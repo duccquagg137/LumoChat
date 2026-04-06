@@ -1,0 +1,19 @@
+﻿Analyzing anigravityxstich...                                   
+
+warning - Unused import: 'package:firebase_auth/firebase_auth.dart' - lib\screens\group_info_screen.dart:3:8 - unused_import
+  error - Undefined class 'PhoneAuthCredential' - lib\screens\login_screen.dart:142:33 - undefined_class
+  error - Undefined name 'FirebaseAuth' - lib\screens\login_screen.dart:145:19 - undefined_identifier
+   info - Use 'const' with the constructor to improve performance - lib\screens\login_screen.dart:369:24 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\screens\login_screen.dart:370:23 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\screens\login_screen.dart:370:38 - prefer_const_constructors
+
+flutter : 6 issues found. (ran in 2.8s)
+At line:1 char:1
++ flutter analyze 2>&1 | Out-File -Encoding utf8 
+-FilePath d:\Flutter\a ...
++ ~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (6 i 
+   ssues found. (ran in 2.8s):String) [], Remot  
+  eException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

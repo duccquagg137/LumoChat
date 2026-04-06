@@ -1,0 +1,12 @@
+﻿Analyzing anigravityxstich...                                   
+
+   info - The declaration '_buildDateHeader' isn't referenced - lib\screens\chat_screen.dart:300:10 - unused_element
+  error - The getter 'error' isn't defined for the type 'AppGradients' - lib\screens\chat_screen.dart:684:59 - undefined_getter
+   info - Don't use 'BuildContext's across async gaps - lib\screens\chat_screen.dart:783:30 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\chat_screen.dart:805:30 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\chat_screen.dart:981:40 - use_build_context_synchronously
+  error - Undefined name 'MockData' - lib\screens\create_group_screen.dart:151:44 - undefined_identifier
+  error - Undefined name 'MockData' - lib\screens\create_group_screen.dart:200:28 - undefined_identifier
+  error - Undefined name 'MockData' - lib\screens\group_info_screen.dart:17:21 - undefined_identifier
+   info - Don't use 'BuildContext's across async gaps - lib\screens\profile_screen.dart:203:47 - use_build_context_synchronously
+
