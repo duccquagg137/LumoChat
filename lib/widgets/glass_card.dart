@@ -223,6 +223,7 @@ class AvatarWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    final hasImage = imageUrl != null && imageUrl!.trim().isNotEmpty;
     final colors = [
       AppColors.primary,
       AppColors.accent,
@@ -246,16 +247,34 @@ class AvatarWidget extends StatelessWidget {
             ),
             border: Border.all(color: AppColors.glassBorder, width: 1.5),
           ),
-          child: Center(
-            child: Text(
-              initial,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: size * 0.4,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'Inter',
-              ),
-            ),
+          child: ClipOval(
+            child: hasImage
+                ? Image.network(
+                    imageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Text(
+                        initial,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: size * 0.4,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'Inter',
+                        ),
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Text(
+                      initial,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: size * 0.4,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Inter',
+                      ),
+                    ),
+                  ),
           ),
         ),
         if (showStatus)

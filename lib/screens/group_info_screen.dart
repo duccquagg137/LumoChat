@@ -110,7 +110,7 @@ class GroupInfoScreen extends StatelessWidget {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: OutlinedPillButton(
-                                      text: 'Tắt TB',
+                                      text: 'Tắt thông báo',
                                       icon: Icons.notifications_off_outlined,
                                       onPressed: () {},
                                     ),

@@ -4,7 +4,6 @@ import '../theme/app_theme.dart';
 import '../services/group_service.dart';
 import 'create_group_screen.dart';
 import 'chat_screen.dart';
-import '../widgets/glass_card.dart';
 
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
@@ -15,8 +14,15 @@ class GroupsScreen extends StatefulWidget {
 
 class _GroupsScreenState extends State<GroupsScreen> {
   final GroupService _groupService = GroupService();
-  String _activeCategory = 'Tất cả';
-  final categories = ['Tất cả', 'Bạn bè', 'Công việc', 'Gia đình'];
+
+  DateTime _groupTimestamp(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>?;
+    final rawTimestamp = data?['lastTimestamp'];
+    if (rawTimestamp is Timestamp) {
+      return rawTimestamp.toDate();
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +49,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   child: Row(
                     children: [
                       const Text(
-                        'Nhóm chat',
+                        'Nhóm trò chuyện',
                         style: TextStyle(
                           fontSize: 28, fontWeight: FontWeight.w800,
                           color: AppColors.textPrimary, fontFamily: 'Inter',
@@ -74,40 +80,6 @@ class _GroupsScreenState extends State<GroupsScreen> {
                     ],
                   ),
                 ),
-                // Category chips
-                SizedBox(
-                  height: 44,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: categories.length,
-                    itemBuilder: (_, i) {
-                      final isActive = _activeCategory == categories[i];
-                      return GestureDetector(
-                        onTap: () => setState(() => _activeCategory = categories[i]),
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                            decoration: BoxDecoration(
-                              gradient: isActive ? AppGradients.primary : null,
-                              color: isActive ? null : AppColors.glassBg,
-                              borderRadius: BorderRadius.circular(20),
-                              border: isActive ? null : Border.all(color: AppColors.glassBorder, width: 0.5),
-                            ),
-                            child: Text(
-                              categories[i],
-                              style: TextStyle(
-                                color: isActive ? Colors.white : AppColors.textSecondary,
-                                fontSize: 13, fontWeight: FontWeight.w600, fontFamily: 'Inter',
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
                 const SizedBox(height: 12),
                 // Groups list
                 Expanded(
@@ -115,13 +87,20 @@ class _GroupsScreenState extends State<GroupsScreen> {
                     stream: _groupService.getUserGroups(),
                     builder: (context, snapshot) {
                       if (snapshot.hasError) {
-                        return const Center(child: Text('Lỗi tải nhóm', style: TextStyle(color: AppColors.textMuted)));
+                        return Center(
+                          child: Text(
+                            'Lỗi tải nhóm: ${snapshot.error}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: AppColors.textMuted),
+                          ),
+                        );
                       }
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator(color: AppColors.primary));
                       }
-                      
-                      final groups = snapshot.data?.docs ?? [];
+
+                      final groups = (snapshot.data?.docs ?? []).toList()
+                        ..sort((a, b) => _groupTimestamp(b).compareTo(_groupTimestamp(a)));
                       
                       if (groups.isEmpty) {
                          return const Center(

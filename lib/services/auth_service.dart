@@ -80,12 +80,45 @@ class AuthService {
           'email': user.email ?? '',
           'name': user.displayName ?? user.phoneNumber ?? 'Người dùng',
           'avatar': user.photoURL ?? '',
+          'bio': '',
+          'phoneNumber': user.phoneNumber ?? '',
+          'address': '',
+          'city': '',
+          'gender': '',
+          'dateOfBirth': '',
+          'website': '',
+          'occupation': '',
+          'settings': {
+            'darkMode': true,
+            'notifications': true,
+          },
+          'friends': [],
+          'friendRequestsSent': [],
+          'friendRequestsReceived': [],
           'isOnline': true,
           'lastActive': FieldValue.serverTimestamp(),
           'createdAt': FieldValue.serverTimestamp(),
         });
       } else {
+        final data = doc.data() ?? <String, dynamic>{};
         await updateUserPresence(true);
+        await _firestore.collection('users').doc(user.uid).set({
+          'friends': FieldValue.arrayUnion([]),
+          'friendRequestsSent': FieldValue.arrayUnion([]),
+          'friendRequestsReceived': FieldValue.arrayUnion([]),
+          'bio': (data['bio'] ?? '').toString(),
+          'phoneNumber': (data['phoneNumber'] ?? user.phoneNumber ?? '').toString(),
+          'address': (data['address'] ?? '').toString(),
+          'city': (data['city'] ?? '').toString(),
+          'gender': (data['gender'] ?? '').toString(),
+          'dateOfBirth': (data['dateOfBirth'] ?? '').toString(),
+          'website': (data['website'] ?? '').toString(),
+          'occupation': (data['occupation'] ?? '').toString(),
+          'settings': {
+            'darkMode': ((data['settings'] as Map<String, dynamic>?)?['darkMode'] != false),
+            'notifications': ((data['settings'] as Map<String, dynamic>?)?['notifications'] != false),
+          },
+        }, SetOptions(merge: true));
       }
     }
   }
@@ -110,6 +143,21 @@ class AuthService {
           'email': email,
           'name': name,
           'avatar': '',
+          'bio': '',
+          'phoneNumber': '',
+          'address': '',
+          'city': '',
+          'gender': '',
+          'dateOfBirth': '',
+          'website': '',
+          'occupation': '',
+          'settings': {
+            'darkMode': true,
+            'notifications': true,
+          },
+          'friends': [],
+          'friendRequestsSent': [],
+          'friendRequestsReceived': [],
           'isOnline': true,
           'lastActive': FieldValue.serverTimestamp(),
           'createdAt': FieldValue.serverTimestamp(),

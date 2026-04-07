@@ -24,7 +24,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _OnboardingPage(
       icon: Icons.group_rounded,
       title: 'Tạo nhóm dễ dàng',
-      subtitle: 'Kết nối với bạn bè, gia đình\nvà đồng nghiệp trong nhóm chat',
+      subtitle: 'Kết nối với bạn bè, gia đình\nvà đồng nghiệp trong nhóm trò chuyện',
       gradient: [const Color(0xFF3B82F6), const Color(0xFF6366F1)],
     ),
     _OnboardingPage(

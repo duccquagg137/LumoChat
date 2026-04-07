@@ -363,7 +363,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         children: [
           TabBar(
             controller: _tabController,
-            indicator: BoxDecoration(
+            indicator: const BoxDecoration(
               border: Border(bottom: BorderSide(color: AppColors.primaryLight, width: 2)),
             ),
             indicatorSize: TabBarIndicatorSize.tab,
@@ -420,7 +420,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       child: Column(
         children: [
           Text(
-            _isCodeSent ? 'Nhập mã xác nhận' : 'Đăng nhập bằng SĐT',
+            _isCodeSent ? 'Nhập mã xác nhận' : 'Đăng nhập bằng số điện thoại',
             style: const TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700, fontFamily: 'Inter'),
           ),
           const SizedBox(height: 8),

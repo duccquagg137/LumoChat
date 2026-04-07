@@ -1,9 +1,11 @@
 import 'dart:io';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloudinary_public/cloudinary_public.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloudinary_public/cloudinary_public.dart';
+
 import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
 
@@ -19,37 +21,82 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _cityController = TextEditingController();
+  final TextEditingController _websiteController = TextEditingController();
+  final TextEditingController _occupationController = TextEditingController();
+
   File? _pickedImage;
   bool _isLoading = false;
+  String _gender = '';
+  DateTime? _birthDate;
+
+  static const List<String> _genderOptions = ['Nam', 'Nữ', 'Khác', 'Không muốn chia sẻ'];
 
   @override
   void initState() {
     super.initState();
-    _nameController.text = widget.userData['name'] ?? '';
-    _bioController.text = widget.userData['bio'] ?? '';
+    _nameController.text = (widget.userData['name'] ?? '').toString();
+    _bioController.text = (widget.userData['bio'] ?? '').toString();
+    _phoneController.text = (widget.userData['phoneNumber'] ?? '').toString();
+    _addressController.text = (widget.userData['address'] ?? '').toString();
+    _cityController.text = (widget.userData['city'] ?? '').toString();
+    _websiteController.text = (widget.userData['website'] ?? '').toString();
+    _occupationController.text = (widget.userData['occupation'] ?? '').toString();
+    _gender = (widget.userData['gender'] ?? '').toString();
+
+    final dobRaw = (widget.userData['dateOfBirth'] ?? '').toString();
+    if (dobRaw.isNotEmpty) {
+      _birthDate = DateTime.tryParse(dobRaw);
+    }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _bioController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    _cityController.dispose();
+    _websiteController.dispose();
+    _occupationController.dispose();
     super.dispose();
   }
 
   Future<void> _pickImage() async {
-    final ImagePicker picker = ImagePicker();
+    final picker = ImagePicker();
     try {
-      final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+      final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 60);
       if (image != null) {
-        setState(() {
-          _pickedImage = File(image.path);
-        });
+        setState(() => _pickedImage = File(image.path));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi chọn ảnh: $e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi chọn ảnh: $e')));
     }
+  }
+
+  Future<void> _pickBirthDate() async {
+    final now = DateTime.now();
+    final initial = _birthDate ?? DateTime(now.year - 18, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(1950, 1, 1),
+      lastDate: now,
+    );
+    if (picked != null) {
+      setState(() => _birthDate = picked);
+    }
+  }
+
+  String _formatBirthDate() {
+    if (_birthDate == null) return 'Chọn ngày sinh';
+    final dd = _birthDate!.day.toString().padLeft(2, '0');
+    final mm = _birthDate!.month.toString().padLeft(2, '0');
+    final yyyy = _birthDate!.year.toString();
+    return '$dd/$mm/$yyyy';
   }
 
   Future<void> _saveProfile() async {
@@ -65,36 +112,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      String avatarUrl = widget.userData['avatar'] ?? '';
-
+      String avatarUrl = (widget.userData['avatar'] ?? '').toString();
       if (_pickedImage != null) {
         final cloudinary = CloudinaryPublic('dds49mcmb', 'lumo_preset', cache: false);
-        CloudinaryResponse response = await cloudinary.uploadFile(
+        final response = await cloudinary.uploadFile(
           CloudinaryFile.fromFile(_pickedImage!.path, resourceType: CloudinaryResourceType.Image),
         );
         avatarUrl = response.secureUrl;
       }
 
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'name': name,
         'bio': _bioController.text.trim(),
         'avatar': avatarUrl,
-      });
+        'phoneNumber': _phoneController.text.trim(),
+        'address': _addressController.text.trim(),
+        'city': _cityController.text.trim(),
+        'website': _websiteController.text.trim(),
+        'occupation': _occupationController.text.trim(),
+        'gender': _gender,
+        'dateOfBirth': _birthDate != null ? _birthDate!.toIso8601String().split('T').first : '',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
-      // Also update Auth profile just in case
       await user.updateDisplayName(name);
       if (_pickedImage != null) {
         await user.updatePhotoURL(avatarUrl);
       }
 
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cập nhật thành công')));
-      }
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cập nhật hồ sơ thành công')));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi cập nhật: $e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi cập nhật: $e')));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -104,16 +155,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final curAvatar = widget.userData['avatar'] ?? '';
-    final initial = _nameController.text.isNotEmpty ? _nameController.text[0].toUpperCase() : 'U';
+    final currentAvatar = (widget.userData['avatar'] ?? '').toString();
+    final initial = _nameController.text.trim().isNotEmpty ? _nameController.text.trim()[0].toUpperCase() : 'U';
 
     return Scaffold(
       body: Stack(
         children: [
           Positioned(
-            top: -80, right: -50,
+            top: -80,
+            right: -50,
             child: Container(
-              width: 250, height: 250,
+              width: 250,
+              height: 250,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
@@ -137,8 +190,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         child: Text(
                           'Chỉnh sửa hồ sơ',
                           style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary, fontFamily: 'Inter',
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                            fontFamily: 'Inter',
                           ),
                         ),
                       ),
@@ -155,35 +210,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           GestureDetector(
                             onTap: _pickImage,
                             child: Stack(
-                              alignment: Alignment.center,
+                              clipBehavior: Clip.none,
                               children: [
-                                Container(
-                                  width: 100, height: 100,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: AppGradients.primary,
-                                    boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 20)],
-                                  ),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: AppColors.bgCard,
-                                      border: Border.all(color: AppColors.bgDark, width: 3),
-                                    ),
-                                    clipBehavior: Clip.hardEdge,
-                                    child: _pickedImage != null
-                                        ? Image.file(_pickedImage!, fit: BoxFit.cover)
-                                        : curAvatar.isNotEmpty
-                                            ? Image.network(curAvatar, fit: BoxFit.cover)
-                                            : Center(
-                                                child: Text(initial, style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w700)),
-                                              ),
-                                  ),
+                                AvatarWidget(
+                                  name: _nameController.text.trim().isNotEmpty ? _nameController.text.trim() : 'User',
+                                  imageUrl: _pickedImage == null ? currentAvatar : null,
+                                  size: 100,
+                                  showStatus: false,
                                 ),
+                                if (_pickedImage != null)
+                                  Positioned.fill(
+                                    child: ClipOval(
+                                      child: Image.file(_pickedImage!, fit: BoxFit.cover),
+                                    ),
+                                  ),
                                 Positioned(
-                                  right: 0, bottom: 0,
+                                  right: -2,
+                                  bottom: -2,
                                   child: Container(
-                                    padding: const EdgeInsets.all(8),
+                                    width: 30,
+                                    height: 30,
                                     decoration: BoxDecoration(
                                       color: AppColors.bgSurface,
                                       shape: BoxShape.circle,
@@ -195,12 +241,53 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 32),
+                          if (currentAvatar.isEmpty && _pickedImage == null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                initial,
+                                style: const TextStyle(color: Colors.transparent, fontSize: 1),
+                              ),
+                            ),
+                          const SizedBox(height: 24),
                           _buildInput(Icons.person_outline_rounded, 'Tên hiển thị', _nameController),
-                          const SizedBox(height: 16),
-                          _buildInput(Icons.info_outline_rounded, 'Giới thiệu bản thân (Bio)', _bioController),
-                          const SizedBox(height: 32),
-                          _isLoading 
+                          const SizedBox(height: 12),
+                          _buildInput(
+                            Icons.info_outline_rounded,
+                            'Giới thiệu bản thân',
+                            _bioController,
+                            maxLines: 3,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInput(
+                            Icons.phone_outlined,
+                            'Số điện thoại',
+                            _phoneController,
+                            keyboardType: TextInputType.phone,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInput(Icons.location_on_outlined, 'Địa chỉ', _addressController),
+                          const SizedBox(height: 12),
+                          _buildInput(Icons.location_city_outlined, 'Thành phố', _cityController),
+                          const SizedBox(height: 12),
+                          _buildGenderField(),
+                          const SizedBox(height: 12),
+                          _buildBirthDateField(),
+                          const SizedBox(height: 12),
+                          _buildInput(
+                            Icons.work_outline_rounded,
+                            'Nghề nghiệp',
+                            _occupationController,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInput(
+                            Icons.language_rounded,
+                            'Website',
+                            _websiteController,
+                            keyboardType: TextInputType.url,
+                          ),
+                          const SizedBox(height: 28),
+                          _isLoading
                               ? const CircularProgressIndicator(color: AppColors.primary)
                               : GradientButton(
                                   text: 'Lưu thay đổi',
@@ -220,7 +307,71 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget _buildInput(IconData icon, String hint, TextEditingController controller) {
+  Widget _buildGenderField() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.bgCard.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.glassBorder),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _gender.isEmpty ? null : _gender,
+          hint: const Text('Giới tính', style: TextStyle(color: AppColors.textMuted)),
+          isExpanded: true,
+          dropdownColor: AppColors.bgSurface,
+          style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted),
+          items: _genderOptions
+              .map((option) => DropdownMenuItem<String>(
+                    value: option,
+                    child: Text(option),
+                  ))
+              .toList(),
+          onChanged: (value) => setState(() => _gender = value ?? ''),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBirthDateField() {
+    return GestureDetector(
+      onTap: _pickBirthDate,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        decoration: BoxDecoration(
+          color: AppColors.bgCard.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.glassBorder),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.cake_outlined, color: AppColors.textMuted, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _formatBirthDate(),
+                style: TextStyle(
+                  color: _birthDate == null ? AppColors.textMuted : AppColors.textPrimary,
+                  fontFamily: 'Inter',
+                ),
+              ),
+            ),
+            const Icon(Icons.calendar_month_outlined, color: AppColors.textMuted, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInput(
+    IconData icon,
+    String hint,
+    TextEditingController controller, {
+    TextInputType? keyboardType,
+    int maxLines = 1,
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.bgCard.withOpacity(0.5),
@@ -229,6 +380,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ),
       child: TextField(
         controller: controller,
+        keyboardType: keyboardType,
+        maxLines: maxLines,
         style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
         decoration: InputDecoration(
           prefixIcon: Icon(icon, color: AppColors.textMuted, size: 22),

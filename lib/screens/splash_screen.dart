@@ -63,6 +63,7 @@ class _SplashScreenState extends State<SplashScreen> {
           return ChatScreen(
             userName: (screenData['userName'] ?? 'User').toString(),
             receiverId: receiverId,
+            userAvatar: (screenData['userAvatar'] ?? '').toString(),
             isOnline: screenData['isOnline'] == true,
             isGroup: screenData['isGroup'] == true,
             memberCount: (screenData['memberCount'] is int) ? screenData['memberCount'] as int : 0,

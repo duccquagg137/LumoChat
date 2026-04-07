@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+
+import '../models/chat_models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
-import '../models/chat_models.dart';
 import 'chat_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
@@ -17,6 +18,13 @@ class _ChatListScreenState extends State<ChatListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+  String get _currentUserId => FirebaseAuth.instance.currentUser?.uid ?? '';
+
+  Set<String> _readIdSet(dynamic raw) {
+    if (raw is! Iterable) return <String>{};
+    return raw.map((e) => e.toString()).where((e) => e.isNotEmpty).toSet();
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -28,7 +36,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Subtle glow
           Positioned(
             top: -100,
             right: -50,
@@ -46,13 +53,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
           SafeArea(
             child: Column(
               children: [
-                // Header
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                   child: Row(
                     children: [
                       const Text(
-                        'Chats',
+                        'Tin nhắn',
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
@@ -69,7 +75,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     ],
                   ),
                 ),
-                // Search bar
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   child: Container(
@@ -80,7 +85,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     ),
                     child: TextField(
                       controller: _searchController,
-                      onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
+                      onChanged: (value) => setState(() => _searchQuery = value.trim().toLowerCase()),
                       style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
                       decoration: const InputDecoration(
                         prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
@@ -93,94 +98,114 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   ),
                 ),
                 Expanded(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance.collection('users').snapshots(),
-                    builder: (context, snapshot) {
-                      if (snapshot.hasError) {
-                         return const Center(child: Text('Đã xảy ra lỗi', style: TextStyle(color: AppColors.textMuted)));
+                  child: StreamBuilder<DocumentSnapshot>(
+                    stream: FirebaseFirestore.instance.collection('users').doc(_currentUserId).snapshots(),
+                    builder: (context, mySnapshot) {
+                      if (mySnapshot.hasError) {
+                        return const Center(child: Text('Đã xảy ra lỗi', style: TextStyle(color: AppColors.textMuted)));
                       }
-                      
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                         return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-                      }
-
-                      if (!snapshot.hasData || snapshot.data == null) {
-                         return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                      if (mySnapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator(color: AppColors.primary));
                       }
 
-                      final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
-                      
-                      // Filter out current user from the list and apply search
-                      final usersList = snapshot.data!.docs
-                          .map((doc) => ChatUser.fromDocument(doc))
-                          .where((user) => user.id != currentUserId && user.name.toLowerCase().contains(_searchQuery))
-                          .toList();
+                      final myData = mySnapshot.data?.data() as Map<String, dynamic>? ?? const {};
+                      final friendIds = _readIdSet(myData['friends']);
 
-                      if (usersList.isEmpty) {
-                         return Center(
-                           child: Text(_searchQuery.isEmpty ? 'Chưa có ai ở đây cả' : 'Không tìm thấy kết quả', style: const TextStyle(color: AppColors.textMuted)),
-                         );
+                      if (friendIds.isEmpty) {
+                        return const Center(
+                          child: Text(
+                            'Bạn chưa có bạn bè nào. Hãy kết bạn ở tab Danh bạ.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: AppColors.textMuted),
+                          ),
+                        );
                       }
 
-                      return Column(
+                      return StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance.collection('users').snapshots(),
+                        builder: (context, usersSnapshot) {
+                          if (usersSnapshot.hasError) {
+                            return const Center(child: Text('Đã xảy ra lỗi', style: TextStyle(color: AppColors.textMuted)));
+                          }
+                          if (usersSnapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                          }
+                          if (!usersSnapshot.hasData || usersSnapshot.data == null) {
+                            return const SizedBox.shrink();
+                          }
 
-                        children: [
-                          // Stories row
-                          SizedBox(
-                            height: 100,
-                            child: ListView(
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              children: [
-                                _buildStoryItem('Tin của bạn', true, true),
-                                ...usersList.take(7).map(
-                                  (u) => _buildStoryItem(u.name.split(' ').last, false, u.isOnline),
+                          final usersList = usersSnapshot.data!.docs
+                              .map((doc) => ChatUser.fromDocument(doc))
+                              .where((user) => user.id != _currentUserId)
+                              .where((user) => friendIds.contains(user.id))
+                              .where((user) => user.name.toLowerCase().contains(_searchQuery))
+                              .toList();
+
+                          if (usersList.isEmpty) {
+                            return Center(
+                              child: Text(
+                                _searchQuery.isEmpty ? 'Chưa có cuộc trò chuyện nào' : 'Không tìm thấy kết quả',
+                                style: const TextStyle(color: AppColors.textMuted),
+                              ),
+                            );
+                          }
+
+                          return Column(
+                            children: [
+                              SizedBox(
+                                height: 100,
+                                child: ListView(
+                                  scrollDirection: Axis.horizontal,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  children: [
+                                    _buildStoryItem('Tin của bạn', true, true),
+                                    ...usersList.take(7).map(
+                                      (user) => _buildStoryItem(user.name.split(' ').last, false, user.isOnline),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          // Conversations list
-                          Expanded(
-                            child: ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              itemCount: usersList.length,
-                              itemBuilder: (context, i) {
-                                final user = usersList[i];
-                                
-                                List<String> ids = [currentUserId, user.id];
-                                ids.sort();
-                                String chatRoomId = ids.join("_");
+                              ),
+                              const SizedBox(height: 8),
+                              Expanded(
+                                child: ListView.builder(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  itemCount: usersList.length,
+                                  itemBuilder: (context, i) {
+                                    final user = usersList[i];
+                                    final ids = [_currentUserId, user.id]..sort();
+                                    final chatRoomId = ids.join('_');
 
-                                return StreamBuilder<DocumentSnapshot>(
-                                  stream: FirebaseFirestore.instance.collection('chat_rooms').doc(chatRoomId).snapshots(),
-                                  builder: (context, roomSnapshot) {
-                                    String lastText = 'Chạm để bắt đầu trò chuyện';
-                                    String timeTxt = '';
-                                    
-                                    if (roomSnapshot.hasData && roomSnapshot.data!.exists) {
-                                      final data = roomSnapshot.data!.data() as Map<String, dynamic>;
-                                      lastText = data['lastMessage'] ?? lastText;
-                                      if (data['lastTimestamp'] != null) {
-                                        final ts = data['lastTimestamp'] as Timestamp;
-                                        final date = ts.toDate();
-                                        timeTxt = '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-                                      }
-                                    }
+                                    return StreamBuilder<DocumentSnapshot>(
+                                      stream: FirebaseFirestore.instance.collection('chat_rooms').doc(chatRoomId).snapshots(),
+                                      builder: (context, roomSnapshot) {
+                                        String lastText = 'Chạm để bắt đầu trò chuyện';
+                                        String timeTxt = '';
 
-                                    final conv = Conversation(
-                                      id: user.id,
-                                      user: user,
-                                      lastMessage: lastText,
-                                      time: timeTxt,
+                                        if (roomSnapshot.hasData && roomSnapshot.data!.exists) {
+                                          final data = roomSnapshot.data!.data() as Map<String, dynamic>;
+                                          lastText = data['lastMessage'] ?? lastText;
+                                          if (data['lastTimestamp'] != null) {
+                                            final ts = data['lastTimestamp'] as Timestamp;
+                                            final date = ts.toDate();
+                                            timeTxt = '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+                                          }
+                                        }
+
+                                        final conv = Conversation(
+                                          id: user.id,
+                                          user: user,
+                                          lastMessage: lastText,
+                                          time: timeTxt,
+                                        );
+                                        return _buildConversationItem(context, conv);
+                                      },
                                     );
-                                    return _buildConversationItem(context, conv);
-                                  }
-                                );
-                              },
-                            ),
-                          ),
-                        ],
+                                  },
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       );
                     },
                   ),
@@ -277,6 +302,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             builder: (_) => ChatScreen(
               userName: conv.user.name,
               receiverId: conv.user.id,
+              userAvatar: conv.user.avatar,
               isOnline: conv.user.isOnline,
               isGroup: conv.isGroup,
               memberCount: conv.memberCount,
@@ -293,11 +319,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ),
         child: Row(
           children: [
-            // Avatar
             Stack(
               children: [
                 AvatarWidget(
                   name: conv.user.name,
+                  imageUrl: conv.user.avatar,
                   size: 52,
                   isOnline: conv.user.isOnline,
                 ),
@@ -317,7 +343,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
               ],
             ),
             const SizedBox(width: 14),
-            // Content
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

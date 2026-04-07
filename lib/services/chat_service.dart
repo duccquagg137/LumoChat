@@ -144,17 +144,41 @@ class ChatService {
     await docRef.update({'reactions': reactions});
   }
 
-  // Xóa tin nhắn
-  Future<void> deleteMessage(String receiverId, String messageId) async {
+  DocumentReference<Map<String, dynamic>> _messageRef(String receiverId, String messageId) {
     final currentUserId = _auth.currentUser!.uid;
     final ids = [currentUserId, receiverId]..sort();
     final chatRoomId = ids.join('_');
 
-    await _firestore
+    return _firestore
         .collection('chat_rooms')
         .doc(chatRoomId)
         .collection('messages')
-        .doc(messageId)
-        .delete();
+        .doc(messageId);
+  }
+
+  // Thu hồi chỉ cho bản thân
+  Future<void> recallMessageForMe(String receiverId, String messageId) async {
+    final currentUserId = _auth.currentUser!.uid;
+    final ref = _messageRef(receiverId, messageId);
+    await ref.update({
+      'deletedFor': FieldValue.arrayUnion([currentUserId]),
+    });
+  }
+
+  // Thu hồi cho mọi người
+  Future<void> recallMessageForEveryone(String receiverId, String messageId) async {
+    final ref = _messageRef(receiverId, messageId);
+    await ref.update({
+      'type': 'deleted',
+      'text': 'Tin nhắn đã thu hồi',
+      'recalledForEveryone': true,
+      'recalledAt': Timestamp.now(),
+      'reactions': FieldValue.delete(),
+    });
+  }
+
+  // Giữ tương thích với code cũ
+  Future<void> deleteMessage(String receiverId, String messageId) async {
+    await recallMessageForEveryone(receiverId, messageId);
   }
 }

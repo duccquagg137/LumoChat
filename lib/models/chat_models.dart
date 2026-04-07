@@ -74,10 +74,13 @@ class ChatMessage {
   final bool isSent;
   final String time;
   final MessageType type;
+  final String? senderId;
   final String? senderName;
   final bool isRead;
   final String? replyTo; // ID tin nhắn đang trả lời
   final Map<String, dynamic>? reactions; // Map của emoji: [userIds]
+  final List<String> deletedFor;
+  final bool isRecalledForEveryone;
 
   const ChatMessage({
     required this.id,
@@ -85,10 +88,13 @@ class ChatMessage {
     required this.isSent,
     required this.time,
     this.type = MessageType.text,
+    this.senderId,
     this.senderName,
     this.isRead = false,
     this.replyTo,
     this.reactions,
+    this.deletedFor = const [],
+    this.isRecalledForEveryone = false,
   });
 
   factory ChatMessage.fromDocument(DocumentSnapshot doc) {
@@ -99,21 +105,53 @@ class ChatMessage {
 
     final String textData = data['text'] ?? '';
     final String timeStr = _formatTimestamp(data['timestamp']);
-    
-    // We check if current user is the sender (will be determined in UI layer or here if we pass currentUserId)
-    // Actually, `isSent` is relative. It's better to store `senderId` and compare in UI.
-    // For now, let's store senderId in `senderName` temporarily to keep the model signature unchanged, 
-    // or we can adjust usages in UI. Let's add `senderId` field.
+    final String? senderId = data['senderId']?.toString();
+    final String? senderName = data['senderName']?.toString();
+    final String rawType = data['type']?.toString() ?? 'text';
+
+    MessageType type;
+    switch (rawType) {
+      case 'image':
+        type = MessageType.image;
+        break;
+      case 'system':
+        type = MessageType.system;
+        break;
+      case 'emoji':
+        type = MessageType.emoji;
+        break;
+      case 'deleted':
+        type = MessageType.deleted;
+        break;
+      default:
+        type = MessageType.text;
+    }
+
+    final rawReactions = data['reactions'];
+    Map<String, dynamic>? parsedReactions;
+    if (rawReactions is Map) {
+      parsedReactions = rawReactions.map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+    }
+    final deletedFor = List<dynamic>.from(data['deletedFor'] ?? const [])
+        .map((e) => e.toString())
+        .toList();
+    final isRecalledForEveryone = data['recalledForEveryone'] == true || rawType == 'deleted';
+
     return ChatMessage(
       id: doc.id,
       text: textData,
       isSent: false, // This will be calculated in UI based on senderId
       time: timeStr,
-      senderName: data['senderId'], // Using this temporary for holding senderId
+      senderId: senderId,
+      senderName: senderName,
       isRead: data['isRead'] ?? false,
-      type: data['type'] == 'image' ? MessageType.image : MessageType.text,
+      type: type,
       replyTo: data['replyTo'],
-      reactions: data['reactions'] as Map<String, dynamic>?,
+      reactions: parsedReactions,
+      deletedFor: deletedFor,
+      isRecalledForEveryone: isRecalledForEveryone,
     );
   }
 
@@ -126,6 +164,4 @@ class ChatMessage {
   }
 }
 
-enum MessageType { text, image, system, emoji }
-
-
+enum MessageType { text, image, system, emoji, deleted }

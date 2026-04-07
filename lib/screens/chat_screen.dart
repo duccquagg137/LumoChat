@@ -11,6 +11,7 @@ import '../models/chat_models.dart';
 import '../services/chat_service.dart';
 import '../services/group_service.dart';
 import '../services/auth_service.dart';
+import 'user_profile_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   final String userName;
@@ -18,6 +19,7 @@ class ChatScreen extends StatefulWidget {
   final bool isOnline;
   final bool isGroup;
   final int memberCount;
+  final String userAvatar;
 
   const ChatScreen({
     super.key,
@@ -26,6 +28,7 @@ class ChatScreen extends StatefulWidget {
     this.isOnline = false,
     this.isGroup = false,
     this.memberCount = 0,
+    this.userAvatar = '',
   });
 
   @override
@@ -38,13 +41,14 @@ class _ChatScreenState extends State<ChatScreen> {
   final ChatService _chatService = ChatService();
   final GroupService _groupService = GroupService();
   final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
-  final String currentUserName = FirebaseAuth.instance.currentUser?.displayName ?? 'Người dùng';
+  String _currentUserName = FirebaseAuth.instance.currentUser?.displayName ?? 'Người dùng';
 
   File? _pickedImage;
   bool _isOtherTyping = false;
   bool _isMeTyping = false;
   Timer? _typingTimer;
   StreamSubscription? _chatRoomSubscription;
+  int _lastMessageCount = -1;
 
   // Reply state
   ChatMessage? _replyingTo;
@@ -52,9 +56,25 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _loadCurrentUserProfile();
     _setupTypingListener();
     _setupOtherTypingListener();
     _recordLastScreen();
+  }
+
+  Future<void> _loadCurrentUserProfile() async {
+    if (currentUserId.isEmpty) return;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(currentUserId).get();
+      if (!doc.exists || !mounted) return;
+      final data = doc.data();
+      final name = data?['name']?.toString().trim();
+      if (name != null && name.isNotEmpty) {
+        setState(() {
+          _currentUserName = name;
+        });
+      }
+    } catch (_) {}
   }
 
   void _recordLastScreen() {
@@ -62,6 +82,7 @@ class _ChatScreenState extends State<ChatScreen> {
       'name': 'chat',
       'receiverId': widget.receiverId,
       'userName': widget.userName,
+      'userAvatar': widget.userAvatar,
       'isOnline': widget.isOnline,
       'isGroup': widget.isGroup,
       'memberCount': widget.memberCount,
@@ -96,20 +117,28 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _setupOtherTypingListener() {
-    final stream = widget.isGroup 
+    final stream = widget.isGroup
         ? _groupService.getGroupStream(widget.receiverId)
         : _chatService.getChatRoomStream(widget.receiverId);
-        
+
     _chatRoomSubscription = stream.listen((snapshot) {
       if (snapshot.exists && snapshot.data() != null) {
         final data = snapshot.data() as Map<String, dynamic>;
         if (data.containsKey('typing')) {
           final typingData = data['typing'] as Map<String, dynamic>;
+          bool isOtherTyping = false;
+          if (widget.isGroup) {
+            isOtherTyping = typingData.entries.any(
+              (entry) => entry.key != currentUserId && entry.value == true,
+            );
+          } else {
+            isOtherTyping = typingData[widget.receiverId] == true;
+          }
           if (mounted) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
                 setState(() {
-                  _isOtherTyping = typingData[widget.receiverId] ?? false;
+                  _isOtherTyping = isOtherTyping;
                 });
               }
             });
@@ -117,6 +146,104 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       }
     });
+  }
+
+  void _syncScrollToLatest(int messageCount) {
+    if (messageCount == _lastMessageCount) return;
+    final shouldAnimate = _lastMessageCount >= 0;
+    _lastMessageCount = messageCount;
+    _scrollToBottom(animated: shouldAnimate);
+  }
+
+  void _scrollToBottom({bool animated = true}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final target = _scrollController.position.maxScrollExtent;
+      if (animated) {
+        _scrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOut,
+        );
+      } else {
+        _scrollController.jumpTo(target);
+      }
+    });
+  }
+
+  DateTime _messageTimestamp(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>?;
+    final rawTimestamp = data?['timestamp'];
+    if (rawTimestamp is Timestamp) {
+      return rawTimestamp.toDate();
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  void _openUserProfile(String userId) {
+    if (userId.isEmpty || userId == currentUserId) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => UserProfileScreen(userId: userId)),
+    );
+  }
+
+  void _setReplyingWithKeepPosition(ChatMessage message) {
+    final offset = _scrollController.hasClients ? _scrollController.offset : null;
+    setState(() => _replyingTo = message);
+    if (offset == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final max = _scrollController.position.maxScrollExtent;
+      _scrollController.jumpTo(offset.clamp(0, max));
+    });
+  }
+
+  void _clearReplyingWithKeepPosition() {
+    if (_replyingTo == null) return;
+    final offset = _scrollController.hasClients ? _scrollController.offset : null;
+    setState(() => _replyingTo = null);
+    if (offset == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final max = _scrollController.position.maxScrollExtent;
+      _scrollController.jumpTo(offset.clamp(0, max));
+    });
+  }
+
+  Widget _buildUserAvatarById({
+    required String? userId,
+    required String fallbackName,
+    required double size,
+    bool isOnline = false,
+    bool showStatus = false,
+    String fallbackImage = '',
+  }) {
+    if (userId == null || userId.isEmpty) {
+      return AvatarWidget(
+        name: fallbackName,
+        imageUrl: fallbackImage,
+        size: size,
+        isOnline: isOnline,
+        showStatus: showStatus,
+      );
+    }
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
+      builder: (context, snapshot) {
+        final data = snapshot.data?.data() as Map<String, dynamic>?;
+        final name = data?['name']?.toString() ?? fallbackName;
+        final avatar = data?['avatar']?.toString() ?? fallbackImage;
+        final online = data?['isOnline'] == true;
+        return AvatarWidget(
+          name: name,
+          imageUrl: avatar,
+          size: size,
+          isOnline: isOnline || online,
+          showStatus: showStatus,
+        );
+      },
+    );
   }
 
   @override
@@ -156,7 +283,7 @@ class _ChatScreenState extends State<ChatScreen> {
               // Messages
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: widget.isGroup 
+                  stream: widget.isGroup
                       ? _groupService.getGroupMessagesStream(widget.receiverId)
                       : _chatService.getMessagesStream(widget.receiverId),
                   builder: (context, snapshot) {
@@ -168,13 +295,20 @@ class _ChatScreenState extends State<ChatScreen> {
                       return const Center(child: CircularProgressIndicator(color: AppColors.primary));
                     }
 
-                    final messageDocs = snapshot.data!.docs;
-                    
+                    if (!snapshot.hasData) {
+                      return const SizedBox.shrink();
+                    }
+
+                    final messageDocs = snapshot.data!.docs.toList()
+                      ..sort((a, b) => _messageTimestamp(a).compareTo(_messageTimestamp(b)));
+
                     if (messageDocs.isEmpty) {
                       return const Center(
                         child: Text('Chưa có tin nhắn', style: TextStyle(color: AppColors.textMuted)),
                       );
                     }
+
+                    _syncScrollToLatest(messageDocs.length);
 
                     return ListView.builder(
                       controller: _scrollController,
@@ -182,16 +316,24 @@ class _ChatScreenState extends State<ChatScreen> {
                       itemCount: messageDocs.length,
                       itemBuilder: (context, i) {
                         final msgData = ChatMessage.fromDocument(messageDocs[i]);
+                        if (msgData.deletedFor.contains(currentUserId)) {
+                          return const SizedBox.shrink();
+                        }
                         // Overwrite isSent based on actual sender
-                        final bool isSent = msgData.senderName == currentUserId;
+                        final bool isSent = msgData.senderId == currentUserId;
                         final ChatMessage msg = ChatMessage(
                           id: msgData.id,
                           text: msgData.text,
                           isSent: isSent,
                           time: msgData.time,
                           type: msgData.type,
+                          senderId: msgData.senderId,
                           senderName: msgData.senderName,
                           isRead: msgData.isRead,
+                          replyTo: msgData.replyTo,
+                          reactions: msgData.reactions,
+                          deletedFor: msgData.deletedFor,
+                          isRecalledForEveryone: msgData.isRecalledForEveryone,
                         );
                         return _buildMessage(msg);
                       },
@@ -205,7 +347,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   padding: const EdgeInsets.only(left: 20, bottom: 8),
                   child: Row(
                     children: [
-                      AvatarWidget(name: widget.userName, size: 24, showStatus: false),
+                      _buildUserAvatarById(
+                        userId: widget.receiverId,
+                        fallbackName: widget.userName,
+                        fallbackImage: widget.userAvatar,
+                        size: 24,
+                        showStatus: false,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         '${widget.userName.split(' ').last} đang nhập...',
@@ -247,38 +395,52 @@ class _ChatScreenState extends State<ChatScreen> {
               icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary, size: 20),
               onPressed: () => Navigator.pop(context),
             ),
-            AvatarWidget(name: widget.userName, size: 40, isOnline: widget.isOnline),
+            GestureDetector(
+              onTap: widget.isGroup ? null : () => _openUserProfile(widget.receiverId),
+              child: _buildUserAvatarById(
+                userId: widget.isGroup ? null : widget.receiverId,
+                fallbackName: widget.userName,
+                fallbackImage: widget.userAvatar,
+                size: 40,
+                isOnline: widget.isOnline,
+                showStatus: true,
+              ),
+            ),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    widget.userName,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      fontFamily: 'Inter',
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.isGroup ? null : () => _openUserProfile(widget.receiverId),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.userName,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Inter',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    widget.isGroup
-                        ? '${widget.memberCount} thành viên'
-                        : widget.isOnline
-                            ? 'Online'
-                            : 'Offline',
-                    style: TextStyle(
-                      color: widget.isOnline ? AppColors.accentGreen : AppColors.textMuted,
-                      fontSize: 12,
-                      fontFamily: 'Inter',
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.isGroup
+                          ? '${widget.memberCount} thành viên'
+                          : widget.isOnline
+                              ? 'Online'
+                              : 'Offline',
+                      style: TextStyle(
+                        color: widget.isOnline ? AppColors.accentGreen : AppColors.textMuted,
+                        fontSize: 12,
+                        fontFamily: 'Inter',
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             _buildActionIcon(Icons.call_outlined),
@@ -300,6 +462,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildMessage(ChatMessage message) {
+    if (message.deletedFor.contains(currentUserId)) {
+      return const SizedBox.shrink();
+    }
+
     if (message.type == MessageType.system) {
       return Center(
         child: Padding(
@@ -318,6 +484,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     final isSent = message.isSent;
+    final senderLabel = message.senderName ?? message.senderId ?? 'Người dùng';
+    final isDeletedMessage = message.type == MessageType.deleted || message.isRecalledForEveryone;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -325,20 +494,28 @@ class _ChatScreenState extends State<ChatScreen> {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isSent && widget.isGroup) ...[
-            AvatarWidget(name: message.senderName ?? '?', size: 28, showStatus: false),
+            GestureDetector(
+              onTap: () => _openUserProfile(message.senderId ?? ''),
+              child: _buildUserAvatarById(
+                userId: message.senderId,
+                fallbackName: senderLabel,
+                size: 28,
+                showStatus: false,
+              ),
+            ),
             const SizedBox(width: 8),
           ],
           Flexible(
             child: Column(
               crossAxisAlignment: isSent ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
-                if (!isSent && widget.isGroup && message.senderName != null)
+                if (!isSent && widget.isGroup)
                   Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 4),
                     child: Text(
-                      message.senderName!,
+                      senderLabel,
                       style: TextStyle(
-                        color: _getSenderColor(message.senderName!),
+                        color: _getSenderColor(senderLabel),
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         fontFamily: 'Inter',
@@ -350,15 +527,17 @@ class _ChatScreenState extends State<ChatScreen> {
                     maxWidth: MediaQuery.of(context).size.width * 0.72,
                   ),
                   child: GestureDetector(
-                    onLongPress: () => _showContextMenu(message),
+                    onLongPress: isDeletedMessage ? null : () => _showContextMenu(message),
                     child: Column(
                       crossAxisAlignment: isSent ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                       children: [
                         if (message.replyTo != null) _buildReplyPreview(message.replyTo!, isSent),
-                        message.type == MessageType.image
+                        isDeletedMessage
+                            ? _buildDeletedBubble(isSent)
+                            : message.type == MessageType.image
                             ? _buildImageMessage(isSent, message)
                             : _buildTextBubble(isSent, message),
-                        if (message.reactions != null && message.reactions!.isNotEmpty)
+                        if (!isDeletedMessage && message.reactions != null && message.reactions!.isNotEmpty)
                           _buildReactionsDisplay(message.reactions!),
                       ],
                     ),
@@ -373,17 +552,34 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildReplyPreview(String replyId, bool isMe) {
+    final Future<DocumentSnapshot> replyFuture = widget.isGroup
+        ? FirebaseFirestore.instance
+            .collection('groups')
+            .doc(widget.receiverId)
+            .collection('messages')
+            .doc(replyId)
+            .get()
+        : FirebaseFirestore.instance
+            .collection('chat_rooms')
+            .doc(_getChatRoomId())
+            .collection('messages')
+            .doc(replyId)
+            .get();
+
     return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('chat_rooms')
-          .doc(_getChatRoomId())
-          .collection('messages')
-          .doc(replyId)
-          .get(),
+      future: replyFuture,
       builder: (context, snapshot) {
         String replyText = 'Tin nhắn đã bị xóa';
         if (snapshot.hasData && snapshot.data!.exists) {
           final data = snapshot.data!.data() as Map<String, dynamic>;
-          replyText = data['type'] == 'image' ? '📷 Hình ảnh' : data['text'];
+          final deletedFor = List<dynamic>.from(data['deletedFor'] ?? const []);
+          final isDeletedForMe = deletedFor.map((e) => e.toString()).contains(currentUserId);
+          final isRecalled = data['recalledForEveryone'] == true || data['type'] == 'deleted';
+          if (isDeletedForMe || isRecalled) {
+            replyText = 'Tin nhắn đã thu hồi';
+          } else {
+            replyText = data['type'] == 'image' ? '📷 Hình ảnh' : (data['text'] ?? '');
+          }
         }
         return Container(
           margin: const EdgeInsets.only(bottom: 4),
@@ -429,6 +625,26 @@ class _ChatScreenState extends State<ChatScreen> {
     List<String> ids = [currentUserId, widget.receiverId];
     ids.sort();
     return ids.join("_");
+  }
+
+  Widget _buildDeletedBubble(bool isSent) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: isSent ? Colors.white10 : AppColors.glassBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.glassBorder, width: 0.5),
+      ),
+      child: Text(
+        'Tin nhắn đã thu hồi',
+        style: TextStyle(
+          color: isSent ? Colors.white70 : AppColors.textMuted,
+          fontSize: 13,
+          fontStyle: FontStyle.italic,
+          fontFamily: 'Inter',
+        ),
+      ),
+    );
   }
 
   Widget _buildTextBubble(bool isSent, ChatMessage message) {
@@ -690,7 +906,11 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 const Text('Trả lời', style: TextStyle(color: AppColors.primaryLight, fontSize: 12, fontWeight: FontWeight.bold)),
                 Text(
-                  _replyingTo!.type == MessageType.image ? '📷 Hình ảnh' : _replyingTo!.text,
+                  (_replyingTo!.type == MessageType.image)
+                      ? '📷 Hình ảnh'
+                      : (_replyingTo!.type == MessageType.deleted || _replyingTo!.isRecalledForEveryone)
+                          ? 'Tin nhắn đã thu hồi'
+                          : _replyingTo!.text,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
@@ -700,7 +920,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.close, size: 18, color: AppColors.textMuted),
-            onPressed: () => setState(() => _replyingTo = null),
+            onPressed: _clearReplyingWithKeepPosition,
           ),
         ],
       ),
@@ -794,7 +1014,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (imageToUpload != null) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đang tải ảnh lên...')));
         if (widget.isGroup) {
-          await _groupService.sendImageMessage(widget.receiverId, currentUserName, imageToUpload);
+          await _groupService.sendImageMessage(widget.receiverId, _currentUserName, imageToUpload);
         } else {
           await _chatService.sendImageMessage(widget.receiverId, imageToUpload);
         }
@@ -802,20 +1022,13 @@ class _ChatScreenState extends State<ChatScreen> {
       
       if (text.isNotEmpty) {
         if (widget.isGroup) {
-          await _groupService.sendGroupMessage(widget.receiverId, currentUserName, text, replyTo: replyId);
+          await _groupService.sendGroupMessage(widget.receiverId, _currentUserName, text, replyTo: replyId);
         } else {
           await _chatService.sendMessage(widget.receiverId, text, replyTo: replyId);
         }
       }
       
-      // Scroll to bottom
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent + 200,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
+      _scrollToBottom(animated: true);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -844,6 +1057,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showContextMenu(ChatMessage message) {
+    final bool isMyMessage = message.senderId == currentUserId;
+    final bool isDeletedMessage = message.type == MessageType.deleted || message.isRecalledForEveryone;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -858,43 +1074,56 @@ class _ChatScreenState extends State<ChatScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Reactions Row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: ['❤️', '😂', '😮', '😢', '👍', '👎'].map((emoji) {
-                return GestureDetector(
-                  onTap: () {
-                    if (widget.isGroup) {
-                      _groupService.toggleReaction(widget.receiverId, message.id, emoji);
-                    } else {
-                      _chatService.toggleReaction(widget.receiverId, message.id, emoji);
-                    }
-                    Navigator.pop(context);
-                  },
-                  child: Text(emoji, style: const TextStyle(fontSize: 28)),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 24),
-            _buildContextMenuItem(Icons.reply_rounded, 'Trả lời', () {
-              Navigator.pop(context);
-              setState(() => _replyingTo = message);
-            }),
-            _buildContextMenuItem(Icons.copy_rounded, 'Sao chép', () {
-              Clipboard.setData(ClipboardData(text: message.text));
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã sao chép')));
-            }),
-            if (message.senderName == currentUserId)
-              _buildContextMenuItem(Icons.delete_outline_rounded, 'Thu hồi', () async {
+            if (!isDeletedMessage) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: ['❤️', '😂', '😮', '😢', '👍', '👎'].map((emoji) {
+                  return GestureDetector(
+                    onTap: () {
+                      if (widget.isGroup) {
+                        _groupService.toggleReaction(widget.receiverId, message.id, emoji);
+                      } else {
+                        _chatService.toggleReaction(widget.receiverId, message.id, emoji);
+                      }
+                      Navigator.pop(context);
+                    },
+                    child: Text(emoji, style: const TextStyle(fontSize: 28)),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 24),
+              _buildContextMenuItem(Icons.reply_rounded, 'Trả lời', () {
+                Navigator.pop(context);
+                _setReplyingWithKeepPosition(message);
+              }),
+              _buildContextMenuItem(Icons.copy_rounded, 'Sao chép', () {
+                Clipboard.setData(ClipboardData(text: message.text));
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã sao chép')));
+              }),
+            ],
+            if (isMyMessage && !isDeletedMessage) ...[
+              _buildContextMenuItem(Icons.visibility_off_outlined, 'Thu hồi cho bạn', () async {
                 final messenger = ScaffoldMessenger.of(context);
                 Navigator.pop(context);
                 if (widget.isGroup) {
-                  await _groupService.deleteMessage(widget.receiverId, message.id);
+                  await _groupService.recallMessageForMe(widget.receiverId, message.id);
                 } else {
-                  await _chatService.deleteMessage(widget.receiverId, message.id);
+                  await _chatService.recallMessageForMe(widget.receiverId, message.id);
                 }
-                messenger.showSnackBar(const SnackBar(content: Text('Đã thu hồi')));
+                messenger.showSnackBar(const SnackBar(content: Text('Đã thu hồi cho bạn')));
               }, color: AppColors.error),
+              _buildContextMenuItem(Icons.delete_outline_rounded, 'Thu hồi cho mọi người', () async {
+                final messenger = ScaffoldMessenger.of(context);
+                Navigator.pop(context);
+                if (widget.isGroup) {
+                  await _groupService.recallMessageForEveryone(widget.receiverId, message.id);
+                } else {
+                  await _chatService.recallMessageForEveryone(widget.receiverId, message.id);
+                }
+                messenger.showSnackBar(const SnackBar(content: Text('Đã thu hồi cho mọi người')));
+              }, color: AppColors.error),
+            ],
           ],
         ),
       ),

@@ -1,6 +1,8 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:io';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../models/chat_models.dart';
 
 class GroupService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -9,10 +11,11 @@ class GroupService {
   // Create a new group
   Future<String> createGroup(String name, String description, List<String> memberIds, String creatorName) async {
     final currentUserId = _auth.currentUser!.uid;
-    
+
     // Add current user to members and admins
     final members = [...memberIds, currentUserId];
-    
+
+    final timestamp = Timestamp.now();
     final docRef = await _firestore.collection('groups').add({
       'name': name,
       'description': description,
@@ -20,9 +23,9 @@ class GroupService {
       'members': members,
       'admins': [currentUserId],
       'createdBy': currentUserId,
-      'createdAt': FieldValue.serverTimestamp(),
+      'createdAt': timestamp,
       'lastMessage': 'Nhóm vừa được tạo',
-      'lastTimestamp': FieldValue.serverTimestamp(),
+      'lastTimestamp': timestamp,
     });
 
     // Create a system message logging the creation
@@ -31,7 +34,7 @@ class GroupService {
       'senderName': 'Hệ thống',
       'text': '$creatorName đã tạo nhóm',
       'type': 'system',
-      'timestamp': FieldValue.serverTimestamp(),
+      'timestamp': timestamp,
     });
 
     return docRef.id;
@@ -43,13 +46,12 @@ class GroupService {
     return _firestore
         .collection('groups')
         .where('members', arrayContains: currentUserId)
-        .orderBy('lastTimestamp', descending: true)
         .snapshots();
   }
 
   // Get stream of group members
   Stream<QuerySnapshot> getGroupMembers(String groupId) {
-    return _firestore.collection('users').where('groups', arrayContains: groupId).snapshots(); 
+    return _firestore.collection('users').where('groups', arrayContains: groupId).snapshots();
   }
 
   // Get stream of group messages
@@ -58,7 +60,6 @@ class GroupService {
         .collection('groups')
         .doc(groupId)
         .collection('messages')
-        .orderBy('timestamp', descending: false)
         .snapshots();
   }
 
@@ -80,13 +81,14 @@ class GroupService {
   // Send a message to a group
   Future<void> sendGroupMessage(String groupId, String senderName, String text, {String? replyTo}) async {
     final currentUserId = _auth.currentUser!.uid;
+    final timestamp = Timestamp.now();
 
     final messageData = {
       'senderId': currentUserId,
       'senderName': senderName,
       'text': text,
       'type': 'text',
-      'timestamp': FieldValue.serverTimestamp(),
+      'timestamp': timestamp,
       'readBy': [currentUserId],
       if (replyTo != null) 'replyTo': replyTo,
     };
@@ -94,15 +96,37 @@ class GroupService {
     await _firestore.collection('groups').doc(groupId).collection('messages').add(messageData);
     await _firestore.collection('groups').doc(groupId).update({
       'lastMessage': '$senderName: $text',
-      'lastTimestamp': FieldValue.serverTimestamp(),
+      'lastTimestamp': timestamp,
     });
   }
 
   // Send an image message
-  Future<void> sendImageMessage(String groupId, String senderName, dynamic imageFile) async {
-    // Note: To fully implement, need Cloudinary upload logic here as well.
-    // Copying the quick logic from ChatService
-    throw Exception('Sẽ cập nhật sau'); 
+  Future<void> sendImageMessage(String groupId, String senderName, File imageFile) async {
+    final currentUserId = _auth.currentUser!.uid;
+    final timestamp = Timestamp.now();
+
+    final cloudinary = CloudinaryPublic('dds49mcmb', 'lumo_preset', cache: false);
+    final response = await cloudinary.uploadFile(
+      CloudinaryFile.fromFile(
+        imageFile.path,
+        resourceType: CloudinaryResourceType.Image,
+      ),
+    );
+    final imageUrl = response.secureUrl;
+
+    await _firestore.collection('groups').doc(groupId).collection('messages').add({
+      'senderId': currentUserId,
+      'senderName': senderName,
+      'text': imageUrl,
+      'type': 'image',
+      'timestamp': timestamp,
+      'readBy': [currentUserId],
+    });
+
+    await _firestore.collection('groups').doc(groupId).update({
+      'lastMessage': '$senderName: 📷 Hình ảnh',
+      'lastTimestamp': timestamp,
+    });
   }
 
   // Toggle reaction
@@ -131,8 +155,33 @@ class GroupService {
     await docRef.update({'reactions': reactions});
   }
 
-  // Delete message
+  DocumentReference<Map<String, dynamic>> _groupMessageRef(String groupId, String messageId) {
+    return _firestore.collection('groups').doc(groupId).collection('messages').doc(messageId);
+  }
+
+  // Thu hồi chỉ cho bản thân
+  Future<void> recallMessageForMe(String groupId, String messageId) async {
+    final currentUserId = _auth.currentUser!.uid;
+    final ref = _groupMessageRef(groupId, messageId);
+    await ref.update({
+      'deletedFor': FieldValue.arrayUnion([currentUserId]),
+    });
+  }
+
+  // Thu hồi cho mọi người
+  Future<void> recallMessageForEveryone(String groupId, String messageId) async {
+    final ref = _groupMessageRef(groupId, messageId);
+    await ref.update({
+      'type': 'deleted',
+      'text': 'Tin nhắn đã thu hồi',
+      'recalledForEveryone': true,
+      'recalledAt': Timestamp.now(),
+      'reactions': FieldValue.delete(),
+    });
+  }
+
+  // Giữ tương thích với code cũ
   Future<void> deleteMessage(String groupId, String messageId) async {
-    await _firestore.collection('groups').doc(groupId).collection('messages').doc(messageId).delete();
+    await recallMessageForEveryone(groupId, messageId);
   }
 }

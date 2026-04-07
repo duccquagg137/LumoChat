@@ -123,7 +123,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
           child: Column(
             children: [
               const Text(
-                'Chat rõ ràng hơn,\nkết nối gần hơn.',
+                'Trò chuyện rõ ràng hơn,\nkết nối gần hơn.',
                 style: TextStyle(
                   fontSize: 38, fontWeight: FontWeight.w900,
                   color: AppColors.textPrimary, fontFamily: 'Inter',
@@ -133,7 +133,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
               ),
               const SizedBox(height: 16),
               const Text(
-                'Nhắn tin 1-1, chat nhóm mượt mà, giao diện hiện đại\nvà tập trung vào trải nghiệm trò chuyện.',
+                'Nhắn tin 1-1, trò chuyện nhóm mượt mà, giao diện hiện đại\nvà tập trung vào trải nghiệm trò chuyện.',
                 style: TextStyle(
                   fontSize: 15, color: AppColors.textSecondary,
                   fontFamily: 'Inter', height: 1.5,
@@ -146,7 +146,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   GradientButton(
-                    text: 'Bắt đầu chat',
+                    text: 'Bắt đầu trò chuyện',
                     icon: Icons.chat_rounded,
                     onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen())),
                   ),
@@ -231,7 +231,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                   children: [
                     _buildMockBubble('Chào bạn! 👋', false),
                     _buildMockBubble('Hôm nay đi cafe không?', false),
-                    _buildMockBubble('Oke, 3h chiều nhé! ☕', true),
+                    _buildMockBubble('Ok, 3h chiều nhé! ☕', true),
                     _buildMockBubble('Tuyệt vời! 😍', false),
                     _buildMockBubble('Gặp lúc đó nhé!', true),
                     const Spacer(),
@@ -247,8 +247,14 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                         children: [
                           const Icon(Icons.add_rounded, color: AppColors.textMuted, size: 16),
                           const SizedBox(width: 8),
-                          const Text('Nhập tin nhắn...', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
-                          const Spacer(),
+                          const Expanded(
+                            child: Text(
+                              'Nhập tin nhắn...',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                            ),
+                          ),
                           Container(
                             width: 24, height: 24,
                             decoration: const BoxDecoration(gradient: AppGradients.primary, shape: BoxShape.circle),
@@ -298,10 +304,10 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
   // ---- FEATURES ----
   Widget _buildFeatures() {
     final features = [
-      const _FeatureItem(Icons.bolt_rounded, 'Chat 1-1 nhanh', 'Gửi tin nhắn tức thì với tốc độ ánh sáng', [Color(0xFF7C3AED), Color(0xFF9333EA)]),
+      const _FeatureItem(Icons.bolt_rounded, 'Trò chuyện 1-1 nhanh', 'Gửi tin nhắn tức thì với tốc độ ánh sáng', [Color(0xFF7C3AED), Color(0xFF9333EA)]),
       const _FeatureItem(Icons.group_add_rounded, 'Tạo nhóm dễ dàng', 'Kết nối nhóm bạn bè chỉ vài thao tác', [Color(0xFF3B82F6), Color(0xFF6366F1)]),
       const _FeatureItem(Icons.photo_library_rounded, 'Gửi ảnh / emoji / file', 'Chia sẻ khoảnh khắc và tài liệu nhanh', [Color(0xFFEC4899), Color(0xFFF43F5E)]),
-      const _FeatureItem(Icons.notifications_active_rounded, 'Thông báo realtime', 'Không bỏ lỡ bất kỳ tin nhắn nào', [Color(0xFF10B981), Color(0xFF059669)]),
+      const _FeatureItem(Icons.notifications_active_rounded, 'Thông báo thời gian thực', 'Không bỏ lỡ bất kỳ tin nhắn nào', [Color(0xFF10B981), Color(0xFF059669)]),
     ];
 
     return Padding(
@@ -313,7 +319,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
             color: AppColors.textPrimary, fontFamily: 'Inter',
           )),
           const SizedBox(height: 8),
-          const Text('Mọi thứ bạn cần cho trải nghiệm chat tuyệt vời', style: TextStyle(
+          const Text('Mọi thứ bạn cần cho trải nghiệm trò chuyện tuyệt vời', style: TextStyle(
             fontSize: 14, color: AppColors.textSecondary, fontFamily: 'Inter',
           )),
           const SizedBox(height: 24),
@@ -393,7 +399,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                       ...[
                         ('Minh Anh', 'Hẹn gặp nhé! ☕', true),
                         ('Hùng Đỗ', 'Code xong chưa?', false),
-                        ('Bạn thân 💕', 'Count me in!', true),
+                        ('Bạn thân 💕', 'Cho mình tham gia với!', true),
                         ('Mai Đinh', '📷 Ảnh', false),
                       ].map((item) => Padding(
                         padding: const EdgeInsets.only(bottom: 10),
@@ -453,7 +459,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                       const SizedBox(height: 12),
                       _buildMockBubble('Chào! 👋', false),
                       _buildMockBubble('Đi cafe nhé?', false),
-                      _buildMockBubble('Oke! ☕', true),
+                      _buildMockBubble('Ok! ☕', true),
                       _buildMockBubble('Tuyệt! 😍', false),
                     ],
                   ),
@@ -484,7 +490,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
             color: AppColors.textPrimary, fontFamily: 'Inter',
           )),
           const SizedBox(height: 8),
-          const Text('Chat nhóm chưa bao giờ dễ dàng đến thế', style: TextStyle(
+          const Text('Trò chuyện nhóm chưa bao giờ dễ dàng đến thế', style: TextStyle(
             fontSize: 14, color: AppColors.textSecondary, fontFamily: 'Inter',
           )),
           const SizedBox(height: 24),
@@ -533,7 +539,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
           const SizedBox(width: 10),
           Expanded(child: _buildStatCard('10K+', 'Tin nhắn\nmỗi ngày', const Color(0xFF3B82F6))),
           const SizedBox(width: 10),
-          Expanded(child: _buildStatCard('< 1s', 'Phản hồi\nrealtime', const Color(0xFF10B981))),
+          Expanded(child: _buildStatCard('< 1s', 'Phản hồi\ntức thì', const Color(0xFF10B981))),
         ],
       ),
     );
@@ -605,7 +611,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
           const Divider(color: AppColors.glassBorder),
           const SizedBox(height: 16),
           const Text(
-            '© 2026 LumoChat. All rights reserved.',
+            '© 2026 LumoChat. Mọi quyền được bảo lưu.',
             style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontFamily: 'Inter'),
           ),
         ],
