@@ -1,9 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/l10n.dart';
 import 'chat_list_screen.dart';
-import 'groups_screen.dart';
 import 'contacts_screen.dart';
+import 'groups_screen.dart';
 import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -38,6 +40,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
@@ -56,10 +60,10 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildNavItem(0, Icons.chat_bubble_rounded, Icons.chat_bubble_outlined, 'Tin nhắn', 0),
-                _buildNavItem(1, Icons.group_rounded, Icons.group_outlined, 'Nhóm', 0),
-                _buildNavItem(2, Icons.contacts_rounded, Icons.contacts_outlined, 'Danh bạ', 0),
-                _buildNavItem(3, Icons.person_rounded, Icons.person_outline_rounded, 'Cá nhân', 0),
+                _buildNavItem(0, Icons.chat_bubble_rounded, Icons.chat_bubble_outlined, l10n.navChats, 0),
+                _buildNavItem(1, Icons.group_rounded, Icons.group_outlined, l10n.navGroups, 0),
+                _buildNavItem(2, Icons.contacts_rounded, Icons.contacts_outlined, l10n.navContacts, 0),
+                _buildNavItem(3, Icons.person_rounded, Icons.person_outline_rounded, l10n.navProfile, 0),
               ],
             ),
           ),

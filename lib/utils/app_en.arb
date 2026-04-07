@@ -1,0 +1,438 @@
+﻿{
+  "@@locale": "en",
+  "appTitle": "LumoChat",
+  "@appTitle": {
+    "description": "Application title"
+  },
+  "navChats": "Messages",
+  "@navChats": {
+    "description": "Bottom navigation label for messages tab"
+  },
+  "navGroups": "Groups",
+  "@navGroups": {
+    "description": "Bottom navigation label for groups tab"
+  },
+  "navContacts": "Contacts",
+  "@navContacts": {
+    "description": "Bottom navigation label for contacts tab"
+  },
+  "navProfile": "Profile",
+  "@navProfile": {
+    "description": "Bottom navigation label for profile tab"
+  },
+  "commonUnexpectedError": "Something went wrong",
+  "@commonUnexpectedError": {
+    "description": "Generic unexpected error message"
+  },
+  "commonNoSearchResults": "No results found",
+  "@commonNoSearchResults": {
+    "description": "Shown when search has no result"
+  },
+  "commonCancel": "Cancel",
+  "@commonCancel": {
+    "description": "Generic cancel label"
+  },
+  "commonAddFriend": "Add friend",
+  "@commonAddFriend": {
+    "description": "Generic add friend action"
+  },
+  "commonClose": "Close",
+  "@commonClose": {
+    "description": "Close label for dialogs"
+  },
+  "commonOnline": "Online",
+  "@commonOnline": {
+    "description": "Generic online status"
+  },
+  "commonOffline": "Offline",
+  "@commonOffline": {
+    "description": "Generic offline status"
+  },
+  "chatListSearchHint": "Search conversations...",
+  "@chatListSearchHint": {
+    "description": "Hint text in chat list search box"
+  },
+  "chatListNoFriendsPrompt": "You have no friends yet. Add friends in the Contacts tab.",
+  "@chatListNoFriendsPrompt": {
+    "description": "Message when user has no friends"
+  },
+  "chatListNoConversations": "No conversations yet",
+  "@chatListNoConversations": {
+    "description": "Message when there are no conversations"
+  },
+  "chatListYourStory": "Your story",
+  "@chatListYourStory": {
+    "description": "Story bubble label for current user"
+  },
+  "chatListTapToStart": "Tap to start chatting",
+  "@chatListTapToStart": {
+    "description": "Default last message text"
+  },
+  "chatListTyping": "typing...",
+  "@chatListTyping": {
+    "description": "Typing indicator text"
+  },
+  "contactsActionFailed": "Action failed: {error}",
+  "@contactsActionFailed": {
+    "description": "Error message when contact action fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "contactsLoadProfileError": "Failed to load profile",
+  "@contactsLoadProfileError": {
+    "description": "Error while loading current user profile in contacts screen"
+  },
+  "contactsLoadContactsError": "Failed to load contacts",
+  "@contactsLoadContactsError": {
+    "description": "Error while loading contacts list"
+  },
+  "contactsSearchHint": "Search friends...",
+  "@contactsSearchHint": {
+    "description": "Hint text in contacts search box"
+  },
+  "contactsQuickInvites": "Invites",
+  "@contactsQuickInvites": {
+    "description": "Quick action label for received invites"
+  },
+  "contactsQuickSent": "Sent",
+  "@contactsQuickSent": {
+    "description": "Quick action label for sent invites"
+  },
+  "contactsQuickFriends": "Friends",
+  "@contactsQuickFriends": {
+    "description": "Quick action label for friends"
+  },
+  "contactsOnlineFriends": "Friends online ({count})",
+  "@contactsOnlineFriends": {
+    "description": "Section title showing number of online friends",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "contactsSectionFriendRequests": "Friend requests",
+  "@contactsSectionFriendRequests": {
+    "description": "Section title for received friend requests"
+  },
+  "contactsRejectedInvite": "Invitation declined",
+  "@contactsRejectedInvite": {
+    "description": "Success message after rejecting request"
+  },
+  "contactsAcceptedFriend": "Friend request accepted",
+  "@contactsAcceptedFriend": {
+    "description": "Success message after accepting request"
+  },
+  "contactsSectionSent": "Sent invitations",
+  "@contactsSectionSent": {
+    "description": "Section title for sent requests"
+  },
+  "contactsPendingResponse": "Waiting for response",
+  "@contactsPendingResponse": {
+    "description": "Subtitle for pending sent request"
+  },
+  "contactsCanceledInvite": "Invitation canceled",
+  "@contactsCanceledInvite": {
+    "description": "Success message after canceling request"
+  },
+  "contactsSectionFriends": "Friends",
+  "@contactsSectionFriends": {
+    "description": "Section title for friend list"
+  },
+  "contactsUnfriended": "Removed from friends",
+  "@contactsUnfriended": {
+    "description": "Success message after unfriend"
+  },
+  "contactsSectionDiscover": "Discover",
+  "@contactsSectionDiscover": {
+    "description": "Section title for suggestions"
+  },
+  "contactsSentInvite": "Friend request sent",
+  "@contactsSentInvite": {
+    "description": "Success message after sending friend request"
+  },
+  "contactsNoMatchingData": "No matching data",
+  "@contactsNoMatchingData": {
+    "description": "Empty state for contacts filters"
+  },
+  "contactsStatusActive": "Active now",
+  "@contactsStatusActive": {
+    "description": "Fallback subtitle for online friend"
+  },
+  "contactsStatusOffline": "Offline",
+  "@contactsStatusOffline": {
+    "description": "Fallback subtitle for offline friend"
+  },
+  "groupsTitle": "Group chats",
+  "@groupsTitle": {
+    "description": "Title of groups screen"
+  },
+  "groupsLoadError": "Error loading groups: {error}",
+  "@groupsLoadError": {
+    "description": "Error message while loading groups",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "groupsEmpty": "You have not joined any group yet",
+  "@groupsEmpty": {
+    "description": "Empty state when user has no groups"
+  },
+  "groupsUnnamed": "Unnamed group",
+  "@groupsUnnamed": {
+    "description": "Fallback group name"
+  },
+  "profileNotUpdated": "Not updated",
+  "@profileNotUpdated": {
+    "description": "Fallback value for missing profile fields"
+  },
+  "profileLoadError": "Unable to load profile",
+  "@profileLoadError": {
+    "description": "Profile load error message"
+  },
+  "profileFallbackUser": "User",
+  "@profileFallbackUser": {
+    "description": "Fallback user name"
+  },
+  "profileFallbackBio": "Using LumoChat",
+  "@profileFallbackBio": {
+    "description": "Fallback profile bio"
+  },
+  "profileSummaryTitle": "LumoChat Profile",
+  "@profileSummaryTitle": {
+    "description": "Summary title for copied profile text"
+  },
+  "profileSummaryName": "Name",
+  "@profileSummaryName": {
+    "description": "Label for name in profile summary"
+  },
+  "profileSummaryEmail": "Email",
+  "@profileSummaryEmail": {
+    "description": "Label for email in profile summary"
+  },
+  "profileSummaryPhone": "Phone",
+  "@profileSummaryPhone": {
+    "description": "Label for phone in profile summary"
+  },
+  "profileSummaryAddress": "Address",
+  "@profileSummaryAddress": {
+    "description": "Label for address in profile summary"
+  },
+  "profileSummaryCity": "City",
+  "@profileSummaryCity": {
+    "description": "Label for city in profile summary"
+  },
+  "profileSummaryGender": "Gender",
+  "@profileSummaryGender": {
+    "description": "Label for gender in profile summary"
+  },
+  "profileSummaryBirthDate": "Birth date",
+  "@profileSummaryBirthDate": {
+    "description": "Label for birth date in profile summary"
+  },
+  "profileSummaryOccupation": "Occupation",
+  "@profileSummaryOccupation": {
+    "description": "Label for occupation in profile summary"
+  },
+  "profileSummaryWebsite": "Website",
+  "@profileSummaryWebsite": {
+    "description": "Label for website in profile summary"
+  },
+  "profileCopySummarySuccess": "Profile information copied",
+  "@profileCopySummarySuccess": {
+    "description": "Success message after copying profile summary"
+  },
+  "profileStatFriends": "Friends",
+  "@profileStatFriends": {
+    "description": "Friends stat label"
+  },
+  "profileStatGroups": "Groups",
+  "@profileStatGroups": {
+    "description": "Groups stat label"
+  },
+  "profileStatStatus": "Status",
+  "@profileStatStatus": {
+    "description": "Status stat label"
+  },
+  "profileEdit": "Edit",
+  "@profileEdit": {
+    "description": "Edit profile button label"
+  },
+  "profileShare": "Share",
+  "@profileShare": {
+    "description": "Share profile button label"
+  },
+  "profileSectionBasicInfo": "Basic Information",
+  "@profileSectionBasicInfo": {
+    "description": "Section title for basic profile info"
+  },
+  "profileFieldPhone": "Phone",
+  "@profileFieldPhone": {
+    "description": "Phone field label"
+  },
+  "profileFieldAddress": "Address",
+  "@profileFieldAddress": {
+    "description": "Address field label"
+  },
+  "profileFieldCity": "City",
+  "@profileFieldCity": {
+    "description": "City field label"
+  },
+  "profileFieldGender": "Gender",
+  "@profileFieldGender": {
+    "description": "Gender field label"
+  },
+  "profileFieldBirthDate": "Birth date",
+  "@profileFieldBirthDate": {
+    "description": "Birth date field label"
+  },
+  "profileFieldOccupation": "Occupation",
+  "@profileFieldOccupation": {
+    "description": "Occupation field label"
+  },
+  "profileFieldWebsite": "Website",
+  "@profileFieldWebsite": {
+    "description": "Website field label"
+  },
+  "profileSectionAccount": "Account",
+  "@profileSectionAccount": {
+    "description": "Section title for account settings"
+  },
+  "profileMenuPersonalInfo": "Personal information",
+  "@profileMenuPersonalInfo": {
+    "description": "Menu item label for personal info"
+  },
+  "profileMenuCopyUserId": "Copy user ID",
+  "@profileMenuCopyUserId": {
+    "description": "Menu item label for copying user id"
+  },
+  "profileCopyUserIdSuccess": "User ID copied",
+  "@profileCopyUserIdSuccess": {
+    "description": "Success message after copying user id"
+  },
+  "profileMenuSecurity": "Security",
+  "@profileMenuSecurity": {
+    "description": "Menu item label for security"
+  },
+  "profileSecurityTitle": "Security",
+  "@profileSecurityTitle": {
+    "description": "Security dialog title"
+  },
+  "profileSecurityMessage": "Advanced security features will be available soon.",
+  "@profileSecurityMessage": {
+    "description": "Security dialog message"
+  },
+  "profileSectionCustomization": "Customization",
+  "@profileSectionCustomization": {
+    "description": "Section title for customization"
+  },
+  "profileMenuDarkMode": "Dark mode",
+  "@profileMenuDarkMode": {
+    "description": "Menu label for dark mode toggle"
+  },
+  "profileMenuLanguage": "Language",
+  "@profileMenuLanguage": {
+    "description": "Menu label for language selector"
+  },
+  "profileLanguageVietnamese": "Vietnamese",
+  "@profileLanguageVietnamese": {
+    "description": "Language option label for Vietnamese"
+  },
+  "profileLanguageEnglish": "English",
+  "@profileLanguageEnglish": {
+    "description": "Language option label for English"
+  },
+  "profileLanguageDialogTitle": "Choose language",
+  "@profileLanguageDialogTitle": {
+    "description": "Language selection dialog title"
+  },
+  "profileLanguageSaveFailed": "Failed to save language setting: {error}",
+  "@profileLanguageSaveFailed": {
+    "description": "Error while saving language setting",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileSectionSupport": "Support",
+  "@profileSectionSupport": {
+    "description": "Section title for support"
+  },
+  "profileMenuHelpCenter": "Help center",
+  "@profileMenuHelpCenter": {
+    "description": "Menu label for help center"
+  },
+  "profileHelpTitle": "Support",
+  "@profileHelpTitle": {
+    "description": "Support dialog title"
+  },
+  "profileHelpMessage": "Contact: support@lumochat.app",
+  "@profileHelpMessage": {
+    "description": "Support dialog message"
+  },
+  "profileMenuReportBug": "Report bug",
+  "@profileMenuReportBug": {
+    "description": "Menu label for report bug"
+  },
+  "profileReportBugTitle": "Report bug",
+  "@profileReportBugTitle": {
+    "description": "Report bug dialog title"
+  },
+  "profileReportBugMessage": "Send bugs to: bug@lumochat.app",
+  "@profileReportBugMessage": {
+    "description": "Report bug dialog message"
+  },
+  "profileMenuAbout": "About",
+  "@profileMenuAbout": {
+    "description": "Menu label for about"
+  },
+  "profileAboutTitle": "About",
+  "@profileAboutTitle": {
+    "description": "About dialog title"
+  },
+  "profileAboutMessage": "LumoChat - Real-time connection and messaging.",
+  "@profileAboutMessage": {
+    "description": "About dialog message"
+  },
+  "profileMenuNotifications": "Notifications",
+  "@profileMenuNotifications": {
+    "description": "Menu label for notifications toggle"
+  },
+  "profileLogout": "Log out",
+  "@profileLogout": {
+    "description": "Log out button label"
+  },
+  "profileLogoutError": "Log out failed: {error}",
+  "@profileLogoutError": {
+    "description": "Error message when logout fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileSaveSettingFailed": "Failed to save setting: {error}",
+  "@profileSaveSettingFailed": {
+    "description": "Error while saving profile setting",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileVersion": "LumoChat v{version}",
+  "@profileVersion": {
+    "description": "Application version text",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  }
+}

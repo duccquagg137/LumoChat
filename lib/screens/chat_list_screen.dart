@@ -1,9 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/chat_models.dart';
 import '../theme/app_theme.dart';
+import '../utils/l10n.dart';
 import '../widgets/glass_card.dart';
 import 'chat_screen.dart';
 
@@ -33,6 +34,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -57,9 +60,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                   child: Row(
                     children: [
-                      const Text(
-                        'Tin nhắn',
-                        style: TextStyle(
+                      Text(
+                        l10n.navChats,
+                        style: const TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
                           color: AppColors.textPrimary,
@@ -87,12 +90,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       controller: _searchController,
                       onChanged: (value) => setState(() => _searchQuery = value.trim().toLowerCase()),
                       style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
-                        hintText: 'Tìm kiếm cuộc trò chuyện...',
-                        hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 14, fontFamily: 'Inter'),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
+                        hintText: l10n.chatListSearchHint,
+                        hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14, fontFamily: 'Inter'),
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       ),
                     ),
                   ),
@@ -102,7 +105,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     stream: FirebaseFirestore.instance.collection('users').doc(_currentUserId).snapshots(),
                     builder: (context, mySnapshot) {
                       if (mySnapshot.hasError) {
-                        return const Center(child: Text('Đã xảy ra lỗi', style: TextStyle(color: AppColors.textMuted)));
+                        return Center(child: Text(l10n.commonUnexpectedError, style: const TextStyle(color: AppColors.textMuted)));
                       }
                       if (mySnapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator(color: AppColors.primary));
@@ -112,11 +115,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       final friendIds = _readIdSet(myData['friends']);
 
                       if (friendIds.isEmpty) {
-                        return const Center(
+                        return Center(
                           child: Text(
-                            'Bạn chưa có bạn bè nào. Hãy kết bạn ở tab Danh bạ.',
+                            l10n.chatListNoFriendsPrompt,
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: AppColors.textMuted),
+                            style: const TextStyle(color: AppColors.textMuted),
                           ),
                         );
                       }
@@ -125,7 +128,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         stream: FirebaseFirestore.instance.collection('users').snapshots(),
                         builder: (context, usersSnapshot) {
                           if (usersSnapshot.hasError) {
-                            return const Center(child: Text('Đã xảy ra lỗi', style: TextStyle(color: AppColors.textMuted)));
+                            return Center(child: Text(l10n.commonUnexpectedError, style: const TextStyle(color: AppColors.textMuted)));
                           }
                           if (usersSnapshot.connectionState == ConnectionState.waiting) {
                             return const Center(child: CircularProgressIndicator(color: AppColors.primary));
@@ -144,7 +147,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           if (usersList.isEmpty) {
                             return Center(
                               child: Text(
-                                _searchQuery.isEmpty ? 'Chưa có cuộc trò chuyện nào' : 'Không tìm thấy kết quả',
+                                _searchQuery.isEmpty ? l10n.chatListNoConversations : l10n.commonNoSearchResults,
                                 style: const TextStyle(color: AppColors.textMuted),
                               ),
                             );
@@ -158,7 +161,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                   scrollDirection: Axis.horizontal,
                                   padding: const EdgeInsets.symmetric(horizontal: 16),
                                   children: [
-                                    _buildStoryItem('Tin của bạn', true, true),
+                                    _buildStoryItem(l10n.chatListYourStory, true, true),
                                     ...usersList.take(7).map(
                                       (user) => _buildStoryItem(user.name.split(' ').last, false, user.isOnline),
                                     ),
@@ -178,7 +181,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                     return StreamBuilder<DocumentSnapshot>(
                                       stream: FirebaseFirestore.instance.collection('chat_rooms').doc(chatRoomId).snapshots(),
                                       builder: (context, roomSnapshot) {
-                                        String lastText = 'Chạm để bắt đầu trò chuyện';
+                                        String lastText = l10n.chatListTapToStart;
                                         String timeTxt = '';
 
                                         if (roomSnapshot.hasData && roomSnapshot.data!.exists) {
@@ -294,6 +297,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   Widget _buildConversationItem(BuildContext context, Conversation conv) {
     final hasUnread = conv.unreadCount > 0;
+    final l10n = context.l10n;
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -382,9 +387,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     children: [
                       Expanded(
                         child: conv.isTyping
-                            ? const Text(
-                                'đang nhập...',
-                                style: TextStyle(
+                            ? Text(
+                                l10n.chatListTyping,
+                                style: const TextStyle(
                                   color: AppColors.accentGreen,
                                   fontSize: 13,
                                   fontStyle: FontStyle.italic,

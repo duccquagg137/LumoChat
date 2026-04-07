@@ -1,10 +1,11 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/chat_models.dart';
 import '../services/friend_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/l10n.dart';
 import '../widgets/glass_card.dart';
 import 'chat_screen.dart';
 
@@ -50,7 +51,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Thao tác thất bại: $e'),
+          content: Text(context.l10n.contactsActionFailed(e.toString())),
           backgroundColor: AppColors.error,
         ),
       );
@@ -63,12 +64,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+
     return Scaffold(
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection('users').doc(_currentUserId).snapshots(),
         builder: (context, mySnapshot) {
           if (mySnapshot.hasError) {
-            return const Center(child: Text('Lỗi tải hồ sơ', style: TextStyle(color: AppColors.textMuted)));
+            return Center(child: Text(l10n.contactsLoadProfileError, style: const TextStyle(color: AppColors.textMuted)));
           }
           if (mySnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: AppColors.primary));
@@ -83,7 +86,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
             stream: FirebaseFirestore.instance.collection('users').snapshots(),
             builder: (context, usersSnapshot) {
               if (usersSnapshot.hasError) {
-                return const Center(child: Text('Lỗi tải danh bạ', style: TextStyle(color: AppColors.textMuted)));
+                return Center(child: Text(l10n.contactsLoadContactsError, style: const TextStyle(color: AppColors.textMuted)));
               }
               if (usersSnapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator(color: AppColors.primary));
@@ -139,9 +142,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
                           padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                           child: Row(
                             children: [
-                              const Text(
-                                'Danh bạ',
-                                style: TextStyle(
+                              Text(
+                                l10n.navContacts,
+                                style: const TextStyle(
                                   fontSize: 28,
                                   fontWeight: FontWeight.w800,
                                   color: AppColors.textPrimary,
@@ -174,12 +177,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
                               controller: _searchController,
                               onChanged: (value) => setState(() => _searchQuery = value.trim().toLowerCase()),
                               style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
-                              decoration: const InputDecoration(
-                                prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
-                                hintText: 'Tìm bạn bè...',
-                                hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 14, fontFamily: 'Inter'),
+                              decoration: InputDecoration(
+                                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
+                                hintText: l10n.contactsSearchHint,
+                                hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14, fontFamily: 'Inter'),
                                 border: InputBorder.none,
-                                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                               ),
                             ),
                           ),
@@ -188,11 +191,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                           child: Row(
                             children: [
-                              _buildQuickAction(Icons.mail_outline_rounded, 'Lời mời', badge: receivedRequests.length),
+                              _buildQuickAction(Icons.mail_outline_rounded, l10n.contactsQuickInvites, badge: receivedRequests.length),
                               const SizedBox(width: 12),
-                              _buildQuickAction(Icons.schedule_send_rounded, 'Đã gửi', badge: sentRequests.length),
+                              _buildQuickAction(Icons.schedule_send_rounded, l10n.contactsQuickSent, badge: sentRequests.length),
                               const SizedBox(width: 12),
-                              _buildQuickAction(Icons.people_outline_rounded, 'Bạn bè', badge: friends.length),
+                              _buildQuickAction(Icons.people_outline_rounded, l10n.contactsQuickFriends, badge: friends.length),
                             ],
                           ),
                         ),
@@ -202,7 +205,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                             child: Row(
                               children: [
                                 Text(
-                                  'Bạn bè đang trực tuyến (${onlineFriends.length})',
+                                  l10n.contactsOnlineFriends(onlineFriends.length),
                                   style: const TextStyle(
                                     color: AppColors.textSecondary,
                                     fontSize: 14,
@@ -256,7 +259,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                             children: [
                               if (receivedRequests.isNotEmpty) ...[
                                 const SizedBox(height: 8),
-                                _buildSectionTitle('Lời mời kết bạn'),
+                                _buildSectionTitle(l10n.contactsSectionFriendRequests),
                                 ...receivedRequests.map((user) {
                                   final isBusy = _busyUserIds.contains(user.id);
                                   return _buildUserItem(
@@ -272,7 +275,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                               : () => _runAction(
                                                     user.id,
                                                     () => _friendService.rejectFriendRequest(user.id),
-                                                    'Đã từ chối lời mời',
+                                                    l10n.contactsRejectedInvite,
                                                   ),
                                         ),
                                         const SizedBox(width: 8),
@@ -284,7 +287,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                               : () => _runAction(
                                                     user.id,
                                                     () => _friendService.acceptFriendRequest(user.id),
-                                                    'Đã chấp nhận kết bạn',
+                                                    l10n.contactsAcceptedFriend,
                                                   ),
                                         ),
                                       ],
@@ -294,20 +297,20 @@ class _ContactsScreenState extends State<ContactsScreen> {
                               ],
                               if (sentRequests.isNotEmpty) ...[
                                 const SizedBox(height: 10),
-                                _buildSectionTitle('Đã gửi lời mời'),
+                                _buildSectionTitle(l10n.contactsSectionSent),
                                 ...sentRequests.map((user) {
                                   final isBusy = _busyUserIds.contains(user.id);
                                   return _buildUserItem(
                                     user: user,
-                                    subtitle: 'Đang chờ phản hồi',
+                                    subtitle: l10n.contactsPendingResponse,
                                     trailing: _buildActionText(
-                                      label: isBusy ? '...' : 'Hủy',
+                                      label: isBusy ? '...' : l10n.commonCancel,
                                       onTap: isBusy
                                           ? null
                                           : () => _runAction(
                                                 user.id,
                                                 () => _friendService.cancelFriendRequest(user.id),
-                                                'Đã hủy lời mời',
+                                                l10n.contactsCanceledInvite,
                                               ),
                                     ),
                                   );
@@ -315,7 +318,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                               ],
                               if (friends.isNotEmpty) ...[
                                 const SizedBox(height: 10),
-                                _buildSectionTitle('Bạn bè'),
+                                _buildSectionTitle(l10n.contactsSectionFriends),
                                 ...sortedLetters.map((letter) {
                                   final usersInLetter = groupedFriends[letter] ?? [];
                                   return Column(
@@ -363,7 +366,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                                     : () => _runAction(
                                                           user.id,
                                                           () => _friendService.unfriend(user.id),
-                                                          'Đã xóa bạn bè',
+                                                          l10n.contactsUnfriended,
                                                         ),
                                                 child: _buildCircleAction(
                                                   Icons.person_remove_outlined,
@@ -380,19 +383,19 @@ class _ContactsScreenState extends State<ContactsScreen> {
                               ],
                               if (suggestions.isNotEmpty) ...[
                                 const SizedBox(height: 10),
-                                _buildSectionTitle('Khám phá'),
+                                _buildSectionTitle(l10n.contactsSectionDiscover),
                                 ...suggestions.map((user) {
                                   final isBusy = _busyUserIds.contains(user.id);
                                   return _buildUserItem(
                                     user: user,
                                     trailing: _buildActionText(
-                                      label: isBusy ? '...' : 'Kết bạn',
+                                      label: isBusy ? '...' : l10n.commonAddFriend,
                                       onTap: isBusy
                                           ? null
                                           : () => _runAction(
                                                 user.id,
                                                 () => _friendService.sendFriendRequest(user.id),
-                                                'Đã gửi lời mời kết bạn',
+                                                l10n.contactsSentInvite,
                                               ),
                                     ),
                                   );
@@ -402,12 +405,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                   receivedRequests.isEmpty &&
                                   sentRequests.isEmpty &&
                                   suggestions.isEmpty)
-                                const Padding(
-                                  padding: EdgeInsets.only(top: 60),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 60),
                                   child: Center(
                                     child: Text(
-                                      'Không có dữ liệu phù hợp',
-                                      style: TextStyle(color: AppColors.textMuted, fontFamily: 'Inter'),
+                                      l10n.contactsNoMatchingData,
+                                      style: const TextStyle(color: AppColors.textMuted, fontFamily: 'Inter'),
                                     ),
                                   ),
                                 ),
@@ -447,6 +450,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
     Widget? trailing,
     String? subtitle,
   }) {
+    final l10n = context.l10n;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 2),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -469,7 +474,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  subtitle ?? (user.bio?.isNotEmpty == true ? user.bio! : (user.isOnline ? 'Đang hoạt động' : 'Ngoại tuyến')),
+                  subtitle ?? (user.bio?.isNotEmpty == true ? user.bio! : (user.isOnline ? l10n.contactsStatusActive : l10n.contactsStatusOffline)),
                   style: const TextStyle(
                     color: AppColors.textMuted,
                     fontSize: 12,

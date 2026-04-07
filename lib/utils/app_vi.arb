@@ -1,0 +1,438 @@
+﻿{
+  "@@locale": "vi",
+  "appTitle": "LumoChat",
+  "@appTitle": {
+    "description": "Tên ứng dụng"
+  },
+  "navChats": "Tin nhắn",
+  "@navChats": {
+    "description": "Nhãn tab tin nhắn ở thanh điều hướng dưới"
+  },
+  "navGroups": "Nhóm",
+  "@navGroups": {
+    "description": "Nhãn tab nhóm ở thanh điều hướng dưới"
+  },
+  "navContacts": "Danh bạ",
+  "@navContacts": {
+    "description": "Nhãn tab danh bạ ở thanh điều hướng dưới"
+  },
+  "navProfile": "Cá nhân",
+  "@navProfile": {
+    "description": "Nhãn tab cá nhân ở thanh điều hướng dưới"
+  },
+  "commonUnexpectedError": "Đã xảy ra lỗi",
+  "@commonUnexpectedError": {
+    "description": "Thông báo lỗi chung"
+  },
+  "commonNoSearchResults": "Không tìm thấy kết quả",
+  "@commonNoSearchResults": {
+    "description": "Thông báo khi không có kết quả tìm kiếm"
+  },
+  "commonCancel": "Hủy",
+  "@commonCancel": {
+    "description": "Nhãn hành động hủy"
+  },
+  "commonAddFriend": "Kết bạn",
+  "@commonAddFriend": {
+    "description": "Nhãn hành động kết bạn"
+  },
+  "commonClose": "Đóng",
+  "@commonClose": {
+    "description": "Nhãn đóng dialog"
+  },
+  "commonOnline": "Trực tuyến",
+  "@commonOnline": {
+    "description": "Trạng thái online chung"
+  },
+  "commonOffline": "Ngoại tuyến",
+  "@commonOffline": {
+    "description": "Trạng thái offline chung"
+  },
+  "chatListSearchHint": "Tìm kiếm cuộc trò chuyện...",
+  "@chatListSearchHint": {
+    "description": "Gợi ý tìm kiếm ở màn danh sách chat"
+  },
+  "chatListNoFriendsPrompt": "Bạn chưa có bạn bè nào. Hãy kết bạn ở tab Danh bạ.",
+  "@chatListNoFriendsPrompt": {
+    "description": "Thông báo khi chưa có bạn bè"
+  },
+  "chatListNoConversations": "Chưa có cuộc trò chuyện nào",
+  "@chatListNoConversations": {
+    "description": "Thông báo khi chưa có cuộc trò chuyện"
+  },
+  "chatListYourStory": "Tin của bạn",
+  "@chatListYourStory": {
+    "description": "Nhãn story của người dùng hiện tại"
+  },
+  "chatListTapToStart": "Chạm để bắt đầu trò chuyện",
+  "@chatListTapToStart": {
+    "description": "Nội dung tin nhắn mặc định"
+  },
+  "chatListTyping": "đang nhập...",
+  "@chatListTyping": {
+    "description": "Nhãn trạng thái đang nhập"
+  },
+  "contactsActionFailed": "Thao tác thất bại: {error}",
+  "@contactsActionFailed": {
+    "description": "Thông báo lỗi khi thao tác bạn bè thất bại",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "contactsLoadProfileError": "Lỗi tải hồ sơ",
+  "@contactsLoadProfileError": {
+    "description": "Lỗi khi tải hồ sơ hiện tại ở màn danh bạ"
+  },
+  "contactsLoadContactsError": "Lỗi tải danh bạ",
+  "@contactsLoadContactsError": {
+    "description": "Lỗi khi tải danh sách danh bạ"
+  },
+  "contactsSearchHint": "Tìm bạn bè...",
+  "@contactsSearchHint": {
+    "description": "Gợi ý tìm kiếm ở màn danh bạ"
+  },
+  "contactsQuickInvites": "Lời mời",
+  "@contactsQuickInvites": {
+    "description": "Nhãn quick action cho lời mời nhận được"
+  },
+  "contactsQuickSent": "Đã gửi",
+  "@contactsQuickSent": {
+    "description": "Nhãn quick action cho lời mời đã gửi"
+  },
+  "contactsQuickFriends": "Bạn bè",
+  "@contactsQuickFriends": {
+    "description": "Nhãn quick action cho bạn bè"
+  },
+  "contactsOnlineFriends": "Bạn bè đang trực tuyến ({count})",
+  "@contactsOnlineFriends": {
+    "description": "Tiêu đề phần bạn bè đang trực tuyến có kèm số lượng",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "contactsSectionFriendRequests": "Lời mời kết bạn",
+  "@contactsSectionFriendRequests": {
+    "description": "Tiêu đề mục lời mời kết bạn"
+  },
+  "contactsRejectedInvite": "Đã từ chối lời mời",
+  "@contactsRejectedInvite": {
+    "description": "Thông báo thành công khi từ chối lời mời"
+  },
+  "contactsAcceptedFriend": "Đã chấp nhận kết bạn",
+  "@contactsAcceptedFriend": {
+    "description": "Thông báo thành công khi chấp nhận kết bạn"
+  },
+  "contactsSectionSent": "Đã gửi lời mời",
+  "@contactsSectionSent": {
+    "description": "Tiêu đề mục lời mời đã gửi"
+  },
+  "contactsPendingResponse": "Đang chờ phản hồi",
+  "@contactsPendingResponse": {
+    "description": "Mô tả trạng thái lời mời đã gửi"
+  },
+  "contactsCanceledInvite": "Đã hủy lời mời",
+  "@contactsCanceledInvite": {
+    "description": "Thông báo thành công khi hủy lời mời"
+  },
+  "contactsSectionFriends": "Bạn bè",
+  "@contactsSectionFriends": {
+    "description": "Tiêu đề mục bạn bè"
+  },
+  "contactsUnfriended": "Đã xóa bạn bè",
+  "@contactsUnfriended": {
+    "description": "Thông báo thành công khi xóa bạn bè"
+  },
+  "contactsSectionDiscover": "Khám phá",
+  "@contactsSectionDiscover": {
+    "description": "Tiêu đề mục gợi ý kết bạn"
+  },
+  "contactsSentInvite": "Đã gửi lời mời kết bạn",
+  "@contactsSentInvite": {
+    "description": "Thông báo thành công khi gửi lời mời kết bạn"
+  },
+  "contactsNoMatchingData": "Không có dữ liệu phù hợp",
+  "@contactsNoMatchingData": {
+    "description": "Thông báo khi không có dữ liệu phù hợp"
+  },
+  "contactsStatusActive": "Đang hoạt động",
+  "@contactsStatusActive": {
+    "description": "Trạng thái mặc định của bạn bè online"
+  },
+  "contactsStatusOffline": "Ngoại tuyến",
+  "@contactsStatusOffline": {
+    "description": "Trạng thái mặc định của bạn bè offline"
+  },
+  "groupsTitle": "Nhóm trò chuyện",
+  "@groupsTitle": {
+    "description": "Tiêu đề màn hình nhóm"
+  },
+  "groupsLoadError": "Lỗi tải nhóm: {error}",
+  "@groupsLoadError": {
+    "description": "Thông báo lỗi khi tải danh sách nhóm",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "groupsEmpty": "Bạn chưa tham gia nhóm nào",
+  "@groupsEmpty": {
+    "description": "Thông báo khi chưa tham gia nhóm"
+  },
+  "groupsUnnamed": "Nhóm không tên",
+  "@groupsUnnamed": {
+    "description": "Tên mặc định khi nhóm không có tên"
+  },
+  "profileNotUpdated": "Chưa cập nhật",
+  "@profileNotUpdated": {
+    "description": "Giá trị fallback cho thông tin hồ sơ chưa có"
+  },
+  "profileLoadError": "Không tải được hồ sơ",
+  "@profileLoadError": {
+    "description": "Thông báo lỗi tải hồ sơ"
+  },
+  "profileFallbackUser": "Người dùng",
+  "@profileFallbackUser": {
+    "description": "Tên fallback người dùng"
+  },
+  "profileFallbackBio": "Đang sử dụng LumoChat",
+  "@profileFallbackBio": {
+    "description": "Mô tả fallback hồ sơ"
+  },
+  "profileSummaryTitle": "Hồ sơ LumoChat",
+  "@profileSummaryTitle": {
+    "description": "Dòng tiêu đề khi sao chép hồ sơ"
+  },
+  "profileSummaryName": "Tên",
+  "@profileSummaryName": {
+    "description": "Nhãn tên trong nội dung sao chép hồ sơ"
+  },
+  "profileSummaryEmail": "Email",
+  "@profileSummaryEmail": {
+    "description": "Nhãn email trong nội dung sao chép hồ sơ"
+  },
+  "profileSummaryPhone": "Số điện thoại",
+  "@profileSummaryPhone": {
+    "description": "Nhãn số điện thoại trong nội dung sao chép hồ sơ"
+  },
+  "profileSummaryAddress": "Địa chỉ",
+  "@profileSummaryAddress": {
+    "description": "Nhãn địa chỉ trong nội dung sao chép hồ sơ"
+  },
+  "profileSummaryCity": "Thành phố",
+  "@profileSummaryCity": {
+    "description": "Nhãn thành phố trong nội dung sao chép hồ sơ"
+  },
+  "profileSummaryGender": "Giới tính",
+  "@profileSummaryGender": {
+    "description": "Nhãn giới tính trong nội dung sao chép hồ sơ"
+  },
+  "profileSummaryBirthDate": "Ngày sinh",
+  "@profileSummaryBirthDate": {
+    "description": "Nhãn ngày sinh trong nội dung sao chép hồ sơ"
+  },
+  "profileSummaryOccupation": "Nghề nghiệp",
+  "@profileSummaryOccupation": {
+    "description": "Nhãn nghề nghiệp trong nội dung sao chép hồ sơ"
+  },
+  "profileSummaryWebsite": "Website",
+  "@profileSummaryWebsite": {
+    "description": "Nhãn website trong nội dung sao chép hồ sơ"
+  },
+  "profileCopySummarySuccess": "Đã sao chép thông tin hồ sơ",
+  "@profileCopySummarySuccess": {
+    "description": "Thông báo khi sao chép hồ sơ thành công"
+  },
+  "profileStatFriends": "Bạn bè",
+  "@profileStatFriends": {
+    "description": "Nhãn thống kê bạn bè trong thẻ hồ sơ"
+  },
+  "profileStatGroups": "Nhóm",
+  "@profileStatGroups": {
+    "description": "Nhãn thống kê nhóm trong thẻ hồ sơ"
+  },
+  "profileStatStatus": "Trạng thái",
+  "@profileStatStatus": {
+    "description": "Nhãn thống kê trạng thái trong thẻ hồ sơ"
+  },
+  "profileEdit": "Chỉnh sửa",
+  "@profileEdit": {
+    "description": "Nhãn nút chỉnh sửa hồ sơ"
+  },
+  "profileShare": "Chia sẻ",
+  "@profileShare": {
+    "description": "Nhãn nút chia sẻ hồ sơ"
+  },
+  "profileSectionBasicInfo": "Thông tin cơ bản",
+  "@profileSectionBasicInfo": {
+    "description": "Tiêu đề mục thông tin cơ bản"
+  },
+  "profileFieldPhone": "Số điện thoại",
+  "@profileFieldPhone": {
+    "description": "Nhãn số điện thoại trong hồ sơ"
+  },
+  "profileFieldAddress": "Địa chỉ",
+  "@profileFieldAddress": {
+    "description": "Nhãn địa chỉ trong hồ sơ"
+  },
+  "profileFieldCity": "Thành phố",
+  "@profileFieldCity": {
+    "description": "Nhãn thành phố trong hồ sơ"
+  },
+  "profileFieldGender": "Giới tính",
+  "@profileFieldGender": {
+    "description": "Nhãn giới tính trong hồ sơ"
+  },
+  "profileFieldBirthDate": "Ngày sinh",
+  "@profileFieldBirthDate": {
+    "description": "Nhãn ngày sinh trong hồ sơ"
+  },
+  "profileFieldOccupation": "Nghề nghiệp",
+  "@profileFieldOccupation": {
+    "description": "Nhãn nghề nghiệp trong hồ sơ"
+  },
+  "profileFieldWebsite": "Website",
+  "@profileFieldWebsite": {
+    "description": "Nhãn website trong hồ sơ"
+  },
+  "profileSectionAccount": "Tài khoản",
+  "@profileSectionAccount": {
+    "description": "Tiêu đề mục tài khoản"
+  },
+  "profileMenuPersonalInfo": "Thông tin cá nhân",
+  "@profileMenuPersonalInfo": {
+    "description": "Nhãn menu thông tin cá nhân"
+  },
+  "profileMenuCopyUserId": "Sao chép ID người dùng",
+  "@profileMenuCopyUserId": {
+    "description": "Nhãn menu sao chép user id"
+  },
+  "profileCopyUserIdSuccess": "Đã sao chép ID",
+  "@profileCopyUserIdSuccess": {
+    "description": "Thông báo sao chép ID thành công"
+  },
+  "profileMenuSecurity": "Bảo mật",
+  "@profileMenuSecurity": {
+    "description": "Nhãn menu bảo mật"
+  },
+  "profileSecurityTitle": "Bảo mật",
+  "@profileSecurityTitle": {
+    "description": "Tiêu đề dialog bảo mật"
+  },
+  "profileSecurityMessage": "Tính năng bảo mật nâng cao sẽ được cập nhật sớm.",
+  "@profileSecurityMessage": {
+    "description": "Nội dung dialog bảo mật"
+  },
+  "profileSectionCustomization": "Tùy chỉnh",
+  "@profileSectionCustomization": {
+    "description": "Tiêu đề mục tùy chỉnh"
+  },
+  "profileMenuDarkMode": "Giao diện tối",
+  "@profileMenuDarkMode": {
+    "description": "Nhãn bật tắt dark mode"
+  },
+  "profileMenuLanguage": "Ngôn ngữ",
+  "@profileMenuLanguage": {
+    "description": "Nhãn menu ngôn ngữ"
+  },
+  "profileLanguageVietnamese": "Tiếng Việt",
+  "@profileLanguageVietnamese": {
+    "description": "Nhãn tiếng Việt"
+  },
+  "profileLanguageEnglish": "Tiếng Anh",
+  "@profileLanguageEnglish": {
+    "description": "Nhãn tiếng Anh"
+  },
+  "profileLanguageDialogTitle": "Chọn ngôn ngữ",
+  "@profileLanguageDialogTitle": {
+    "description": "Tiêu đề dialog chọn ngôn ngữ"
+  },
+  "profileLanguageSaveFailed": "Lưu cài đặt ngôn ngữ thất bại: {error}",
+  "@profileLanguageSaveFailed": {
+    "description": "Thông báo lỗi lưu cài đặt ngôn ngữ",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileSectionSupport": "Hỗ trợ",
+  "@profileSectionSupport": {
+    "description": "Tiêu đề mục hỗ trợ"
+  },
+  "profileMenuHelpCenter": "Trung tâm hỗ trợ",
+  "@profileMenuHelpCenter": {
+    "description": "Nhãn menu trung tâm hỗ trợ"
+  },
+  "profileHelpTitle": "Hỗ trợ",
+  "@profileHelpTitle": {
+    "description": "Tiêu đề dialog hỗ trợ"
+  },
+  "profileHelpMessage": "Liên hệ: support@lumochat.app",
+  "@profileHelpMessage": {
+    "description": "Nội dung dialog hỗ trợ"
+  },
+  "profileMenuReportBug": "Báo lỗi",
+  "@profileMenuReportBug": {
+    "description": "Nhãn menu báo lỗi"
+  },
+  "profileReportBugTitle": "Báo lỗi",
+  "@profileReportBugTitle": {
+    "description": "Tiêu đề dialog báo lỗi"
+  },
+  "profileReportBugMessage": "Gửi lỗi qua email: bug@lumochat.app",
+  "@profileReportBugMessage": {
+    "description": "Nội dung dialog báo lỗi"
+  },
+  "profileMenuAbout": "Giới thiệu",
+  "@profileMenuAbout": {
+    "description": "Nhãn menu giới thiệu"
+  },
+  "profileAboutTitle": "Giới thiệu",
+  "@profileAboutTitle": {
+    "description": "Tiêu đề dialog giới thiệu"
+  },
+  "profileAboutMessage": "LumoChat - Kết nối và trò chuyện thời gian thực.",
+  "@profileAboutMessage": {
+    "description": "Nội dung dialog giới thiệu"
+  },
+  "profileMenuNotifications": "Thông báo",
+  "@profileMenuNotifications": {
+    "description": "Nhãn bật tắt thông báo"
+  },
+  "profileLogout": "Đăng xuất",
+  "@profileLogout": {
+    "description": "Nhãn nút đăng xuất"
+  },
+  "profileLogoutError": "Lỗi đăng xuất: {error}",
+  "@profileLogoutError": {
+    "description": "Thông báo lỗi khi đăng xuất",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileSaveSettingFailed": "Lưu cài đặt thất bại: {error}",
+  "@profileSaveSettingFailed": {
+    "description": "Thông báo lỗi lưu cài đặt chung",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileVersion": "LumoChat v{version}",
+  "@profileVersion": {
+    "description": "Thông tin phiên bản ứng dụng",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  }
+}

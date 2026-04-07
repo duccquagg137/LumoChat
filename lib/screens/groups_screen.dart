@@ -1,9 +1,11 @@
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../theme/app_theme.dart';
+
 import '../services/group_service.dart';
-import 'create_group_screen.dart';
+import '../theme/app_theme.dart';
+import '../utils/l10n.dart';
 import 'chat_screen.dart';
+import 'create_group_screen.dart';
 
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
@@ -26,13 +28,17 @@ class _GroupsScreenState extends State<GroupsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+
     return Scaffold(
       body: Stack(
         children: [
           Positioned(
-            top: -80, right: -60,
+            top: -80,
+            right: -60,
             child: Container(
-              width: 200, height: 200,
+              width: 200,
+              height: 200,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
@@ -48,18 +54,22 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                   child: Row(
                     children: [
-                      const Text(
-                        'Nhóm trò chuyện',
-                        style: TextStyle(
-                          fontSize: 28, fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimary, fontFamily: 'Inter',
+                      Text(
+                        l10n.groupsTitle,
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                          fontFamily: 'Inter',
                         ),
                       ),
                       const Spacer(),
                       Container(
-                        width: 36, height: 36,
+                        width: 36,
+                        height: 36,
                         decoration: BoxDecoration(
-                          color: AppColors.glassBg, shape: BoxShape.circle,
+                          color: AppColors.glassBg,
+                          shape: BoxShape.circle,
                           border: Border.all(color: AppColors.glassBorder, width: 0.5),
                         ),
                         child: const Icon(Icons.search_rounded, color: AppColors.textPrimary, size: 20),
@@ -70,9 +80,11 @@ class _GroupsScreenState extends State<GroupsScreen> {
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateGroupScreen()));
                         },
                         child: Container(
-                          width: 36, height: 36,
+                          width: 36,
+                          height: 36,
                           decoration: const BoxDecoration(
-                            gradient: AppGradients.primary, shape: BoxShape.circle,
+                            gradient: AppGradients.primary,
+                            shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
                         ),
@@ -81,7 +93,6 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                // Groups list
                 Expanded(
                   child: StreamBuilder<QuerySnapshot>(
                     stream: _groupService.getUserGroups(),
@@ -89,7 +100,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       if (snapshot.hasError) {
                         return Center(
                           child: Text(
-                            'Lỗi tải nhóm: ${snapshot.error}',
+                            l10n.groupsLoadError(snapshot.error.toString()),
                             textAlign: TextAlign.center,
                             style: const TextStyle(color: AppColors.textMuted),
                           ),
@@ -101,14 +112,14 @@ class _GroupsScreenState extends State<GroupsScreen> {
 
                       final groups = (snapshot.data?.docs ?? []).toList()
                         ..sort((a, b) => _groupTimestamp(b).compareTo(_groupTimestamp(a)));
-                      
+
                       if (groups.isEmpty) {
-                         return const Center(
-                           child: Text(
-                             'Bạn chưa tham gia nhóm nào',
-                             style: TextStyle(color: AppColors.textMuted, fontSize: 14, fontFamily: 'Inter'),
-                           ),
-                         );
+                        return Center(
+                          child: Text(
+                            l10n.groupsEmpty,
+                            style: const TextStyle(color: AppColors.textMuted, fontSize: 14, fontFamily: 'Inter'),
+                          ),
+                        );
                       }
 
                       return ListView.builder(
@@ -118,10 +129,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
                           final doc = groups[i];
                           final data = doc.data() as Map<String, dynamic>;
                           final String groupId = doc.id;
-                          final String name = data['name'] ?? 'Nhóm không tên';
+                          final String name = data['name'] ?? l10n.groupsUnnamed;
                           final String lastMessage = data['lastMessage'] ?? '';
                           final List members = data['members'] ?? [];
-                          
+
                           String timeTxt = '';
                           if (data['lastTimestamp'] != null) {
                             final ts = data['lastTimestamp'] as Timestamp;
@@ -138,18 +149,22 @@ class _GroupsScreenState extends State<GroupsScreen> {
               ],
             ),
           ),
-          // FAB
           Positioned(
-            right: 20, bottom: 20,
+            right: 20,
+            bottom: 20,
             child: GestureDetector(
               onTap: () {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateGroupScreen()));
               },
               child: Container(
-                width: 56, height: 56,
+                width: 56,
+                height: 56,
                 decoration: BoxDecoration(
-                  gradient: AppGradients.primary, shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
+                  gradient: AppGradients.primary,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(color: AppColors.primary.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8)),
+                  ],
                 ),
                 child: const Icon(Icons.group_add_rounded, color: Colors.white, size: 26),
               ),
@@ -180,16 +195,16 @@ class _GroupsScreenState extends State<GroupsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: Colors.transparent, // Update later with unread logic
+          color: Colors.transparent,
         ),
         child: Row(
           children: [
-            // Avatar
             Stack(
               clipBehavior: Clip.none,
               children: [
                 Container(
-                  width: 52, height: 52,
+                  width: 52,
+                  height: 52,
                   decoration: BoxDecoration(
                     gradient: AppGradients.primary,
                     shape: BoxShape.circle,
@@ -218,7 +233,6 @@ class _GroupsScreenState extends State<GroupsScreen> {
               ],
             ),
             const SizedBox(width: 14),
-            // Content
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

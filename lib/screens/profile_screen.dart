@@ -1,10 +1,12 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/app_locale_controller.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/l10n.dart';
 import '../widgets/glass_card.dart';
 import 'edit_profile_screen.dart';
 import 'landing_screen.dart';
@@ -21,14 +23,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _notifications = true;
   bool _settingsLoaded = false;
 
-  String _displayOrFallback(dynamic value, {String fallback = 'Chưa cập nhật'}) {
+  String _displayOrFallback(dynamic value, {required String fallback}) {
     final text = (value ?? '').toString().trim();
     return text.isEmpty ? fallback : text;
   }
 
-  String _formatDateField(dynamic raw) {
+  String _formatDateField(dynamic raw, {required String fallback}) {
     final text = (raw ?? '').toString().trim();
-    if (text.isEmpty) return 'Chưa cập nhật';
+    if (text.isEmpty) return fallback;
     final parsed = DateTime.tryParse(text);
     if (parsed == null) return text;
     final dd = parsed.day.toString().padLeft(2, '0');
@@ -45,8 +47,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _notifications = value;
       }
     });
+
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
+
     try {
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'settings': {key: value}
@@ -54,31 +58,121 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lưu cài đặt thất bại: $e')),
+        SnackBar(content: Text(context.l10n.profileSaveSettingFailed(e.toString()))),
       );
     }
   }
 
-  void _showSimpleDialog(String title, String message) {
+  Future<void> _setLanguage(String languageCode) async {
+    await AppLocaleController.setLocale(languageCode);
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      if (mounted) setState(() {});
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'settings': {'languageCode': languageCode}
+      }, SetOptions(merge: true));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.profileLanguageSaveFailed(e.toString()))),
+      );
+    }
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _showSimpleDialog({required String title, required String message}) {
+    final l10n = context.l10n;
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.bgSurface,
         title: Text(title, style: const TextStyle(color: AppColors.textPrimary)),
         content: Text(message, style: const TextStyle(color: AppColors.textSecondary)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Đóng'),
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(l10n.commonClose),
           ),
         ],
       ),
     );
   }
 
+  void _showLanguageDialog() {
+    final l10n = context.l10n;
+    final currentCode = AppLocaleController.currentLanguageCode;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.bgSurface,
+        title: Text(
+          l10n.profileLanguageDialogTitle,
+          style: const TextStyle(color: AppColors.textPrimary),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RadioListTile<String>(
+              value: 'vi',
+              groupValue: currentCode,
+              onChanged: (value) {
+                if (value == null) return;
+                Navigator.pop(dialogContext);
+                _setLanguage(value);
+              },
+              activeColor: AppColors.primary,
+              title: Text(
+                l10n.profileLanguageVietnamese,
+                style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
+              ),
+            ),
+            RadioListTile<String>(
+              value: 'en',
+              groupValue: currentCode,
+              onChanged: (value) {
+                if (value == null) return;
+                Navigator.pop(dialogContext);
+                _setLanguage(value);
+              },
+              activeColor: AppColors.primary,
+              title: Text(
+                l10n.profileLanguageEnglish,
+                style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(l10n.commonClose),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _currentLanguageLabel() {
+    final l10n = context.l10n;
+    return AppLocaleController.currentLanguageCode == 'en'
+        ? l10n.profileLanguageEnglish
+        : l10n.profileLanguageVietnamese;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+
     return Scaffold(
       body: Stack(
         children: [
@@ -100,49 +194,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
               builder: (profileContext, snapshot) {
-                if (snapshot.hasError || !snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-                }
-                final userData = snapshot.data!.data() as Map<String, dynamic>?;
-                if (userData == null) {
-                  return const Center(
-                    child: Text('Không tải được hồ sơ', style: TextStyle(color: AppColors.textMuted)),
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      l10n.profileLoadError,
+                      style: const TextStyle(color: AppColors.textMuted),
+                    ),
                   );
                 }
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                }
 
-                final name = _displayOrFallback(userData['name'], fallback: 'Người dùng');
-                final email = _displayOrFallback(userData['email']);
-                final bio = _displayOrFallback(userData['bio'], fallback: 'Đang sử dụng LumoChat');
-                final avatar = (userData['avatar'] ?? '').toString();
-                final isOnline = userData['isOnline'] == true;
-                final friendCount = (userData['friends'] is List) ? (userData['friends'] as List).length : 0;
+                final userData = snapshot.data!.data() as Map<String, dynamic>?;
+                if (userData == null) {
+                  return Center(
+                    child: Text(
+                      l10n.profileLoadError,
+                      style: const TextStyle(color: AppColors.textMuted),
+                    ),
+                  );
+                }
 
                 final settings = (userData['settings'] as Map<String, dynamic>?) ?? const {};
                 if (!_settingsLoaded) {
                   _darkMode = settings['darkMode'] != false;
                   _notifications = settings['notifications'] != false;
+                  final savedLanguage = (settings['languageCode'] ?? '').toString();
+                  if (savedLanguage == 'vi' || savedLanguage == 'en') {
+                    AppLocaleController.setLocale(savedLanguage);
+                  }
                   _settingsLoaded = true;
                 }
 
-                final phone = _displayOrFallback(userData['phoneNumber']);
-                final address = _displayOrFallback(userData['address']);
-                final city = _displayOrFallback(userData['city']);
-                final gender = _displayOrFallback(userData['gender']);
-                final birthday = _formatDateField(userData['dateOfBirth']);
-                final website = _displayOrFallback(userData['website']);
-                final occupation = _displayOrFallback(userData['occupation']);
+                final name = _displayOrFallback(userData['name'], fallback: l10n.profileFallbackUser);
+                final email = _displayOrFallback(userData['email'], fallback: l10n.profileNotUpdated);
+                final bio = _displayOrFallback(userData['bio'], fallback: l10n.profileFallbackBio);
+                final avatar = (userData['avatar'] ?? '').toString();
+                final isOnline = userData['isOnline'] == true;
+                final friendCount = (userData['friends'] is List) ? (userData['friends'] as List).length : 0;
+
+                final phone = _displayOrFallback(userData['phoneNumber'], fallback: l10n.profileNotUpdated);
+                final address = _displayOrFallback(userData['address'], fallback: l10n.profileNotUpdated);
+                final city = _displayOrFallback(userData['city'], fallback: l10n.profileNotUpdated);
+                final gender = _displayOrFallback(userData['gender'], fallback: l10n.profileNotUpdated);
+                final birthday = _formatDateField(userData['dateOfBirth'], fallback: l10n.profileNotUpdated);
+                final website = _displayOrFallback(userData['website'], fallback: l10n.profileNotUpdated);
+                final occupation = _displayOrFallback(userData['occupation'], fallback: l10n.profileNotUpdated);
 
                 final profileSummary = StringBuffer()
-                  ..writeln('Hồ sơ LumoChat')
-                  ..writeln('Tên: $name')
-                  ..writeln('Email: $email')
-                  ..writeln('Số điện thoại: $phone')
-                  ..writeln('Địa chỉ: $address')
-                  ..writeln('Thành phố: $city')
-                  ..writeln('Giới tính: $gender')
-                  ..writeln('Ngày sinh: $birthday')
-                  ..writeln('Nghề nghiệp: $occupation')
-                  ..writeln('Website: $website');
+                  ..writeln(l10n.profileSummaryTitle)
+                  ..writeln('${l10n.profileSummaryName}: $name')
+                  ..writeln('${l10n.profileSummaryEmail}: $email')
+                  ..writeln('${l10n.profileSummaryPhone}: $phone')
+                  ..writeln('${l10n.profileSummaryAddress}: $address')
+                  ..writeln('${l10n.profileSummaryCity}: $city')
+                  ..writeln('${l10n.profileSummaryGender}: $gender')
+                  ..writeln('${l10n.profileSummaryBirthDate}: $birthday')
+                  ..writeln('${l10n.profileSummaryOccupation}: $occupation')
+                  ..writeln('${l10n.profileSummaryWebsite}: $website');
 
                 return SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -151,9 +261,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          const Text(
-                            'Cá nhân',
-                            style: TextStyle(
+                          Text(
+                            l10n.navProfile,
+                            style: const TextStyle(
                               fontSize: 28,
                               fontWeight: FontWeight.w800,
                               color: AppColors.textPrimary,
@@ -216,11 +326,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 return Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                   children: [
-                                    _buildStat('$friendCount', 'Bạn bè'),
+                                    _buildStat('$friendCount', l10n.profileStatFriends),
                                     Container(width: 1, height: 30, color: AppColors.glassBorder),
-                                    _buildStat('$groupCount', 'Nhóm'),
+                                    _buildStat('$groupCount', l10n.profileStatGroups),
                                     Container(width: 1, height: 30, color: AppColors.glassBorder),
-                                    _buildStat(isOnline ? 'Online' : 'Offline', 'Trạng thái'),
+                                    _buildStat(isOnline ? l10n.commonOnline : l10n.commonOffline, l10n.profileStatStatus),
                                   ],
                                 );
                               },
@@ -230,7 +340,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               children: [
                                 Expanded(
                                   child: GradientButton(
-                                    text: 'Chỉnh sửa',
+                                    text: l10n.profileEdit,
                                     icon: Icons.edit_rounded,
                                     height: 44,
                                     onPressed: () {
@@ -246,13 +356,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: OutlinedPillButton(
-                                    text: 'Chia sẻ',
+                                    text: l10n.profileShare,
                                     icon: Icons.share_rounded,
                                     onPressed: () async {
                                       await Clipboard.setData(ClipboardData(text: profileSummary.toString()));
                                       if (!profileContext.mounted) return;
                                       ScaffoldMessenger.of(profileContext).showSnackBar(
-                                        const SnackBar(content: Text('Đã sao chép thông tin hồ sơ')),
+                                        SnackBar(content: Text(l10n.profileCopySummarySuccess)),
                                       );
                                     },
                                   ),
@@ -263,20 +373,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      _buildSection('Thông tin cơ bản', [
-                        _buildInfoRow(Icons.phone_outlined, 'Số điện thoại', phone),
-                        _buildInfoRow(Icons.location_on_outlined, 'Địa chỉ', address),
-                        _buildInfoRow(Icons.location_city_outlined, 'Thành phố', city),
-                        _buildInfoRow(Icons.wc_outlined, 'Giới tính', gender),
-                        _buildInfoRow(Icons.cake_outlined, 'Ngày sinh', birthday),
-                        _buildInfoRow(Icons.work_outline_rounded, 'Nghề nghiệp', occupation),
-                        _buildInfoRow(Icons.language_rounded, 'Website', website),
+                      _buildSection(l10n.profileSectionBasicInfo, [
+                        _buildInfoRow(Icons.phone_outlined, l10n.profileFieldPhone, phone),
+                        _buildInfoRow(Icons.location_on_outlined, l10n.profileFieldAddress, address),
+                        _buildInfoRow(Icons.location_city_outlined, l10n.profileFieldCity, city),
+                        _buildInfoRow(Icons.wc_outlined, l10n.profileFieldGender, gender),
+                        _buildInfoRow(Icons.cake_outlined, l10n.profileFieldBirthDate, birthday),
+                        _buildInfoRow(Icons.work_outline_rounded, l10n.profileFieldOccupation, occupation),
+                        _buildInfoRow(Icons.language_rounded, l10n.profileFieldWebsite, website),
                       ]),
                       const SizedBox(height: 16),
-                      _buildSection('Tài khoản', [
+                      _buildSection(l10n.profileSectionAccount, [
                         _buildMenuItem(
                           Icons.person_outline_rounded,
-                          'Thông tin cá nhân',
+                          l10n.profileMenuPersonalInfo,
                           onTap: () {
                             Navigator.push(
                               profileContext,
@@ -288,58 +398,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         _buildMenuItem(
                           Icons.content_copy_rounded,
-                          'Sao chép ID người dùng',
+                          l10n.profileMenuCopyUserId,
                           onTap: () async {
                             await Clipboard.setData(ClipboardData(text: uid));
                             if (!profileContext.mounted) return;
                             ScaffoldMessenger.of(profileContext).showSnackBar(
-                              const SnackBar(content: Text('Đã sao chép ID')),
+                              SnackBar(content: Text(l10n.profileCopyUserIdSuccess)),
                             );
                           },
                         ),
                         _buildMenuItem(
                           Icons.lock_outline_rounded,
-                          'Bảo mật',
-                          onTap: () => _showSimpleDialog('Bảo mật', 'Tính năng bảo mật nâng cao sẽ được cập nhật sớm.'),
+                          l10n.profileMenuSecurity,
+                          onTap: () => _showSimpleDialog(
+                            title: l10n.profileSecurityTitle,
+                            message: l10n.profileSecurityMessage,
+                          ),
                         ),
                       ]),
                       const SizedBox(height: 16),
-                      _buildSection('Tùy chỉnh', [
+                      _buildSection(l10n.profileSectionCustomization, [
                         _buildToggleItem(
                           Icons.dark_mode_outlined,
-                          'Giao diện tối',
+                          l10n.profileMenuDarkMode,
                           _darkMode,
                           (value) => _updateSetting('darkMode', value),
                         ),
                         _buildMenuItem(
                           Icons.language_rounded,
-                          'Ngôn ngữ',
-                          trailing: 'Tiếng Việt',
-                          onTap: () => _showSimpleDialog('Ngôn ngữ', 'Hiện tại ứng dụng đang dùng Tiếng Việt.'),
+                          l10n.profileMenuLanguage,
+                          trailing: _currentLanguageLabel(),
+                          onTap: _showLanguageDialog,
                         ),
                         _buildToggleItem(
                           Icons.notifications_outlined,
-                          'Thông báo',
+                          l10n.profileMenuNotifications,
                           _notifications,
                           (value) => _updateSetting('notifications', value),
                         ),
                       ]),
                       const SizedBox(height: 16),
-                      _buildSection('Hỗ trợ', [
+                      _buildSection(l10n.profileSectionSupport, [
                         _buildMenuItem(
                           Icons.help_outline_rounded,
-                          'Trung tâm hỗ trợ',
-                          onTap: () => _showSimpleDialog('Hỗ trợ', 'Liên hệ: support@lumochat.app'),
+                          l10n.profileMenuHelpCenter,
+                          onTap: () => _showSimpleDialog(
+                            title: l10n.profileHelpTitle,
+                            message: l10n.profileHelpMessage,
+                          ),
                         ),
                         _buildMenuItem(
                           Icons.bug_report_outlined,
-                          'Báo lỗi',
-                          onTap: () => _showSimpleDialog('Báo lỗi', 'Gửi lỗi qua email: bug@lumochat.app'),
+                          l10n.profileMenuReportBug,
+                          onTap: () => _showSimpleDialog(
+                            title: l10n.profileReportBugTitle,
+                            message: l10n.profileReportBugMessage,
+                          ),
                         ),
                         _buildMenuItem(
                           Icons.info_outline_rounded,
-                          'Giới thiệu',
-                          onTap: () => _showSimpleDialog('Giới thiệu', 'LumoChat - Kết nối và trò chuyện thời gian thực.'),
+                          l10n.profileMenuAbout,
+                          onTap: () => _showSimpleDialog(
+                            title: l10n.profileAboutTitle,
+                            message: l10n.profileAboutMessage,
+                          ),
                         ),
                       ]),
                       const SizedBox(height: 24),
@@ -357,17 +479,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             }
                           } catch (e) {
                             if (!profileContext.mounted) return;
-                            ScaffoldMessenger.of(profileContext).showSnackBar(SnackBar(content: Text('Lỗi đăng xuất: $e')));
+                            ScaffoldMessenger.of(profileContext).showSnackBar(
+                              SnackBar(content: Text(l10n.profileLogoutError(e.toString()))),
+                            );
                           }
                         },
-                        child: const Row(
+                        child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.logout_rounded, color: AppColors.error, size: 20),
-                            SizedBox(width: 8),
+                            const Icon(Icons.logout_rounded, color: AppColors.error, size: 20),
+                            const SizedBox(width: 8),
                             Text(
-                              'Đăng xuất',
-                              style: TextStyle(
+                              l10n.profileLogout,
+                              style: const TextStyle(
                                 color: AppColors.error,
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
@@ -378,9 +502,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      const Text(
-                        'LumoChat v1.0.0',
-                        style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontFamily: 'Inter'),
+                      Text(
+                        l10n.profileVersion('1.0.0'),
+                        style: const TextStyle(color: AppColors.textMuted, fontSize: 12, fontFamily: 'Inter'),
                       ),
                       const SizedBox(height: 40),
                     ],

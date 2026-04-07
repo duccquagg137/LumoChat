@@ -3,9 +3,12 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'firebase_options.dart';
 import 'screens/splash_screen.dart';
+import 'services/app_locale_controller.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -24,6 +27,8 @@ void main() async {
   } catch (e) {
     debugPrint('Firebase initialization failed: $e');
   }
+
+  await AppLocaleController.loadSavedLocale();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -44,11 +49,24 @@ class LumoChatApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'LumoChat',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
-      home: SplashScreen(isFirebaseInitialized: isFirebaseInitialized),
+    return ValueListenableBuilder<Locale>(
+      valueListenable: AppLocaleController.localeNotifier,
+      builder: (context, locale, _) {
+        return MaterialApp(
+          locale: locale,
+          onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.darkTheme,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SplashScreen(isFirebaseInitialized: isFirebaseInitialized),
+        );
+      },
     );
   }
 }
