@@ -5,6 +5,8 @@ import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
 import '../models/chat_models.dart';
 import '../services/group_service.dart';
+import '../utils/error_mapper.dart';
+import '../utils/l10n.dart';
 import 'chat_screen.dart';
 
 class CreateGroupScreen extends StatefulWidget {
@@ -17,10 +19,12 @@ class CreateGroupScreen extends StatefulWidget {
 class _CreateGroupScreenState extends State<CreateGroupScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
   final FocusNode _nameFocusNode = FocusNode();
   final FocusNode _descFocusNode = FocusNode();
   final Set<String> _selectedIds = {};
   Map<String, String> _friendNameById = {};
+  String _searchQuery = '';
   String get _currentUserId => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   Set<String> _readIdSet(dynamic raw) {
@@ -29,13 +33,14 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   }
 
   String _buildAutoGroupName() {
+    final l10n = context.l10n;
     final names = _selectedIds
         .map((id) => (_friendNameById[id] ?? '').trim())
         .where((name) => name.isNotEmpty)
         .toList();
 
     if (names.isEmpty) {
-      return 'Nhóm mới';
+      return l10n.groupsCreateDefaultName;
     }
     if (names.length <= 3) {
       return names.join(', ');
@@ -45,10 +50,22 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     return '$preview +$remain';
   }
 
+  String _normalize(String value) => value.trim().toLowerCase();
+
+  bool _matchUser(ChatUser user) {
+    if (_searchQuery.isEmpty) return true;
+    final q = _searchQuery;
+    final name = _normalize(user.name);
+    final bio = _normalize(user.bio ?? '');
+    final username = _normalize(user.username ?? '');
+    return name.contains(q) || bio.contains(q) || username.contains(q);
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
     _descController.dispose();
+    _searchController.dispose();
     _nameFocusNode.dispose();
     _descFocusNode.dispose();
     super.dispose();
@@ -56,6 +73,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -83,12 +102,14 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary, size: 20),
                         onPressed: () => Navigator.pop(context),
                       ),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'Tạo nhóm mới',
-                          style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary, fontFamily: 'Inter',
+                          l10n.groupsCreateTitle,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                            fontFamily: 'Inter',
                           ),
                         ),
                       ),
@@ -100,10 +121,12 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          'Tạo',
+                          l10n.groupsCreateAction,
                           style: TextStyle(
                             color: _selectedIds.isNotEmpty ? Colors.white : AppColors.textMuted,
-                            fontSize: 14, fontWeight: FontWeight.w600, fontFamily: 'Inter',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'Inter',
                           ),
                         ),
                       ),
@@ -115,7 +138,12 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                     stream: FirebaseFirestore.instance.collection('users').doc(_currentUserId).snapshots(),
                     builder: (context, mySnapshot) {
                       if (mySnapshot.hasError) {
-                        return const Center(child: Text('Đã xảy ra lỗi', style: TextStyle(color: AppColors.textMuted)));
+                        return Center(
+                          child: Text(
+                            l10n.groupsCreateLoadProfileError,
+                            style: const TextStyle(color: AppColors.textMuted),
+                          ),
+                        );
                       }
                       if (mySnapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator(color: AppColors.primary));
@@ -128,7 +156,12 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         stream: FirebaseFirestore.instance.collection('users').snapshots(),
                         builder: (context, usersSnapshot) {
                           if (usersSnapshot.hasError) {
-                            return const Center(child: Text('Đã xảy ra lỗi', style: TextStyle(color: AppColors.textMuted)));
+                            return Center(
+                              child: Text(
+                                l10n.groupsCreateLoadFriendsError,
+                                style: const TextStyle(color: AppColors.textMuted),
+                              ),
+                            );
                           }
                           if (usersSnapshot.connectionState == ConnectionState.waiting) {
                             return const Center(child: CircularProgressIndicator(color: AppColors.primary));
@@ -141,7 +174,14 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                               .map((doc) => ChatUser.fromDocument(doc))
                               .where((u) => u.id != _currentUserId)
                               .where((u) => friendIds.contains(u.id))
-                              .toList();
+                              .toList()
+                            ..sort((a, b) {
+                              if (a.isOnline != b.isOnline) {
+                                return a.isOnline ? -1 : 1;
+                              }
+                              return _normalize(a.name).compareTo(_normalize(b.name));
+                            });
+                          final visibleUsers = allUsers.where(_matchUser).toList();
                           _friendNameById = {for (final u in allUsers) u.id: u.name};
 
                           return SingleChildScrollView(
@@ -186,7 +226,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                   // Group name
                                   _buildInput(
                                     controller: _nameController,
-                                    hint: 'Tên nhóm (tùy chọn)',
+                                    hint: l10n.groupsCreateNameHint,
                                     icon: Icons.edit_rounded,
                                     focusNode: _nameFocusNode,
                                   ),
@@ -194,7 +234,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                   // Description
                                   _buildInput(
                                     controller: _descController,
-                                    hint: 'Mô tả nhóm (tùy chọn)',
+                                    hint: l10n.groupsCreateDescriptionHint,
                                     icon: Icons.description_outlined,
                                     focusNode: _descFocusNode,
                                   ),
@@ -205,7 +245,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                             // Selected members chips
                             if (_selectedIds.isNotEmpty) ...[
                               Text(
-                                'Đã chọn (${_selectedIds.length})',
+                                l10n.groupsCreateSelectedCount(_selectedIds.length),
                                 style: const TextStyle(
                                   color: AppColors.textSecondary, fontSize: 14,
                                   fontWeight: FontWeight.w600, fontFamily: 'Inter',
@@ -218,7 +258,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                 children: _selectedIds.map((id) {
                                   final user = allUsers.firstWhere(
                                     (u) => u.id == id,
-                                    orElse: () => const ChatUser(id: '', name: 'Không tìm thấy'),
+                                    orElse: () => ChatUser(id: '', name: l10n.profileFallbackUser),
                                   );
                                   return Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -251,32 +291,44 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                               ),
                               const SizedBox(height: 20),
                             ],
-                            // Search
-                            const GlassCard(
-                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              borderRadius: 16,
-                              child: Row(
-                                children: [
-                                  Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
-                                  SizedBox(width: 12),
-                                  Text(
-                                    'Tìm bạn bè để thêm...',
-                                    style: TextStyle(color: AppColors.textMuted, fontSize: 14, fontFamily: 'Inter'),
-                                  ),
-                                ],
+                            Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.bgCard.withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: AppColors.glassBorder),
+                              ),
+                              child: TextField(
+                                controller: _searchController,
+                                onChanged: (value) => setState(() => _searchQuery = _normalize(value)),
+                                style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
+                                decoration: InputDecoration(
+                                  prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
+                                  hintText: l10n.groupsCreateSearchHint,
+                                  hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14, fontFamily: 'Inter'),
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                ),
                               ),
                             ),
                             const SizedBox(height: 16),
                             if (allUsers.isEmpty)
-                              const Padding(
-                                padding: EdgeInsets.only(top: 16),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 16),
                                 child: Text(
-                                  'Bạn chưa có bạn bè để thêm vào nhóm.',
-                                  style: TextStyle(color: AppColors.textMuted, fontFamily: 'Inter'),
+                                  l10n.groupsCreateNoFriends,
+                                  style: const TextStyle(color: AppColors.textMuted, fontFamily: 'Inter'),
+                                ),
+                              )
+                            else if (visibleUsers.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: Text(
+                                  l10n.commonNoSearchResults,
+                                  style: const TextStyle(color: AppColors.textMuted, fontFamily: 'Inter'),
                                 ),
                               ),
                             // Contact list from Firestore
-                            ...allUsers.map((user) {
+                            ...visibleUsers.map((user) {
                               final isSelected = _selectedIds.contains(user.id);
                               return GestureDetector(
                                 onTap: () {
@@ -354,41 +406,48 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
               left: 20, right: 20,
               bottom: MediaQuery.of(context).padding.bottom + 20,
               child: GradientButton(
-                text: 'Tạo nhóm với ${_selectedIds.length} thành viên',
+                text: l10n.groupsCreateButton(_selectedIds.length),
                 icon: Icons.group_add_rounded,
                 width: double.infinity,
                 onPressed: () async {
+                  final localL10n = context.l10n;
                   final typedName = _nameController.text.trim();
                   final desc = _descController.text.trim();
                   final groupName = typedName.isNotEmpty ? typedName : _buildAutoGroupName();
                   
                   final currentUser = FirebaseAuth.instance.currentUser;
-                  final creatorName = currentUser?.displayName ?? currentUser?.phoneNumber ?? 'Người dùng';
+                  final creatorName = currentUser?.displayName ?? currentUser?.phoneNumber ?? localL10n.profileFallbackUser;
                   
                   try {
-                    // Show loading optionally, for now just await
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đang tạo nhóm...')));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(localL10n.groupsCreateInProgress)),
+                    );
                     
                     final groupService = GroupService();
                     final groupId = await groupService.createGroup(groupName, desc, _selectedIds.toList(), creatorName);
                     
-                    if (context.mounted) {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ChatScreen(
-                            userName: groupName,
-                            receiverId: groupId,
-                            isGroup: true,
-                            memberCount: _selectedIds.length + 1,
-                          ),
+                    if (!context.mounted) return;
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ChatScreen(
+                          userName: groupName,
+                          receiverId: groupId,
+                          isGroup: true,
+                          memberCount: _selectedIds.length + 1,
                         ),
-                      );
-                    }
+                      ),
+                    );
                   } catch (e) {
-                     if (context.mounted) {
-                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
-                     }
+                     if (!context.mounted) return;
+                     ScaffoldMessenger.of(context).showSnackBar(
+                       SnackBar(
+                         content: Text(
+                           localL10n.groupsCreateFailed(AppErrorText.forGroupsL10n(localL10n, e)),
+                         ),
+                         backgroundColor: AppColors.error,
+                        ),
+                     );
                   }
                 },
               ),

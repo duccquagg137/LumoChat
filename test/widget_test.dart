@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumochat/main.dart';
 
@@ -5,6 +6,12 @@ void main() {
   testWidgets('LumoChat app smoke test', (WidgetTester tester) async {
     await tester.pumpWidget(const LumoChatApp(isFirebaseInitialized: false));
     await tester.pump(const Duration(seconds: 2));
-    expect(find.text('Open App'), findsOneWidget);
+    final openAppFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is Text &&
+          (widget.data == 'Open App' || widget.data == 'Mở ứng dụng'),
+      description: 'Open App CTA in vi/en',
+    );
+    expect(openAppFinder, findsOneWidget);
   });
 }

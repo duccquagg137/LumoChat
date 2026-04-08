@@ -5,9 +5,12 @@ import 'package:flutter/material.dart';
 import '../models/chat_models.dart';
 import '../services/friend_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/error_mapper.dart';
 import '../utils/l10n.dart';
 import '../widgets/glass_card.dart';
 import 'chat_screen.dart';
+
+enum _ContactsFilter { all, requests, friends, discover }
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
@@ -20,6 +23,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   final FriendService _friendService = FriendService();
   final TextEditingController _searchController = TextEditingController();
   final Set<String> _busyUserIds = {};
+  _ContactsFilter _activeFilter = _ContactsFilter.all;
   String _searchQuery = '';
 
   String get _currentUserId => FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -35,9 +39,34 @@ class _ContactsScreenState extends State<ContactsScreen> {
     return raw.map((e) => e.toString()).where((e) => e.isNotEmpty).toSet();
   }
 
+  String _normalize(String value) => value.trim().toLowerCase();
+
+  int _compareByName(ChatUser a, ChatUser b) {
+    return _normalize(a.name).compareTo(_normalize(b.name));
+  }
+
+  int _compareByOnlineThenName(ChatUser a, ChatUser b) {
+    if (a.isOnline != b.isOnline) {
+      return a.isOnline ? -1 : 1;
+    }
+    return _compareByName(a, b);
+  }
+
   bool _matchSearch(ChatUser user) {
     if (_searchQuery.isEmpty) return true;
-    return user.name.toLowerCase().contains(_searchQuery);
+    final name = _normalize(user.name);
+    final bio = _normalize(user.bio ?? '');
+    final username = _normalize(user.username ?? '');
+    return name.contains(_searchQuery) || bio.contains(_searchQuery) || username.contains(_searchQuery);
+  }
+
+  bool _showSection(_ContactsFilter filter) {
+    return _activeFilter == _ContactsFilter.all || _activeFilter == filter;
+  }
+
+  void _setFilter(_ContactsFilter filter) {
+    if (_activeFilter == filter) return;
+    setState(() => _activeFilter = filter);
   }
 
   Future<void> _runAction(String userId, Future<void> Function() action, String successText) async {
@@ -51,7 +80,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.l10n.contactsActionFailed(e.toString())),
+          content: Text(context.l10n.contactsActionFailed(AppErrorText.forContacts(context, e))),
           backgroundColor: AppColors.error,
         ),
       );
@@ -99,17 +128,30 @@ class _ContactsScreenState extends State<ContactsScreen> {
                   .map((doc) => ChatUser.fromDocument(doc))
                   .where((user) => user.id != _currentUserId)
                   .toList()
-                ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+                ..sort(_compareByName);
 
-              final friends = allUsers.where((u) => friendIds.contains(u.id)).where(_matchSearch).toList();
-              final receivedRequests = allUsers.where((u) => receivedRequestIds.contains(u.id)).where(_matchSearch).toList();
-              final sentRequests = allUsers.where((u) => sentRequestIds.contains(u.id)).where(_matchSearch).toList();
-              final suggestions = allUsers
-                  .where((u) => !friendIds.contains(u.id))
-                  .where((u) => !receivedRequestIds.contains(u.id))
-                  .where((u) => !sentRequestIds.contains(u.id))
-                  .where(_matchSearch)
-                  .toList();
+              final friends = <ChatUser>[];
+              final receivedRequests = <ChatUser>[];
+              final sentRequests = <ChatUser>[];
+              final suggestions = <ChatUser>[];
+
+              for (final user in allUsers) {
+                if (!_matchSearch(user)) continue;
+                if (friendIds.contains(user.id)) {
+                  friends.add(user);
+                } else if (receivedRequestIds.contains(user.id)) {
+                  receivedRequests.add(user);
+                } else if (sentRequestIds.contains(user.id)) {
+                  sentRequests.add(user);
+                } else {
+                  suggestions.add(user);
+                }
+              }
+
+              friends.sort(_compareByOnlineThenName);
+              receivedRequests.sort(_compareByOnlineThenName);
+              sentRequests.sort(_compareByName);
+              suggestions.sort(_compareByOnlineThenName);
 
               final onlineFriends = friends.where((u) => u.isOnline).toList();
               final groupedFriends = <String, List<ChatUser>>{};
@@ -118,6 +160,16 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 groupedFriends.putIfAbsent(letter, () => []).add(user);
               }
               final sortedLetters = groupedFriends.keys.toList()..sort();
+              final showRequestsSection = _showSection(_ContactsFilter.requests);
+              final showFriendsSection = _showSection(_ContactsFilter.friends);
+              final showDiscoverSection = _showSection(_ContactsFilter.discover);
+
+              final hasVisibleData =
+                  (showRequestsSection && (receivedRequests.isNotEmpty || sentRequests.isNotEmpty)) ||
+                  (showFriendsSection && friends.isNotEmpty) ||
+                  (showDiscoverSection && suggestions.isNotEmpty);
+
+              final showOnlineStrip = showFriendsSection && onlineFriends.isNotEmpty;
 
               return Stack(
                 children: [
@@ -175,7 +227,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                             ),
                             child: TextField(
                               controller: _searchController,
-                              onChanged: (value) => setState(() => _searchQuery = value.trim().toLowerCase()),
+                              onChanged: (value) => setState(() => _searchQuery = _normalize(value)),
                               style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
                               decoration: InputDecoration(
                                 prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
@@ -191,15 +243,63 @@ class _ContactsScreenState extends State<ContactsScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                           child: Row(
                             children: [
-                              _buildQuickAction(Icons.mail_outline_rounded, l10n.contactsQuickInvites, badge: receivedRequests.length),
+                              _buildQuickAction(
+                                Icons.mail_outline_rounded,
+                                l10n.contactsQuickInvites,
+                                badge: receivedRequests.length,
+                                isActive: _activeFilter == _ContactsFilter.requests,
+                                onTap: () => _setFilter(_ContactsFilter.requests),
+                              ),
                               const SizedBox(width: 12),
-                              _buildQuickAction(Icons.schedule_send_rounded, l10n.contactsQuickSent, badge: sentRequests.length),
+                              _buildQuickAction(
+                                Icons.schedule_send_rounded,
+                                l10n.contactsQuickSent,
+                                badge: sentRequests.length,
+                                isActive: _activeFilter == _ContactsFilter.discover,
+                                onTap: () => _setFilter(_ContactsFilter.discover),
+                              ),
                               const SizedBox(width: 12),
-                              _buildQuickAction(Icons.people_outline_rounded, l10n.contactsQuickFriends, badge: friends.length),
+                              _buildQuickAction(
+                                Icons.people_outline_rounded,
+                                l10n.contactsQuickFriends,
+                                badge: friends.length,
+                                isActive: _activeFilter == _ContactsFilter.friends,
+                                onTap: () => _setFilter(_ContactsFilter.friends),
+                              ),
                             ],
                           ),
                         ),
-                        if (onlineFriends.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                _buildFilterChip(
+                                  label: l10n.contactsFilterAll,
+                                  selected: _activeFilter == _ContactsFilter.all,
+                                  onTap: () => _setFilter(_ContactsFilter.all),
+                                ),
+                                _buildFilterChip(
+                                  label: l10n.contactsFilterRequests,
+                                  selected: _activeFilter == _ContactsFilter.requests,
+                                  onTap: () => _setFilter(_ContactsFilter.requests),
+                                ),
+                                _buildFilterChip(
+                                  label: l10n.contactsFilterFriends,
+                                  selected: _activeFilter == _ContactsFilter.friends,
+                                  onTap: () => _setFilter(_ContactsFilter.friends),
+                                ),
+                                _buildFilterChip(
+                                  label: l10n.contactsFilterDiscover,
+                                  selected: _activeFilter == _ContactsFilter.discover,
+                                  onTap: () => _setFilter(_ContactsFilter.discover),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (showOnlineStrip) ...[
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                             child: Row(
@@ -257,7 +357,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                           child: ListView(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             children: [
-                              if (receivedRequests.isNotEmpty) ...[
+                              if (showRequestsSection && receivedRequests.isNotEmpty) ...[
                                 const SizedBox(height: 8),
                                 _buildSectionTitle(l10n.contactsSectionFriendRequests),
                                 ...receivedRequests.map((user) {
@@ -295,7 +395,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                   );
                                 }),
                               ],
-                              if (sentRequests.isNotEmpty) ...[
+                              if (showRequestsSection && sentRequests.isNotEmpty) ...[
                                 const SizedBox(height: 10),
                                 _buildSectionTitle(l10n.contactsSectionSent),
                                 ...sentRequests.map((user) {
@@ -304,7 +404,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                     user: user,
                                     subtitle: l10n.contactsPendingResponse,
                                     trailing: _buildActionText(
-                                      label: isBusy ? '...' : l10n.commonCancel,
+                                      label: isBusy ? l10n.commonLoading : l10n.commonCancel,
                                       onTap: isBusy
                                           ? null
                                           : () => _runAction(
@@ -316,7 +416,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                   );
                                 }),
                               ],
-                              if (friends.isNotEmpty) ...[
+                              if (showFriendsSection && friends.isNotEmpty) ...[
                                 const SizedBox(height: 10),
                                 _buildSectionTitle(l10n.contactsSectionFriends),
                                 ...sortedLetters.map((letter) {
@@ -381,7 +481,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                   );
                                 }),
                               ],
-                              if (suggestions.isNotEmpty) ...[
+                              if (showDiscoverSection && suggestions.isNotEmpty) ...[
                                 const SizedBox(height: 10),
                                 _buildSectionTitle(l10n.contactsSectionDiscover),
                                 ...suggestions.map((user) {
@@ -389,7 +489,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                   return _buildUserItem(
                                     user: user,
                                     trailing: _buildActionText(
-                                      label: isBusy ? '...' : l10n.commonAddFriend,
+                                      label: isBusy ? l10n.commonLoading : l10n.commonAddFriend,
                                       onTap: isBusy
                                           ? null
                                           : () => _runAction(
@@ -401,15 +501,19 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                   );
                                 }),
                               ],
-                              if (friends.isEmpty &&
-                                  receivedRequests.isEmpty &&
-                                  sentRequests.isEmpty &&
-                                  suggestions.isEmpty)
+                              if (!hasVisibleData)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 60),
                                   child: Center(
                                     child: Text(
-                                      l10n.contactsNoMatchingData,
+                                      _searchQuery.isNotEmpty
+                                          ? l10n.commonNoSearchResults
+                                          : switch (_activeFilter) {
+                                              _ContactsFilter.all => l10n.contactsEmptyNoUsers,
+                                              _ContactsFilter.requests => l10n.contactsEmptyRequests,
+                                              _ContactsFilter.friends => l10n.contactsEmptyFriends,
+                                              _ContactsFilter.discover => l10n.contactsEmptyDiscover,
+                                            },
                                       style: const TextStyle(color: AppColors.textMuted, fontFamily: 'Inter'),
                                     ),
                                   ),
@@ -492,32 +596,75 @@ class _ContactsScreenState extends State<ContactsScreen> {
     );
   }
 
-  Widget _buildQuickAction(IconData icon, String label, {int badge = 0}) {
+  Widget _buildQuickAction(
+    IconData icon,
+    String label, {
+    int badge = 0,
+    bool isActive = false,
+    VoidCallback? onTap,
+  }) {
     return Expanded(
-      child: GlassCard(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        borderRadius: 16,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, color: AppColors.primaryLight, size: 22),
-                const SizedBox(height: 6),
-                Text(
-                  label,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontFamily: 'Inter'),
-                ),
-              ],
-            ),
-            if (badge > 0)
-              Positioned(
-                top: 0,
-                right: 16,
-                child: UnreadBadge(count: badge, size: 18),
+      child: GestureDetector(
+        onTap: onTap,
+        child: GlassCard(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          borderRadius: 16,
+          backgroundColor: isActive ? AppColors.primary.withOpacity(0.2) : null,
+          border: isActive ? Border.all(color: AppColors.primary.withOpacity(0.45), width: 0.8) : null,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, color: AppColors.primaryLight, size: 22),
+                  const SizedBox(height: 6),
+                  Text(
+                    label,
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontFamily: 'Inter'),
+                  ),
+                ],
               ),
-          ],
+              if (badge > 0)
+                Positioned(
+                  top: 0,
+                  right: 16,
+                  child: UnreadBadge(count: badge, size: 18),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primary.withOpacity(0.2) : AppColors.glassBg,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? AppColors.primary.withOpacity(0.4) : AppColors.glassBorder,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? AppColors.primaryLight : AppColors.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Inter',
+            ),
+          ),
         ),
       ),
     );

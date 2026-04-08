@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
 import '../services/auth_service.dart';
+import '../utils/error_mapper.dart';
+import '../utils/l10n.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'home_screen.dart';
 
@@ -83,11 +85,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   // --- Email Auth ---
   void _submitEmailAuth() async {
+    final l10n = context.l10n;
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
     
     if (email.isEmpty || password.isEmpty) {
-      _showError('Vui lòng nhập đầy đủ thông tin');
+      _showError(l10n.authValidationRequiredFields);
       return;
     }
 
@@ -100,12 +103,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         final confirmPassword = _confirmPasswordController.text.trim();
         
         if (name.isEmpty) {
-          _showError('Vui lòng nhập tên');
+          _showError(l10n.authValidationNameRequired);
           _setLoading(false);
           return;
         }
         if (password != confirmPassword) {
-          _showError('Mật khẩu không khớp');
+          _showError(l10n.authValidationPasswordMismatch);
           _setLoading(false);
           return;
         }
@@ -113,7 +116,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       }
       _navigateToHome();
     } catch (e) {
-      _showError('Lỗi: ${e.toString()}');
+      _showError(AppErrorText.forAuthL10n(l10n, e));
     } finally {
       _setLoading(false);
     }
@@ -121,9 +124,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   // --- Phone Auth ---
   void _sendPhoneCode() async {
+    final l10n = context.l10n;
     final phone = _phoneController.text.trim();
     if (phone.isEmpty) {
-      _showError('Vui lòng nhập số điện thoại');
+      _showError(l10n.authValidationPhoneRequired);
       return;
     }
 
@@ -149,20 +153,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             await FirebaseAuth.instance.signInWithCredential(credential);
             _navigateToHome();
           } catch (e) {
-            _showError('Lỗi xác thực tự động: $e');
+            _showError(l10n.authErrorAutoVerificationFailed(AppErrorText.forAuthL10n(l10n, e)));
             _setLoading(false);
           }
         },
         verificationFailed: (String error) {
-          String userMsg = error;
-          if (error.contains('BILLING_NOT_ENABLED')) {
-            userMsg = 'Dự án Firebase chưa bật thanh toán (Billing). Vui lòng nâng cấp lên gói Blaze để nhận SMS thật.';
-          } else if (error.contains('quota exceeded')) {
-            userMsg = 'Đã hết hạn mức gửi SMS hôm nay. Thử lại sau 24h.';
-          } else if (error.contains('invalid-phone-number')) {
-            userMsg = 'Số điện thoại không hợp lệ.';
-          }
-          _showError('Xác minh thất bại: $userMsg');
+          final reason = AppErrorText.forAuthL10n(l10n, error);
+          _showError(l10n.authErrorVerificationFailed(reason));
           _setLoading(false);
         },
         codeSent: (String verificationId) {
@@ -176,15 +173,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         },
       );
     } catch (e) {
-      _showError('Lỗi gửi mã: $e');
+      _showError(l10n.authErrorSendOtpFailed(AppErrorText.forAuthL10n(l10n, e)));
       _setLoading(false);
     }
   }
 
   void _verifyOTP() async {
+    final l10n = context.l10n;
     final code = _otpController.text.trim();
     if (code.isEmpty || code.length < 6) {
-      _showError('Vui lòng nhập mã OTP hợp lệ');
+      _showError(l10n.authValidationOtpRequired);
       return;
     }
 
@@ -193,13 +191,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       await _authService.signInWithOTP(_verificationId, code);
       _navigateToHome();
     } catch (e) {
-      _showError('Mã OTP không đúng hoặc đã hết hạn');
+      _showError(AppErrorText.forAuthL10n(l10n, e));
       _setLoading(false);
     }
   }
 
   // --- Social Auth ---
   void _signInWithGoogle() async {
+    final l10n = context.l10n;
     _setLoading(true);
     try {
       final userOpt = await _authService.signInWithGoogle();
@@ -209,7 +208,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         _setLoading(false); // Cancelled
       }
     } catch (e) {
-      _showError('Lỗi đăng nhập Google: $e');
+      _showError(l10n.authErrorGoogleFailed(AppErrorText.forAuthL10n(l10n, e)));
       _setLoading(false);
     }
   }
@@ -316,7 +315,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       _buildSocialButton(Icons.g_mobiledata_rounded, 'Google', _signInWithGoogle),
                       const SizedBox(width: 16),
                       // Mock apple button
-                      _buildSocialButton(Icons.apple_rounded, 'Apple', () => _showError('Apple login comming soon')),
+                      _buildSocialButton(Icons.apple_rounded, 'Apple', () => _showError(context.l10n.authAppleComingSoon)),
                     ],
                   ),
                   const SizedBox(height: 40),

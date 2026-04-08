@@ -11,6 +11,8 @@ import '../models/chat_models.dart';
 import '../services/chat_service.dart';
 import '../services/group_service.dart';
 import '../services/auth_service.dart';
+import '../utils/error_mapper.dart';
+import '../utils/l10n.dart';
 import 'user_profile_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -41,14 +43,19 @@ class _ChatScreenState extends State<ChatScreen> {
   final ChatService _chatService = ChatService();
   final GroupService _groupService = GroupService();
   final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
-  String _currentUserName = FirebaseAuth.instance.currentUser?.displayName ?? 'Người dùng';
+  String _currentUserName = FirebaseAuth.instance.currentUser?.displayName ?? '';
 
   File? _pickedImage;
   bool _isOtherTyping = false;
   bool _isMeTyping = false;
   Timer? _typingTimer;
+  Timer? _readReceiptTimer;
   StreamSubscription? _chatRoomSubscription;
   int _lastMessageCount = -1;
+  bool _isSyncingReceipts = false;
+  bool _isUploadingImage = false;
+  File? _failedImageUpload;
+  String? _failedImageReplyId;
 
   // Reply state
   ChatMessage? _replyingTo;
@@ -60,6 +67,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _setupTypingListener();
     _setupOtherTypingListener();
     _recordLastScreen();
+    if (!widget.isGroup) {
+      _chatService.markConversationVisible(widget.receiverId);
+    }
   }
 
   Future<void> _loadCurrentUserProfile() async {
@@ -180,6 +190,37 @@ class _ChatScreenState extends State<ChatScreen> {
     return DateTime.fromMillisecondsSinceEpoch(0);
   }
 
+  bool _hasUnreadIncomingDirectMessages(List<DocumentSnapshot> docs) {
+    if (widget.isGroup || currentUserId.isEmpty) return false;
+    return docs.any((doc) {
+      final data = doc.data() as Map<String, dynamic>?;
+      if (data == null) return false;
+      final senderId = data['senderId']?.toString();
+      final receiverId = data['receiverId']?.toString();
+      final isRead = data['isRead'] == true;
+      return senderId != currentUserId && receiverId == currentUserId && !isRead;
+    });
+  }
+
+  void _syncDirectReceiptsIfNeeded(List<DocumentSnapshot> docs) {
+    if (!_hasUnreadIncomingDirectMessages(docs) || _isSyncingReceipts) {
+      return;
+    }
+
+    _isSyncingReceipts = true;
+    _chatService.markMessagesDelivered(widget.receiverId).catchError((_) => 0);
+
+    _readReceiptTimer?.cancel();
+    _readReceiptTimer = Timer(const Duration(milliseconds: 700), () async {
+      try {
+        await _chatService.markMessagesRead(widget.receiverId);
+      } catch (_) {
+      } finally {
+        _isSyncingReceipts = false;
+      }
+    });
+  }
+
   void _openUserProfile(String userId) {
     if (userId.isEmpty || userId == currentUserId) return;
     Navigator.push(
@@ -250,6 +291,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _setMeTyping(false);
     _typingTimer?.cancel();
+    _readReceiptTimer?.cancel();
     _chatRoomSubscription?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
@@ -287,8 +329,14 @@ class _ChatScreenState extends State<ChatScreen> {
                       ? _groupService.getGroupMessagesStream(widget.receiverId)
                       : _chatService.getMessagesStream(widget.receiverId),
                   builder: (context, snapshot) {
+                    final l10n = context.l10n;
                     if (snapshot.hasError) {
-                      return const Center(child: Text('Lỗi tải tin nhắn', style: TextStyle(color: AppColors.textMuted)));
+                      return Center(
+                        child: Text(
+                          l10n.commonUnexpectedError,
+                          style: const TextStyle(color: AppColors.textMuted),
+                        ),
+                      );
                     }
 
                     if (snapshot.connectionState == ConnectionState.waiting) {
@@ -303,11 +351,15 @@ class _ChatScreenState extends State<ChatScreen> {
                       ..sort((a, b) => _messageTimestamp(a).compareTo(_messageTimestamp(b)));
 
                     if (messageDocs.isEmpty) {
-                      return const Center(
-                        child: Text('Chưa có tin nhắn', style: TextStyle(color: AppColors.textMuted)),
+                      return Center(
+                        child: Text(
+                          l10n.chatListNoConversations,
+                          style: const TextStyle(color: AppColors.textMuted),
+                        ),
                       );
                     }
 
+                    _syncDirectReceiptsIfNeeded(messageDocs);
                     _syncScrollToLatest(messageDocs.length);
 
                     return ListView.builder(
@@ -330,6 +382,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           senderId: msgData.senderId,
                           senderName: msgData.senderName,
                           isRead: msgData.isRead,
+                          deliveryStatus: msgData.deliveryStatus,
                           replyTo: msgData.replyTo,
                           reactions: msgData.reactions,
                           deletedFor: msgData.deletedFor,
@@ -356,7 +409,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '${widget.userName.split(' ').last} đang nhập...',
+                        '${widget.userName.split(' ').last} ${context.l10n.chatListTyping}',
                         style: const TextStyle(
                           color: AppColors.textMuted,
                           fontSize: 12,
@@ -379,6 +432,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildAppBar(BuildContext context) {
+    final l10n = context.l10n;
     return Container(
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
       decoration: const BoxDecoration(
@@ -429,10 +483,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     const SizedBox(height: 2),
                     Text(
                       widget.isGroup
-                          ? '${widget.memberCount} thành viên'
+                          ? l10n.groupsMemberCount(widget.memberCount)
                           : widget.isOnline
-                              ? 'Online'
-                              : 'Offline',
+                              ? l10n.commonOnline
+                              : l10n.commonOffline,
                       style: TextStyle(
                         color: widget.isOnline ? AppColors.accentGreen : AppColors.textMuted,
                         fontSize: 12,
@@ -484,7 +538,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     final isSent = message.isSent;
-    final senderLabel = message.senderName ?? message.senderId ?? 'Người dùng';
+    final senderLabel = message.senderName ?? message.senderId ?? context.l10n.profileFallbackUser;
     final isDeletedMessage = message.type == MessageType.deleted || message.isRecalledForEveryone;
 
     return Padding(
@@ -552,6 +606,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildReplyPreview(String replyId, bool isMe) {
+    final l10n = context.l10n;
     final Future<DocumentSnapshot> replyFuture = widget.isGroup
         ? FirebaseFirestore.instance
             .collection('groups')
@@ -569,16 +624,18 @@ class _ChatScreenState extends State<ChatScreen> {
     return FutureBuilder<DocumentSnapshot>(
       future: replyFuture,
       builder: (context, snapshot) {
-        String replyText = 'Tin nhắn đã bị xóa';
+        String replyText = l10n.chatMessageDeleted;
         if (snapshot.hasData && snapshot.data!.exists) {
           final data = snapshot.data!.data() as Map<String, dynamic>;
           final deletedFor = List<dynamic>.from(data['deletedFor'] ?? const []);
           final isDeletedForMe = deletedFor.map((e) => e.toString()).contains(currentUserId);
           final isRecalled = data['recalledForEveryone'] == true || data['type'] == 'deleted';
           if (isDeletedForMe || isRecalled) {
-            replyText = 'Tin nhắn đã thu hồi';
+            replyText = l10n.chatMessageRecalled;
           } else {
-            replyText = data['type'] == 'image' ? '📷 Hình ảnh' : (data['text'] ?? '');
+            replyText = data['type'] == 'image'
+                ? l10n.chatImagePlaceholder
+                : (data['text']?.toString() ?? '');
           }
         }
         return Container(
@@ -628,6 +685,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildDeletedBubble(bool isSent) {
+    final l10n = context.l10n;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
@@ -636,7 +694,7 @@ class _ChatScreenState extends State<ChatScreen> {
         border: Border.all(color: AppColors.glassBorder, width: 0.5),
       ),
       child: Text(
-        'Tin nhắn đã thu hồi',
+        l10n.chatMessageRecalled,
         style: TextStyle(
           color: isSent ? Colors.white70 : AppColors.textMuted,
           fontSize: 13,
@@ -644,6 +702,67 @@ class _ChatScreenState extends State<ChatScreen> {
           fontFamily: 'Inter',
         ),
       ),
+    );
+  }
+
+  String _deliveryStatusLabel(MessageDeliveryStatus status) {
+    final l10n = context.l10n;
+    switch (status) {
+      case MessageDeliveryStatus.read:
+        return l10n.chatStatusRead;
+      case MessageDeliveryStatus.delivered:
+        return l10n.chatStatusDelivered;
+      case MessageDeliveryStatus.sent:
+        return l10n.chatStatusSent;
+    }
+  }
+
+  IconData _deliveryStatusIcon(MessageDeliveryStatus status) {
+    switch (status) {
+      case MessageDeliveryStatus.read:
+        return Icons.done_all_rounded;
+      case MessageDeliveryStatus.delivered:
+        return Icons.done_all_rounded;
+      case MessageDeliveryStatus.sent:
+        return Icons.done_rounded;
+    }
+  }
+
+  Color _deliveryStatusColor(MessageDeliveryStatus status, bool onDarkBackground) {
+    if (status == MessageDeliveryStatus.read) {
+      return const Color(0xFF60A5FA);
+    }
+    return onDarkBackground ? Colors.white.withOpacity(0.72) : AppColors.textMuted;
+  }
+
+  Widget _buildDeliveryStatusBadge(
+    ChatMessage message, {
+    required bool onDarkBackground,
+    bool showLabel = true,
+  }) {
+    final color = _deliveryStatusColor(message.deliveryStatus, onDarkBackground);
+    final label = _deliveryStatusLabel(message.deliveryStatus);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          _deliveryStatusIcon(message.deliveryStatus),
+          color: color,
+          size: 14,
+        ),
+        if (showLabel) ...[
+          const SizedBox(width: 2),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontFamily: 'Inter',
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -696,10 +815,10 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               if (isSent) ...[
                 const SizedBox(width: 4),
-                Icon(
-                  message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
-                  color: message.isRead ? const Color(0xFF60A5FA) : Colors.white.withOpacity(0.7),
-                  size: 14,
+                _buildDeliveryStatusBadge(
+                  message,
+                  onDarkBackground: true,
+                  showLabel: !widget.isGroup,
                 ),
               ],
             ],
@@ -759,10 +878,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                         if (isSent) ...[
                           const SizedBox(width: 4),
-                          Icon(
-                            message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
-                            color: message.isRead ? const Color(0xFF60A5FA) : Colors.white70,
-                            size: 14,
+                          _buildDeliveryStatusBadge(
+                            message,
+                            onDarkBackground: true,
+                            showLabel: false,
                           ),
                         ],
                       ],
@@ -795,6 +914,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildInputBar() {
+    final l10n = context.l10n;
+    final canSend = !_isUploadingImage && (_messageController.text.isNotEmpty || _pickedImage != null);
     return Container(
       padding: EdgeInsets.only(
         left: 12,
@@ -839,21 +960,21 @@ class _ChatScreenState extends State<ChatScreen> {
                             fontFamily: 'Inter',
                             fontSize: 14,
                           ),
-                          decoration: const InputDecoration(
-                            hintText: 'Nhập tin nhắn...',
-                            hintStyle: TextStyle(color: AppColors.textMuted),
+                          decoration: InputDecoration(
+                            hintText: l10n.chatInputHint,
+                            hintStyle: const TextStyle(color: AppColors.textMuted),
                             border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           ),
                         ),
                       ),
                       GestureDetector(
-                        onTap: () => _sendImage(ImageSource.gallery),
+                        onTap: _isUploadingImage ? null : () => _sendImage(ImageSource.gallery),
                         child: const Icon(Icons.add_photo_alternate_outlined, color: AppColors.textMuted, size: 22),
                       ),
                       const SizedBox(width: 8),
                       GestureDetector(
-                        onTap: () => _sendImage(ImageSource.camera),
+                        onTap: _isUploadingImage ? null : () => _sendImage(ImageSource.camera),
                         child: const Icon(Icons.camera_alt_outlined, color: AppColors.textMuted, size: 22),
                       ),
                       const SizedBox(width: 12),
@@ -863,22 +984,33 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: _messageController.text.isNotEmpty || _pickedImage != null ? _sendMessage : null,
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    gradient: AppGradients.primary,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.4),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                onTap: canSend ? _sendMessage : null,
+                child: Opacity(
+                  opacity: canSend ? 1 : 0.45,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      gradient: AppGradients.primary,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: _isUploadingImage
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
                   ),
-                  child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
                 ),
               ),
             ],
@@ -889,6 +1021,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildReplyInputBar() {
+    final l10n = context.l10n;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       margin: const EdgeInsets.only(bottom: 8),
@@ -904,12 +1037,15 @@ class _ChatScreenState extends State<ChatScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Trả lời', style: TextStyle(color: AppColors.primaryLight, fontSize: 12, fontWeight: FontWeight.bold)),
+                Text(
+                  l10n.chatReplyingTo,
+                  style: const TextStyle(color: AppColors.primaryLight, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
                 Text(
                   (_replyingTo!.type == MessageType.image)
-                      ? '📷 Hình ảnh'
+                      ? l10n.chatImagePlaceholder
                       : (_replyingTo!.type == MessageType.deleted || _replyingTo!.isRecalledForEveryone)
-                          ? 'Tin nhắn đã thu hồi'
+                          ? l10n.chatMessageRecalled
                           : _replyingTo!.text,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -943,6 +1079,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildImagePreview() {
+    final l10n = context.l10n;
+    final hasPendingRetry = _failedImageUpload?.path == _pickedImage?.path;
+
     return Stack(
       children: [
         Container(
@@ -964,11 +1103,49 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Image.file(_pickedImage!, height: 100, width: 100, fit: BoxFit.cover),
           ),
         ),
+        if (_isUploadingImage)
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black45,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        if (hasPendingRetry && !_isUploadingImage)
+          Positioned(
+            left: 4,
+            bottom: 4,
+            child: GestureDetector(
+              onTap: _retryFailedImageUpload,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  l10n.chatRetry,
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'Inter'),
+                ),
+              ),
+            ),
+          ),
         Positioned(
           top: 4,
           right: 4,
           child: GestureDetector(
-            onTap: () => setState(() => _pickedImage = null),
+            onTap: () => setState(() {
+              _pickedImage = null;
+              _failedImageUpload = null;
+              _failedImageReplyId = null;
+            }),
             child: Container(
               padding: const EdgeInsets.all(4),
               decoration: const BoxDecoration(
@@ -995,68 +1172,166 @@ class _ChatScreenState extends State<ChatScreen> {
     return colors[name.hashCode.abs() % colors.length];
   }
 
-  void _sendMessage() async {
-    final text = _messageController.text.trim();
-    final imageToUpload = _pickedImage;
-    final replyId = _replyingTo?.id;
-    
-    if (text.isEmpty && imageToUpload == null) return;
+  Future<bool> _uploadImageWithRetry(File imageFile, {String? replyTo, bool isRetry = false}) async {
+    final l10n = context.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    final senderName = _currentUserName.trim().isNotEmpty ? _currentUserName.trim() : l10n.profileFallbackUser;
 
-    // Clear UI state
-    _messageController.clear();
-    if (imageToUpload != null) {
-      setState(() => _pickedImage = null);
+    if (!isRetry) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.chatUploadingImage)));
     }
-    setState(() => _replyingTo = null);
-    _setMeTyping(false);
+
+    if (mounted) {
+      setState(() {
+        _isUploadingImage = true;
+      });
+    }
 
     try {
-      if (imageToUpload != null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đang tải ảnh lên...')));
-        if (widget.isGroup) {
-          await _groupService.sendImageMessage(widget.receiverId, _currentUserName, imageToUpload);
-        } else {
-          await _chatService.sendImageMessage(widget.receiverId, imageToUpload);
-        }
+      if (widget.isGroup) {
+        await _groupService.sendImageMessage(
+          widget.receiverId,
+          senderName,
+          imageFile,
+          replyTo: replyTo,
+        );
+      } else {
+        await _chatService.sendImageMessage(
+          widget.receiverId,
+          imageFile,
+          replyTo: replyTo,
+        );
       }
-      
-      if (text.isNotEmpty) {
-        if (widget.isGroup) {
-          await _groupService.sendGroupMessage(widget.receiverId, _currentUserName, text, replyTo: replyId);
-        } else {
-          await _chatService.sendMessage(widget.receiverId, text, replyTo: replyId);
-        }
+
+      if (mounted) {
+        setState(() {
+          _pickedImage = null;
+          _failedImageUpload = null;
+          _failedImageReplyId = null;
+        });
       }
-      
-      _scrollToBottom(animated: true);
+      return true;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi gửi: $e'), backgroundColor: Colors.redAccent),
+        setState(() {
+          _pickedImage = imageFile;
+          _failedImageUpload = imageFile;
+          _failedImageReplyId = replyTo;
+        });
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(l10n.chatImageUploadFailedWithReason(AppErrorText.forChat(context, e))),
+            backgroundColor: Colors.redAccent,
+            action: SnackBarAction(
+              label: l10n.chatRetry,
+              onPressed: _retryFailedImageUpload,
+            ),
+          ),
         );
+      }
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingImage = false;
+        });
       }
     }
   }
 
+  void _retryFailedImageUpload() {
+    final imageFile = _failedImageUpload;
+    if (imageFile == null || _isUploadingImage) return;
+    _uploadImageWithRetry(imageFile, replyTo: _failedImageReplyId, isRetry: true);
+  }
+
+  void _sendMessage() async {
+    final text = _messageController.text.trim();
+    final imageToUpload = _pickedImage;
+    final replyId = _replyingTo?.id;
+
+    if (text.isEmpty && imageToUpload == null) return;
+
+    if (text.isNotEmpty) {
+      _messageController.clear();
+    }
+
+    var sentAnything = false;
+    final l10n = context.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    final senderName = _currentUserName.trim().isNotEmpty ? _currentUserName.trim() : l10n.profileFallbackUser;
+
+    if (imageToUpload != null) {
+      final imageSent = await _uploadImageWithRetry(imageToUpload, replyTo: replyId);
+      sentAnything = sentAnything || imageSent;
+    }
+
+    if (text.isNotEmpty) {
+      try {
+        if (widget.isGroup) {
+          await _groupService.sendGroupMessage(
+            widget.receiverId,
+            senderName,
+            text,
+            replyTo: replyId,
+          );
+        } else {
+          await _chatService.sendMessage(
+            widget.receiverId,
+            text,
+            replyTo: replyId,
+          );
+        }
+        sentAnything = true;
+      } catch (e) {
+        if (mounted) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(l10n.chatSendFailed(AppErrorText.forChat(context, e))),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    }
+
+    if (sentAnything) {
+      if (mounted) {
+        setState(() {
+          _replyingTo = null;
+        });
+      }
+      _setMeTyping(false);
+      _scrollToBottom(animated: true);
+    }
+  }
+
   void _sendImage(ImageSource source) async {
+    final l10n = context.l10n;
     final ImagePicker picker = ImagePicker();
     try {
       final XFile? image = await picker.pickImage(source: source, imageQuality: 70);
       if (image != null) {
         setState(() {
           _pickedImage = File(image.path);
+          _failedImageUpload = null;
+          _failedImageReplyId = null;
         });
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi chọn ảnh: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(
+            content: Text(l10n.chatImagePickFailed(AppErrorText.forChat(context, e))),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     }
   }
 
   void _showContextMenu(ChatMessage message) {
+    final l10n = context.l10n;
     final bool isMyMessage = message.senderId == currentUserId;
     final bool isDeletedMessage = message.type == MessageType.deleted || message.isRecalledForEveryone;
 
@@ -1092,18 +1367,18 @@ class _ChatScreenState extends State<ChatScreen> {
                 }).toList(),
               ),
               const SizedBox(height: 24),
-              _buildContextMenuItem(Icons.reply_rounded, 'Trả lời', () {
+              _buildContextMenuItem(Icons.reply_rounded, l10n.chatContextReply, () {
                 Navigator.pop(context);
                 _setReplyingWithKeepPosition(message);
               }),
-              _buildContextMenuItem(Icons.copy_rounded, 'Sao chép', () {
+              _buildContextMenuItem(Icons.copy_rounded, l10n.chatContextCopy, () {
                 Clipboard.setData(ClipboardData(text: message.text));
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã sao chép')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.chatCopied)));
               }),
             ],
             if (isMyMessage && !isDeletedMessage) ...[
-              _buildContextMenuItem(Icons.visibility_off_outlined, 'Thu hồi cho bạn', () async {
+              _buildContextMenuItem(Icons.visibility_off_outlined, l10n.chatRecallForMe, () async {
                 final messenger = ScaffoldMessenger.of(context);
                 Navigator.pop(context);
                 if (widget.isGroup) {
@@ -1111,9 +1386,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 } else {
                   await _chatService.recallMessageForMe(widget.receiverId, message.id);
                 }
-                messenger.showSnackBar(const SnackBar(content: Text('Đã thu hồi cho bạn')));
+                messenger.showSnackBar(SnackBar(content: Text(l10n.chatRecalledForMeSuccess)));
               }, color: AppColors.error),
-              _buildContextMenuItem(Icons.delete_outline_rounded, 'Thu hồi cho mọi người', () async {
+              _buildContextMenuItem(Icons.delete_outline_rounded, l10n.chatRecallForEveryone, () async {
                 final messenger = ScaffoldMessenger.of(context);
                 Navigator.pop(context);
                 if (widget.isGroup) {
@@ -1121,7 +1396,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 } else {
                   await _chatService.recallMessageForEveryone(widget.receiverId, message.id);
                 }
-                messenger.showSnackBar(const SnackBar(content: Text('Đã thu hồi cho mọi người')));
+                messenger.showSnackBar(SnackBar(content: Text(l10n.chatRecalledForEveryoneSuccess)));
               }, color: AppColors.error),
             ],
           ],
@@ -1138,3 +1413,4 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
+

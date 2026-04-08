@@ -24,6 +24,18 @@
   "@commonUnexpectedError": {
     "description": "Generic unexpected error message"
   },
+  "commonErrorNetwork": "Network error. Please try again.",
+  "@commonErrorNetwork": {
+    "description": "Generic network error message"
+  },
+  "commonErrorPermissionDenied": "You do not have permission to perform this action.",
+  "@commonErrorPermissionDenied": {
+    "description": "Shown when permission is denied"
+  },
+  "commonErrorServiceUnavailable": "Service is temporarily unavailable. Please try again later.",
+  "@commonErrorServiceUnavailable": {
+    "description": "Shown when backend service is unavailable"
+  },
   "commonNoSearchResults": "No results found",
   "@commonNoSearchResults": {
     "description": "Shown when search has no result"
@@ -47,6 +59,38 @@
   "commonOffline": "Offline",
   "@commonOffline": {
     "description": "Generic offline status"
+  },
+  "commonDelete": "Delete",
+  "@commonDelete": {
+    "description": "Generic delete label"
+  },
+  "commonPin": "Pin",
+  "@commonPin": {
+    "description": "Generic pin label"
+  },
+  "commonUnpin": "Unpin",
+  "@commonUnpin": {
+    "description": "Generic unpin label"
+  },
+  "commonHide": "Hide",
+  "@commonHide": {
+    "description": "Generic hide label"
+  },
+  "commonLeave": "Leave",
+  "@commonLeave": {
+    "description": "Generic leave label"
+  },
+  "commonSave": "Save",
+  "@commonSave": {
+    "description": "Generic save label"
+  },
+  "commonLoading": "Processing...",
+  "@commonLoading": {
+    "description": "Short loading label for in-progress actions"
+  },
+  "commonMore": "More",
+  "@commonMore": {
+    "description": "Generic more options label"
   },
   "chatListSearchHint": "Search conversations...",
   "@chatListSearchHint": {
@@ -72,6 +116,130 @@
   "@chatListTyping": {
     "description": "Typing indicator text"
   },
+  "chatInputHint": "Type a message...",
+  "@chatInputHint": {
+    "description": "Hint text in chat input field"
+  },
+  "chatReplyingTo": "Replying",
+  "@chatReplyingTo": {
+    "description": "Label shown above reply preview in input area"
+  },
+  "chatImagePlaceholder": "📷 [image]",
+  "@chatImagePlaceholder": {
+    "description": "Placeholder text for image message references"
+  },
+  "chatMessageDeleted": "Message unavailable",
+  "@chatMessageDeleted": {
+    "description": "Shown when replied message no longer exists"
+  },
+  "chatMessageRecalled": "Message recalled",
+  "@chatMessageRecalled": {
+    "description": "Shown when message was recalled"
+  },
+  "chatStatusSent": "Sent",
+  "@chatStatusSent": {
+    "description": "Delivery status label when message is sent"
+  },
+  "chatStatusDelivered": "Delivered",
+  "@chatStatusDelivered": {
+    "description": "Delivery status label when message is delivered"
+  },
+  "chatStatusRead": "Read",
+  "@chatStatusRead": {
+    "description": "Delivery status label when message is read"
+  },
+  "chatUploadingImage": "Uploading image...",
+  "@chatUploadingImage": {
+    "description": "Snackbar text while uploading image"
+  },
+  "chatImageUploadFailed": "Image upload failed",
+  "@chatImageUploadFailed": {
+    "description": "Snackbar text when image upload fails"
+  },
+  "chatImageUploadFailedWithReason": "Image upload failed: {error}",
+  "@chatImageUploadFailedWithReason": {
+    "description": "Error message when image upload fails with reason",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "chatRetry": "Retry",
+  "@chatRetry": {
+    "description": "Retry action label"
+  },
+  "chatSendFailed": "Send failed: {error}",
+  "@chatSendFailed": {
+    "description": "Error message when sending message fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "chatImagePickFailed": "Unable to pick image: {error}",
+  "@chatImagePickFailed": {
+    "description": "Error when selecting image from camera/gallery fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "chatContextReply": "Reply",
+  "@chatContextReply": {
+    "description": "Reply action label in message context menu"
+  },
+  "chatContextCopy": "Copy",
+  "@chatContextCopy": {
+    "description": "Copy action label in message context menu"
+  },
+  "chatCopied": "Copied",
+  "@chatCopied": {
+    "description": "Toast/snackbar text when message is copied"
+  },
+  "chatRecallForMe": "Recall for me",
+  "@chatRecallForMe": {
+    "description": "Action label for recalling a message for current user only"
+  },
+  "chatRecalledForMeSuccess": "Message recalled for you",
+  "@chatRecalledForMeSuccess": {
+    "description": "Success message after recalling a message for current user"
+  },
+  "chatRecallForEveryone": "Recall for everyone",
+  "@chatRecallForEveryone": {
+    "description": "Action label for recalling message for everyone"
+  },
+  "chatRecalledForEveryoneSuccess": "Message recalled for everyone",
+  "@chatRecalledForEveryoneSuccess": {
+    "description": "Success message after recalling message for everyone"
+  },
+  "chatListPinSuccess": "Chat has been pinned",
+  "@chatListPinSuccess": {
+    "description": "Success message after pinning a chat"
+  },
+  "chatListUnpinSuccess": "Chat has been unpinned",
+  "@chatListUnpinSuccess": {
+    "description": "Success message after unpinning a chat"
+  },
+  "chatListHideSuccess": "Chat has been hidden",
+  "@chatListHideSuccess": {
+    "description": "Success message after hiding a chat"
+  },
+  "chatListDeleteSuccess": "Chat removed from your list",
+  "@chatListDeleteSuccess": {
+    "description": "Success message after deleting chat for current user"
+  },
+  "chatListActionFailed": "Chat action failed: {error}",
+  "@chatListActionFailed": {
+    "description": "Error message for chat list actions",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "contactsActionFailed": "Action failed: {error}",
   "@contactsActionFailed": {
     "description": "Error message when contact action fails",
@@ -92,6 +260,22 @@
   "contactsSearchHint": "Search friends...",
   "@contactsSearchHint": {
     "description": "Hint text in contacts search box"
+  },
+  "contactsFilterAll": "All",
+  "@contactsFilterAll": {
+    "description": "Filter chip for showing all items in contacts screen"
+  },
+  "contactsFilterRequests": "Requests",
+  "@contactsFilterRequests": {
+    "description": "Filter chip for showing requests in contacts screen"
+  },
+  "contactsFilterFriends": "Friends",
+  "@contactsFilterFriends": {
+    "description": "Filter chip for showing friends in contacts screen"
+  },
+  "contactsFilterDiscover": "Discover",
+  "@contactsFilterDiscover": {
+    "description": "Filter chip for showing discover suggestions in contacts screen"
   },
   "contactsQuickInvites": "Invites",
   "@contactsQuickInvites": {
@@ -158,6 +342,22 @@
   "@contactsNoMatchingData": {
     "description": "Empty state for contacts filters"
   },
+  "contactsEmptyNoUsers": "No users available to display.",
+  "@contactsEmptyNoUsers": {
+    "description": "Empty state when no users are available in contacts"
+  },
+  "contactsEmptyRequests": "No friend requests right now.",
+  "@contactsEmptyRequests": {
+    "description": "Empty state for requests filter in contacts"
+  },
+  "contactsEmptyFriends": "You have no friends yet.",
+  "@contactsEmptyFriends": {
+    "description": "Empty state for friends filter in contacts"
+  },
+  "contactsEmptyDiscover": "No friend suggestions available.",
+  "@contactsEmptyDiscover": {
+    "description": "Empty state for discover filter in contacts"
+  },
   "contactsStatusActive": "Active now",
   "@contactsStatusActive": {
     "description": "Fallback subtitle for online friend"
@@ -169,6 +369,22 @@
   "groupsTitle": "Group chats",
   "@groupsTitle": {
     "description": "Title of groups screen"
+  },
+  "groupsSearchHint": "Search groups by name or message...",
+  "@groupsSearchHint": {
+    "description": "Hint text for groups search input"
+  },
+  "groupsSortRecent": "Recent",
+  "@groupsSortRecent": {
+    "description": "Sort option for recent group activity"
+  },
+  "groupsSortName": "Name",
+  "@groupsSortName": {
+    "description": "Sort option for group name"
+  },
+  "groupsSortMembers": "Members",
+  "@groupsSortMembers": {
+    "description": "Sort option for number of members"
   },
   "groupsLoadError": "Error loading groups: {error}",
   "@groupsLoadError": {
@@ -183,9 +399,273 @@
   "@groupsEmpty": {
     "description": "Empty state when user has no groups"
   },
+  "groupsNoSearchResults": "No groups found for this search",
+  "@groupsNoSearchResults": {
+    "description": "Empty state when searching groups has no results"
+  },
   "groupsUnnamed": "Unnamed group",
   "@groupsUnnamed": {
     "description": "Fallback group name"
+  },
+  "groupsNoMessagesYet": "No messages yet",
+  "@groupsNoMessagesYet": {
+    "description": "Fallback group subtitle when no last message exists"
+  },
+  "groupsMemberCount": "{count} members",
+  "@groupsMemberCount": {
+    "description": "Group member count label",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupsActionAddMembers": "Add members",
+  "@groupsActionAddMembers": {
+    "description": "Action label to add members into group"
+  },
+  "groupsActionLeaveGroup": "Leave group",
+  "@groupsActionLeaveGroup": {
+    "description": "Action label to leave group"
+  },
+  "groupsActionDeleteGroup": "Delete group",
+  "@groupsActionDeleteGroup": {
+    "description": "Action label to delete group"
+  },
+  "groupsActionFailed": "Group action failed: {error}",
+  "@groupsActionFailed": {
+    "description": "Error message for group action",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "groupsAddMembersDialogTitle": "Add members to group",
+  "@groupsAddMembersDialogTitle": {
+    "description": "Dialog title for adding group members"
+  },
+  "groupsAddMembersSearchHint": "Search members...",
+  "@groupsAddMembersSearchHint": {
+    "description": "Hint text for searching members in add member dialog"
+  },
+  "groupsAddMembersNoFriends": "You have no friends to add into this group",
+  "@groupsAddMembersNoFriends": {
+    "description": "Message when user has no friends to add"
+  },
+  "groupsAddMembersNoCandidates": "No suitable friends left to add",
+  "@groupsAddMembersNoCandidates": {
+    "description": "Message when no candidate remains for adding"
+  },
+  "groupsAddMembersSuccess": "Added {count} members",
+  "@groupsAddMembersSuccess": {
+    "description": "Success message after adding group members",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupsLeaveConfirmTitle": "Confirm leaving group",
+  "@groupsLeaveConfirmTitle": {
+    "description": "Confirmation title for leaving group"
+  },
+  "groupsLeaveConfirmMessage": "Are you sure you want to leave \"{groupName}\"?",
+  "@groupsLeaveConfirmMessage": {
+    "description": "Confirmation message for leaving group",
+    "placeholders": {
+      "groupName": {
+        "type": "String"
+      }
+    }
+  },
+  "groupsLeaveSuccess": "You left the group",
+  "@groupsLeaveSuccess": {
+    "description": "Success message after leaving group"
+  },
+  "groupsDeleteConfirmTitle": "Confirm deleting group",
+  "@groupsDeleteConfirmTitle": {
+    "description": "Confirmation title for deleting group"
+  },
+  "groupsDeleteConfirmMessage": "Are you sure you want to delete \"{groupName}\"? This action cannot be undone.",
+  "@groupsDeleteConfirmMessage": {
+    "description": "Confirmation message for deleting group",
+    "placeholders": {
+      "groupName": {
+        "type": "String"
+      }
+    }
+  },
+  "groupsDeleteNotAllowed": "You do not have permission to delete this group",
+  "@groupsDeleteNotAllowed": {
+    "description": "Message when current user is not allowed to delete group"
+  },
+  "groupsDeleteSuccess": "Group deleted",
+  "@groupsDeleteSuccess": {
+    "description": "Success message after deleting group"
+  },
+  "groupsCreateTitle": "Create new group",
+  "@groupsCreateTitle": {
+    "description": "Title of create group screen"
+  },
+  "groupsCreateAction": "Create",
+  "@groupsCreateAction": {
+    "description": "Create action label in create group screen"
+  },
+  "groupsCreateDefaultName": "New group",
+  "@groupsCreateDefaultName": {
+    "description": "Default group name when user does not type one"
+  },
+  "groupsCreateNameHint": "Group name (optional)",
+  "@groupsCreateNameHint": {
+    "description": "Hint for group name input"
+  },
+  "groupsCreateDescriptionHint": "Group description (optional)",
+  "@groupsCreateDescriptionHint": {
+    "description": "Hint for group description input"
+  },
+  "groupsCreateSelectedCount": "Selected ({count})",
+  "@groupsCreateSelectedCount": {
+    "description": "Count of selected members in create group screen",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupsCreateSearchHint": "Search friends to add...",
+  "@groupsCreateSearchHint": {
+    "description": "Hint for searching friends in create group screen"
+  },
+  "groupsCreateNoFriends": "You have no friends to add into a group.",
+  "@groupsCreateNoFriends": {
+    "description": "Empty state when creating group without friends"
+  },
+  "groupsCreateButton": "Create group with {count} members",
+  "@groupsCreateButton": {
+    "description": "Bottom button label for creating a group",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupsCreateInProgress": "Creating group...",
+  "@groupsCreateInProgress": {
+    "description": "Snackbar text while creating a group"
+  },
+  "groupsCreateFailed": "Create group failed: {error}",
+  "@groupsCreateFailed": {
+    "description": "Error text when group creation fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "groupsCreateLoadProfileError": "Unable to load your profile.",
+  "@groupsCreateLoadProfileError": {
+    "description": "Error shown when loading profile data in create group screen"
+  },
+  "groupsCreateLoadFriendsError": "Unable to load your friends list.",
+  "@groupsCreateLoadFriendsError": {
+    "description": "Error shown when loading friend data in create group screen"
+  },
+  "authValidationRequiredFields": "Please fill in all required fields.",
+  "@authValidationRequiredFields": {
+    "description": "Validation error when email or password is missing"
+  },
+  "authValidationNameRequired": "Please enter your name.",
+  "@authValidationNameRequired": {
+    "description": "Validation error when name is missing during sign up"
+  },
+  "authValidationPasswordMismatch": "Password confirmation does not match.",
+  "@authValidationPasswordMismatch": {
+    "description": "Validation error when password confirmation mismatches"
+  },
+  "authValidationPhoneRequired": "Please enter your phone number.",
+  "@authValidationPhoneRequired": {
+    "description": "Validation error when phone number is missing"
+  },
+  "authValidationOtpRequired": "Please enter a valid OTP code.",
+  "@authValidationOtpRequired": {
+    "description": "Validation error when OTP is empty or invalid"
+  },
+  "authErrorInvalidCredentials": "Invalid login credentials.",
+  "@authErrorInvalidCredentials": {
+    "description": "Error shown when login credentials are invalid"
+  },
+  "authErrorEmailAlreadyInUse": "This email is already in use.",
+  "@authErrorEmailAlreadyInUse": {
+    "description": "Error shown when signing up with an existing email"
+  },
+  "authErrorWeakPassword": "Password is too weak. Please choose a stronger one.",
+  "@authErrorWeakPassword": {
+    "description": "Error shown when provided password is weak"
+  },
+  "authErrorTooManyRequests": "Too many requests. Please try again later.",
+  "@authErrorTooManyRequests": {
+    "description": "Error shown when auth requests are throttled"
+  },
+  "authErrorInvalidOtp": "OTP is invalid or has expired.",
+  "@authErrorInvalidOtp": {
+    "description": "Error shown when OTP verification fails"
+  },
+  "authErrorInvalidPhoneNumber": "Phone number is invalid.",
+  "@authErrorInvalidPhoneNumber": {
+    "description": "Error shown when phone number format is invalid"
+  },
+  "authErrorSmsQuotaExceeded": "SMS quota reached for today. Please try again later.",
+  "@authErrorSmsQuotaExceeded": {
+    "description": "Error shown when Firebase SMS quota is exceeded"
+  },
+  "authErrorBillingNotEnabled": "Firebase Billing is not enabled for real SMS verification.",
+  "@authErrorBillingNotEnabled": {
+    "description": "Error shown when Firebase billing is disabled for phone auth"
+  },
+  "authErrorOperationNotAllowed": "This sign-in method is not enabled.",
+  "@authErrorOperationNotAllowed": {
+    "description": "Error shown when auth method is disabled in Firebase"
+  },
+  "authErrorAutoVerificationFailed": "Auto verification failed: {error}",
+  "@authErrorAutoVerificationFailed": {
+    "description": "Error message for automatic phone verification failure",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "authErrorVerificationFailed": "Verification failed: {error}",
+  "@authErrorVerificationFailed": {
+    "description": "Error message when phone number verification fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "authErrorSendOtpFailed": "Failed to send OTP: {error}",
+  "@authErrorSendOtpFailed": {
+    "description": "Error message when sending OTP fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "authErrorGoogleFailed": "Google sign-in failed: {error}",
+  "@authErrorGoogleFailed": {
+    "description": "Error message when Google sign-in fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "authAppleComingSoon": "Apple sign-in is coming soon.",
+  "@authAppleComingSoon": {
+    "description": "Temporary message for unavailable Apple sign-in"
   },
   "profileNotUpdated": "Not updated",
   "@profileNotUpdated": {

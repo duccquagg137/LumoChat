@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatUser {
   final String id;
@@ -28,7 +28,7 @@ class ChatUser {
       avatar: data['avatar'] ?? '',
       isOnline: data['isOnline'] ?? false,
       bio: data['bio'],
-      username: data['email'], // Using email as username fallback
+      username: data['email'],
     );
   }
 
@@ -77,8 +77,9 @@ class ChatMessage {
   final String? senderId;
   final String? senderName;
   final bool isRead;
-  final String? replyTo; // ID tin nhắn đang trả lời
-  final Map<String, dynamic>? reactions; // Map của emoji: [userIds]
+  final MessageDeliveryStatus deliveryStatus;
+  final String? replyTo;
+  final Map<String, dynamic>? reactions;
   final List<String> deletedFor;
   final bool isRecalledForEveryone;
 
@@ -91,6 +92,7 @@ class ChatMessage {
     this.senderId,
     this.senderName,
     this.isRead = false,
+    this.deliveryStatus = MessageDeliveryStatus.sent,
     this.replyTo,
     this.reactions,
     this.deletedFor = const [],
@@ -103,11 +105,12 @@ class ChatMessage {
       return ChatMessage(id: doc.id, text: '', isSent: false, time: '');
     }
 
-    final String textData = data['text'] ?? '';
-    final String timeStr = _formatTimestamp(data['timestamp']);
-    final String? senderId = data['senderId']?.toString();
-    final String? senderName = data['senderName']?.toString();
-    final String rawType = data['type']?.toString() ?? 'text';
+    final textData = data['text']?.toString() ?? '';
+    final timeStr = _formatTimestamp(data['timestamp']);
+    final senderId = data['senderId']?.toString();
+    final senderName = data['senderName']?.toString();
+    final rawType = data['type']?.toString() ?? 'text';
+    final deliveryStatus = _parseDeliveryStatus(data);
 
     MessageType type;
     switch (rawType) {
@@ -134,21 +137,25 @@ class ChatMessage {
         (key, value) => MapEntry(key.toString(), value),
       );
     }
+
     final deletedFor = List<dynamic>.from(data['deletedFor'] ?? const [])
         .map((e) => e.toString())
         .toList();
-    final isRecalledForEveryone = data['recalledForEveryone'] == true || rawType == 'deleted';
+
+    final isRecalledForEveryone =
+        data['recalledForEveryone'] == true || rawType == 'deleted';
 
     return ChatMessage(
       id: doc.id,
       text: textData,
-      isSent: false, // This will be calculated in UI based on senderId
+      isSent: false,
       time: timeStr,
+      type: type,
       senderId: senderId,
       senderName: senderName,
-      isRead: data['isRead'] ?? false,
-      type: type,
-      replyTo: data['replyTo'],
+      isRead: deliveryStatus == MessageDeliveryStatus.read || data['isRead'] == true,
+      deliveryStatus: deliveryStatus,
+      replyTo: data['replyTo']?.toString(),
       reactions: parsedReactions,
       deletedFor: deletedFor,
       isRecalledForEveryone: isRecalledForEveryone,
@@ -162,6 +169,29 @@ class ChatMessage {
     }
     return '';
   }
+
+  static MessageDeliveryStatus _parseDeliveryStatus(Map<String, dynamic> data) {
+    final rawStatus = data['status']?.toString();
+    switch (rawStatus) {
+      case 'read':
+        return MessageDeliveryStatus.read;
+      case 'delivered':
+        return MessageDeliveryStatus.delivered;
+      case 'sent':
+        return MessageDeliveryStatus.sent;
+      default:
+        if (data['isRead'] == true) {
+          return MessageDeliveryStatus.read;
+        }
+        if (data['deliveredAt'] != null) {
+          return MessageDeliveryStatus.delivered;
+        }
+        return MessageDeliveryStatus.sent;
+    }
+  }
 }
 
 enum MessageType { text, image, system, emoji, deleted }
+
+enum MessageDeliveryStatus { sent, delivered, read }
+

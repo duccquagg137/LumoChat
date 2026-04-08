@@ -24,6 +24,18 @@
   "@commonUnexpectedError": {
     "description": "Thông báo lỗi chung"
   },
+  "commonErrorNetwork": "Lỗi kết nối mạng. Vui lòng thử lại.",
+  "@commonErrorNetwork": {
+    "description": "Thông báo lỗi mạng chung"
+  },
+  "commonErrorPermissionDenied": "Bạn không có quyền thực hiện thao tác này.",
+  "@commonErrorPermissionDenied": {
+    "description": "Thông báo khi không có quyền thao tác"
+  },
+  "commonErrorServiceUnavailable": "Dịch vụ đang tạm thời gián đoạn. Vui lòng thử lại sau.",
+  "@commonErrorServiceUnavailable": {
+    "description": "Thông báo khi dịch vụ tạm thời không khả dụng"
+  },
   "commonNoSearchResults": "Không tìm thấy kết quả",
   "@commonNoSearchResults": {
     "description": "Thông báo khi không có kết quả tìm kiếm"
@@ -47,6 +59,38 @@
   "commonOffline": "Ngoại tuyến",
   "@commonOffline": {
     "description": "Trạng thái offline chung"
+  },
+  "commonDelete": "Xóa",
+  "@commonDelete": {
+    "description": "Nhãn hành động xóa"
+  },
+  "commonPin": "Ghim",
+  "@commonPin": {
+    "description": "Nhãn hành động ghim"
+  },
+  "commonUnpin": "Bỏ ghim",
+  "@commonUnpin": {
+    "description": "Nhãn hành động bỏ ghim"
+  },
+  "commonHide": "Ẩn",
+  "@commonHide": {
+    "description": "Nhãn hành động ẩn"
+  },
+  "commonLeave": "Rời nhóm",
+  "@commonLeave": {
+    "description": "Nhãn hành động rời nhóm"
+  },
+  "commonSave": "Lưu",
+  "@commonSave": {
+    "description": "Nhãn hành động lưu"
+  },
+  "commonLoading": "Đang xử lý...",
+  "@commonLoading": {
+    "description": "Nhãn ngắn hiển thị khi hành động đang xử lý"
+  },
+  "commonMore": "Thêm",
+  "@commonMore": {
+    "description": "Nhãn hành động mở thêm tùy chọn"
   },
   "chatListSearchHint": "Tìm kiếm cuộc trò chuyện...",
   "@chatListSearchHint": {
@@ -72,6 +116,130 @@
   "@chatListTyping": {
     "description": "Nhãn trạng thái đang nhập"
   },
+  "chatInputHint": "Nhập tin nhắn...",
+  "@chatInputHint": {
+    "description": "Gợi ý trong ô nhập tin nhắn"
+  },
+  "chatReplyingTo": "Trả lời",
+  "@chatReplyingTo": {
+    "description": "Nhãn hiển thị khi đang trả lời tin nhắn"
+  },
+  "chatImagePlaceholder": "📷 [ảnh]",
+  "@chatImagePlaceholder": {
+    "description": "Nội dung placeholder cho tin nhắn ảnh"
+  },
+  "chatMessageDeleted": "Tin nhắn không còn tồn tại",
+  "@chatMessageDeleted": {
+    "description": "Hiển thị khi tin nhắn được trả lời đã bị xóa"
+  },
+  "chatMessageRecalled": "Tin nhắn đã thu hồi",
+  "@chatMessageRecalled": {
+    "description": "Hiển thị khi tin nhắn đã bị thu hồi"
+  },
+  "chatStatusSent": "Đã gửi",
+  "@chatStatusSent": {
+    "description": "Trạng thái khi tin nhắn đã gửi"
+  },
+  "chatStatusDelivered": "Đã nhận",
+  "@chatStatusDelivered": {
+    "description": "Trạng thái khi tin nhắn đã đến thiết bị người nhận"
+  },
+  "chatStatusRead": "Đã xem",
+  "@chatStatusRead": {
+    "description": "Trạng thái khi tin nhắn đã được xem"
+  },
+  "chatUploadingImage": "Đang tải ảnh lên...",
+  "@chatUploadingImage": {
+    "description": "Snackbar khi đang upload ảnh"
+  },
+  "chatImageUploadFailed": "Tải ảnh thất bại",
+  "@chatImageUploadFailed": {
+    "description": "Snackbar khi upload ảnh thất bại"
+  },
+  "chatImageUploadFailedWithReason": "Tải ảnh thất bại: {error}",
+  "@chatImageUploadFailedWithReason": {
+    "description": "Thông báo lỗi khi upload ảnh thất bại có kèm lý do",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "chatRetry": "Thử lại",
+  "@chatRetry": {
+    "description": "Nhãn hành động thử lại"
+  },
+  "chatSendFailed": "Gửi thất bại: {error}",
+  "@chatSendFailed": {
+    "description": "Thông báo lỗi khi gửi tin nhắn thất bại",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "chatImagePickFailed": "Không thể chọn ảnh: {error}",
+  "@chatImagePickFailed": {
+    "description": "Thông báo lỗi khi chọn ảnh từ máy ảnh hoặc thư viện",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "chatContextReply": "Trả lời",
+  "@chatContextReply": {
+    "description": "Nhãn hành động trả lời trong menu tin nhắn"
+  },
+  "chatContextCopy": "Sao chép",
+  "@chatContextCopy": {
+    "description": "Nhãn hành động sao chép trong menu tin nhắn"
+  },
+  "chatCopied": "Đã sao chép",
+  "@chatCopied": {
+    "description": "Thông báo khi sao chép tin nhắn thành công"
+  },
+  "chatRecallForMe": "Thu hồi cho bạn",
+  "@chatRecallForMe": {
+    "description": "Nhãn hành động thu hồi tin nhắn cho người dùng hiện tại"
+  },
+  "chatRecalledForMeSuccess": "Đã thu hồi cho bạn",
+  "@chatRecalledForMeSuccess": {
+    "description": "Thông báo khi thu hồi tin nhắn cho bạn thành công"
+  },
+  "chatRecallForEveryone": "Thu hồi cho mọi người",
+  "@chatRecallForEveryone": {
+    "description": "Nhãn hành động thu hồi tin nhắn cho mọi người"
+  },
+  "chatRecalledForEveryoneSuccess": "Đã thu hồi cho mọi người",
+  "@chatRecalledForEveryoneSuccess": {
+    "description": "Thông báo khi thu hồi tin nhắn cho mọi người thành công"
+  },
+  "chatListPinSuccess": "Đã ghim đoạn chat",
+  "@chatListPinSuccess": {
+    "description": "Thông báo khi ghim chat thành công"
+  },
+  "chatListUnpinSuccess": "Đã bỏ ghim đoạn chat",
+  "@chatListUnpinSuccess": {
+    "description": "Thông báo khi bỏ ghim chat thành công"
+  },
+  "chatListHideSuccess": "Đã ẩn đoạn chat",
+  "@chatListHideSuccess": {
+    "description": "Thông báo khi ẩn chat thành công"
+  },
+  "chatListDeleteSuccess": "Đã xóa đoạn chat khỏi danh sách",
+  "@chatListDeleteSuccess": {
+    "description": "Thông báo khi xóa chat cho người dùng hiện tại"
+  },
+  "chatListActionFailed": "Thao tác đoạn chat thất bại: {error}",
+  "@chatListActionFailed": {
+    "description": "Thông báo lỗi khi thao tác ở danh sách đoạn chat",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "contactsActionFailed": "Thao tác thất bại: {error}",
   "@contactsActionFailed": {
     "description": "Thông báo lỗi khi thao tác bạn bè thất bại",
@@ -92,6 +260,22 @@
   "contactsSearchHint": "Tìm bạn bè...",
   "@contactsSearchHint": {
     "description": "Gợi ý tìm kiếm ở màn danh bạ"
+  },
+  "contactsFilterAll": "Tất cả",
+  "@contactsFilterAll": {
+    "description": "Bộ lọc hiển thị tất cả ở màn danh bạ"
+  },
+  "contactsFilterRequests": "Lời mời",
+  "@contactsFilterRequests": {
+    "description": "Bộ lọc hiển thị lời mời ở màn danh bạ"
+  },
+  "contactsFilterFriends": "Bạn bè",
+  "@contactsFilterFriends": {
+    "description": "Bộ lọc hiển thị bạn bè ở màn danh bạ"
+  },
+  "contactsFilterDiscover": "Khám phá",
+  "@contactsFilterDiscover": {
+    "description": "Bộ lọc hiển thị gợi ý kết bạn ở màn danh bạ"
   },
   "contactsQuickInvites": "Lời mời",
   "@contactsQuickInvites": {
@@ -158,6 +342,22 @@
   "@contactsNoMatchingData": {
     "description": "Thông báo khi không có dữ liệu phù hợp"
   },
+  "contactsEmptyNoUsers": "Chưa có người dùng nào để hiển thị.",
+  "@contactsEmptyNoUsers": {
+    "description": "Thông báo khi chưa có dữ liệu người dùng ở danh bạ"
+  },
+  "contactsEmptyRequests": "Không có lời mời kết bạn nào.",
+  "@contactsEmptyRequests": {
+    "description": "Thông báo khi bộ lọc lời mời không có dữ liệu"
+  },
+  "contactsEmptyFriends": "Bạn chưa có bạn bè nào.",
+  "@contactsEmptyFriends": {
+    "description": "Thông báo khi bộ lọc bạn bè không có dữ liệu"
+  },
+  "contactsEmptyDiscover": "Không có gợi ý kết bạn phù hợp.",
+  "@contactsEmptyDiscover": {
+    "description": "Thông báo khi bộ lọc khám phá không có dữ liệu"
+  },
   "contactsStatusActive": "Đang hoạt động",
   "@contactsStatusActive": {
     "description": "Trạng thái mặc định của bạn bè online"
@@ -169,6 +369,22 @@
   "groupsTitle": "Nhóm trò chuyện",
   "@groupsTitle": {
     "description": "Tiêu đề màn hình nhóm"
+  },
+  "groupsSearchHint": "Tìm nhóm theo tên hoặc tin nhắn...",
+  "@groupsSearchHint": {
+    "description": "Gợi ý tìm kiếm ở màn danh sách nhóm"
+  },
+  "groupsSortRecent": "Gần đây",
+  "@groupsSortRecent": {
+    "description": "Bộ lọc sắp xếp nhóm theo hoạt động gần nhất"
+  },
+  "groupsSortName": "Tên nhóm",
+  "@groupsSortName": {
+    "description": "Bộ lọc sắp xếp nhóm theo tên"
+  },
+  "groupsSortMembers": "Nhiều thành viên",
+  "@groupsSortMembers": {
+    "description": "Bộ lọc sắp xếp nhóm theo số thành viên"
   },
   "groupsLoadError": "Lỗi tải nhóm: {error}",
   "@groupsLoadError": {
@@ -183,9 +399,273 @@
   "@groupsEmpty": {
     "description": "Thông báo khi chưa tham gia nhóm"
   },
+  "groupsNoSearchResults": "Không tìm thấy nhóm phù hợp",
+  "@groupsNoSearchResults": {
+    "description": "Thông báo khi tìm nhóm không có kết quả"
+  },
   "groupsUnnamed": "Nhóm không tên",
   "@groupsUnnamed": {
     "description": "Tên mặc định khi nhóm không có tên"
+  },
+  "groupsNoMessagesYet": "Chưa có tin nhắn nào",
+  "@groupsNoMessagesYet": {
+    "description": "Mô tả khi nhóm chưa có tin nhắn gần đây"
+  },
+  "groupsMemberCount": "{count} thành viên",
+  "@groupsMemberCount": {
+    "description": "Nhãn số lượng thành viên của nhóm",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupsActionAddMembers": "Thêm người",
+  "@groupsActionAddMembers": {
+    "description": "Hành động thêm người vào nhóm"
+  },
+  "groupsActionLeaveGroup": "Rời nhóm",
+  "@groupsActionLeaveGroup": {
+    "description": "Hành động rời nhóm"
+  },
+  "groupsActionDeleteGroup": "Xóa nhóm",
+  "@groupsActionDeleteGroup": {
+    "description": "Hành động xóa nhóm"
+  },
+  "groupsActionFailed": "Thao tác nhóm thất bại: {error}",
+  "@groupsActionFailed": {
+    "description": "Thông báo lỗi thao tác nhóm",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "groupsAddMembersDialogTitle": "Thêm thành viên vào nhóm",
+  "@groupsAddMembersDialogTitle": {
+    "description": "Tiêu đề hộp thoại thêm thành viên nhóm"
+  },
+  "groupsAddMembersSearchHint": "Tìm thành viên...",
+  "@groupsAddMembersSearchHint": {
+    "description": "Gợi ý tìm kiếm thành viên trong dialog thêm thành viên nhóm"
+  },
+  "groupsAddMembersNoFriends": "Bạn chưa có bạn bè để thêm vào nhóm",
+  "@groupsAddMembersNoFriends": {
+    "description": "Thông báo khi không có bạn bè để thêm"
+  },
+  "groupsAddMembersNoCandidates": "Không còn bạn bè phù hợp để thêm",
+  "@groupsAddMembersNoCandidates": {
+    "description": "Thông báo khi không còn ứng viên thêm nhóm"
+  },
+  "groupsAddMembersSuccess": "Đã thêm {count} thành viên",
+  "@groupsAddMembersSuccess": {
+    "description": "Thông báo thêm thành viên thành công",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupsLeaveConfirmTitle": "Xác nhận rời nhóm",
+  "@groupsLeaveConfirmTitle": {
+    "description": "Tiêu đề xác nhận rời nhóm"
+  },
+  "groupsLeaveConfirmMessage": "Bạn có chắc muốn rời nhóm \"{groupName}\"?",
+  "@groupsLeaveConfirmMessage": {
+    "description": "Nội dung xác nhận rời nhóm",
+    "placeholders": {
+      "groupName": {
+        "type": "String"
+      }
+    }
+  },
+  "groupsLeaveSuccess": "Bạn đã rời nhóm",
+  "@groupsLeaveSuccess": {
+    "description": "Thông báo rời nhóm thành công"
+  },
+  "groupsDeleteConfirmTitle": "Xác nhận xóa nhóm",
+  "@groupsDeleteConfirmTitle": {
+    "description": "Tiêu đề xác nhận xóa nhóm"
+  },
+  "groupsDeleteConfirmMessage": "Bạn có chắc muốn xóa nhóm \"{groupName}\"? Hành động này không thể hoàn tác.",
+  "@groupsDeleteConfirmMessage": {
+    "description": "Nội dung xác nhận xóa nhóm",
+    "placeholders": {
+      "groupName": {
+        "type": "String"
+      }
+    }
+  },
+  "groupsDeleteNotAllowed": "Bạn không có quyền xóa nhóm này",
+  "@groupsDeleteNotAllowed": {
+    "description": "Thông báo không đủ quyền xóa nhóm"
+  },
+  "groupsDeleteSuccess": "Đã xóa nhóm",
+  "@groupsDeleteSuccess": {
+    "description": "Thông báo xóa nhóm thành công"
+  },
+  "groupsCreateTitle": "Tạo nhóm mới",
+  "@groupsCreateTitle": {
+    "description": "Tiêu đề màn hình tạo nhóm"
+  },
+  "groupsCreateAction": "Tạo",
+  "@groupsCreateAction": {
+    "description": "Nhãn hành động tạo nhóm"
+  },
+  "groupsCreateDefaultName": "Nhóm mới",
+  "@groupsCreateDefaultName": {
+    "description": "Tên nhóm mặc định khi người dùng không nhập tên"
+  },
+  "groupsCreateNameHint": "Tên nhóm (tùy chọn)",
+  "@groupsCreateNameHint": {
+    "description": "Gợi ý nhập tên nhóm"
+  },
+  "groupsCreateDescriptionHint": "Mô tả nhóm (tùy chọn)",
+  "@groupsCreateDescriptionHint": {
+    "description": "Gợi ý nhập mô tả nhóm"
+  },
+  "groupsCreateSelectedCount": "Đã chọn ({count})",
+  "@groupsCreateSelectedCount": {
+    "description": "Số lượng thành viên đã chọn khi tạo nhóm",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupsCreateSearchHint": "Tìm bạn bè để thêm...",
+  "@groupsCreateSearchHint": {
+    "description": "Gợi ý tìm kiếm bạn bè khi tạo nhóm"
+  },
+  "groupsCreateNoFriends": "Bạn chưa có bạn bè để thêm vào nhóm.",
+  "@groupsCreateNoFriends": {
+    "description": "Thông báo khi chưa có bạn bè lúc tạo nhóm"
+  },
+  "groupsCreateButton": "Tạo nhóm với {count} thành viên",
+  "@groupsCreateButton": {
+    "description": "Nhãn nút tạo nhóm với số thành viên đã chọn",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupsCreateInProgress": "Đang tạo nhóm...",
+  "@groupsCreateInProgress": {
+    "description": "Thông báo khi đang xử lý tạo nhóm"
+  },
+  "groupsCreateFailed": "Tạo nhóm thất bại: {error}",
+  "@groupsCreateFailed": {
+    "description": "Thông báo lỗi khi tạo nhóm thất bại",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "groupsCreateLoadProfileError": "Không thể tải hồ sơ hiện tại.",
+  "@groupsCreateLoadProfileError": {
+    "description": "Thông báo lỗi tải hồ sơ người dùng trong màn tạo nhóm"
+  },
+  "groupsCreateLoadFriendsError": "Không thể tải danh sách bạn bè.",
+  "@groupsCreateLoadFriendsError": {
+    "description": "Thông báo lỗi tải danh sách bạn bè trong màn tạo nhóm"
+  },
+  "authValidationRequiredFields": "Vui lòng nhập đầy đủ thông tin.",
+  "@authValidationRequiredFields": {
+    "description": "Lỗi xác thực khi thiếu email hoặc mật khẩu"
+  },
+  "authValidationNameRequired": "Vui lòng nhập tên.",
+  "@authValidationNameRequired": {
+    "description": "Lỗi xác thực khi thiếu tên lúc đăng ký"
+  },
+  "authValidationPasswordMismatch": "Mật khẩu xác nhận không khớp.",
+  "@authValidationPasswordMismatch": {
+    "description": "Lỗi xác thực khi mật khẩu và xác nhận mật khẩu không khớp"
+  },
+  "authValidationPhoneRequired": "Vui lòng nhập số điện thoại.",
+  "@authValidationPhoneRequired": {
+    "description": "Lỗi xác thực khi thiếu số điện thoại"
+  },
+  "authValidationOtpRequired": "Vui lòng nhập mã OTP hợp lệ.",
+  "@authValidationOtpRequired": {
+    "description": "Lỗi xác thực khi OTP rỗng hoặc không hợp lệ"
+  },
+  "authErrorInvalidCredentials": "Thông tin đăng nhập không hợp lệ.",
+  "@authErrorInvalidCredentials": {
+    "description": "Lỗi khi email/mật khẩu hoặc thông tin đăng nhập không đúng"
+  },
+  "authErrorEmailAlreadyInUse": "Email này đã được sử dụng.",
+  "@authErrorEmailAlreadyInUse": {
+    "description": "Lỗi khi đăng ký bằng email đã tồn tại"
+  },
+  "authErrorWeakPassword": "Mật khẩu quá yếu. Vui lòng dùng mật khẩu mạnh hơn.",
+  "@authErrorWeakPassword": {
+    "description": "Lỗi khi mật khẩu không đủ mạnh"
+  },
+  "authErrorTooManyRequests": "Bạn thao tác quá nhiều lần. Vui lòng thử lại sau.",
+  "@authErrorTooManyRequests": {
+    "description": "Lỗi khi yêu cầu xác thực quá nhiều trong thời gian ngắn"
+  },
+  "authErrorInvalidOtp": "Mã OTP không đúng hoặc đã hết hạn.",
+  "@authErrorInvalidOtp": {
+    "description": "Lỗi khi mã OTP không hợp lệ hoặc hết hạn"
+  },
+  "authErrorInvalidPhoneNumber": "Số điện thoại không hợp lệ.",
+  "@authErrorInvalidPhoneNumber": {
+    "description": "Lỗi khi số điện thoại sai định dạng"
+  },
+  "authErrorSmsQuotaExceeded": "Đã hết hạn mức gửi SMS hôm nay. Vui lòng thử lại sau.",
+  "@authErrorSmsQuotaExceeded": {
+    "description": "Lỗi khi vượt quota gửi SMS"
+  },
+  "authErrorBillingNotEnabled": "Dự án Firebase chưa bật Billing để gửi SMS thật.",
+  "@authErrorBillingNotEnabled": {
+    "description": "Lỗi khi Firebase chưa bật billing cho phone auth"
+  },
+  "authErrorOperationNotAllowed": "Phương thức đăng nhập này hiện chưa được bật.",
+  "@authErrorOperationNotAllowed": {
+    "description": "Lỗi khi phương thức xác thực chưa được cấu hình"
+  },
+  "authErrorAutoVerificationFailed": "Xác thực tự động thất bại: {error}",
+  "@authErrorAutoVerificationFailed": {
+    "description": "Thông báo khi auto verification thất bại",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "authErrorVerificationFailed": "Xác minh thất bại: {error}",
+  "@authErrorVerificationFailed": {
+    "description": "Thông báo khi verify số điện thoại thất bại",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "authErrorSendOtpFailed": "Gửi mã OTP thất bại: {error}",
+  "@authErrorSendOtpFailed": {
+    "description": "Thông báo khi gửi mã OTP thất bại",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "authErrorGoogleFailed": "Đăng nhập Google thất bại: {error}",
+  "@authErrorGoogleFailed": {
+    "description": "Thông báo khi đăng nhập Google thất bại",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "authAppleComingSoon": "Đăng nhập Apple sẽ sớm được hỗ trợ.",
+  "@authAppleComingSoon": {
+    "description": "Thông báo cho nút đăng nhập Apple chưa khả dụng"
   },
   "profileNotUpdated": "Chưa cập nhật",
   "@profileNotUpdated": {

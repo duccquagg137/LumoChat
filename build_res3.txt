@@ -1,3 +1,0 @@
-﻿
-Running Gradle task 'assembleDebug'...                          
-Running Gradle task 'assembleDebug'...                           2,591ms
