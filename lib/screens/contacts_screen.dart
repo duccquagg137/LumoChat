@@ -1,10 +1,13 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/chat_models.dart';
 import '../services/friend_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/app_logger.dart';
 import '../utils/error_mapper.dart';
 import '../utils/l10n.dart';
 import '../widgets/glass_card.dart';
@@ -23,6 +26,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   final FriendService _friendService = FriendService();
   final TextEditingController _searchController = TextEditingController();
   final Set<String> _busyUserIds = {};
+  Timer? _searchDebounce;
   _ContactsFilter _activeFilter = _ContactsFilter.all;
   String _searchQuery = '';
 
@@ -30,6 +34,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -69,6 +74,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
     setState(() => _activeFilter = filter);
   }
 
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 220), () {
+      if (!mounted) return;
+      setState(() => _searchQuery = _normalize(value));
+    });
+  }
+
   Future<void> _runAction(String userId, Future<void> Function() action, String successText) async {
     if (_busyUserIds.contains(userId)) return;
     setState(() => _busyUserIds.add(userId));
@@ -76,12 +89,31 @@ class _ContactsScreenState extends State<ContactsScreen> {
       await action();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(successText)));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      final reason = AppErrorMapper.mapContacts(e);
+      AppLogger.error(
+        'Contacts action failed',
+        tag: 'contacts',
+        error: e,
+        stackTrace: stackTrace,
+        context: {
+          'operation': 'contacts.user_action',
+          'userId': userId,
+          'reason': reason.name,
+        },
+      );
       if (!mounted) return;
+      final shouldOfferRetry = AppErrorMapper.isRetryableForContacts(e);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(context.l10n.contactsActionFailed(AppErrorText.forContacts(context, e))),
           backgroundColor: AppColors.error,
+          action: shouldOfferRetry
+              ? SnackBarAction(
+                  label: context.l10n.commonRetry,
+                  onPressed: () => _runAction(userId, action, successText),
+                )
+              : null,
         ),
       );
     } finally {
@@ -227,7 +259,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                             ),
                             child: TextField(
                               controller: _searchController,
-                              onChanged: (value) => setState(() => _searchQuery = _normalize(value)),
+                              onChanged: _onSearchChanged,
                               style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
                               decoration: InputDecoration(
                                 prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
@@ -729,3 +761,4 @@ class _ContactsScreenState extends State<ContactsScreen> {
     );
   }
 }
+

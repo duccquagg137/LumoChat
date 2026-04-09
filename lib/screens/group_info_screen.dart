@@ -1,363 +1,422 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../theme/app_theme.dart';
-import '../widgets/glass_card.dart';
-import '../models/chat_models.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 
-class GroupInfoScreen extends StatelessWidget {
+import '../models/chat_models.dart';
+import '../services/group_service.dart';
+import '../theme/app_theme.dart';
+import '../utils/l10n.dart';
+import '../widgets/glass_card.dart';
+
+enum GroupInfoAction { openSearch }
+
+class GroupInfoScreen extends StatefulWidget {
+  final String groupId;
   final String groupName;
   final int memberCount;
   final List<String> memberIds;
 
   const GroupInfoScreen({
     super.key,
+    required this.groupId,
     required this.groupName,
     required this.memberCount,
     this.memberIds = const [],
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          Positioned(
-            top: -80, left: -50,
-            child: Container(
-              width: 250, height: 250,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [AppColors.primary.withOpacity(0.15), Colors.transparent],
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: CustomScrollView(
-              slivers: [
-                // App bar
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary, size: 20),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        const Text(
-                          'Thông tin nhóm',
-                          style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary, fontFamily: 'Inter',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Column(
-                      children: [
-                        // Group header card
-                        GlassCard(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            children: [
-                              Container(
-                                width: 80, height: 80,
-                                decoration: BoxDecoration(
-                                  gradient: AppGradients.primary,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.primary.withOpacity(0.3),
-                                      blurRadius: 20,
-                                    ),
-                                  ],
-                                ),
-                                child: const Icon(Icons.group_rounded, color: Colors.white, size: 40),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                groupName,
-                                style: const TextStyle(
-                                  fontSize: 22, fontWeight: FontWeight.w800,
-                                  color: AppColors.textPrimary, fontFamily: 'Inter',
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                '$memberCount thành viên',
-                                style: const TextStyle(
-                                  color: AppColors.textSecondary, fontSize: 13, fontFamily: 'Inter',
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: GradientButton(
-                                      text: 'Thêm',
-                                      icon: Icons.person_add_rounded,
-                                      height: 42,
-                                      onPressed: () {},
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: OutlinedPillButton(
-                                      text: 'Tắt thông báo',
-                                      icon: Icons.notifications_off_outlined,
-                                      onPressed: () {},
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        // Media section
-                        GlassCard(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            children: [
-                              const Row(
-                                children: [
-                                  Text(
-                                    'Ảnh/Video',
-                                    style: TextStyle(
-                                      color: AppColors.textPrimary, fontSize: 15,
-                                      fontWeight: FontWeight.w700, fontFamily: 'Inter',
-                                    ),
-                                  ),
-                                  Spacer(),
-                                  Text(
-                                    'Xem tất cả',
-                                    style: TextStyle(
-                                      color: AppColors.primaryLight, fontSize: 13, fontFamily: 'Inter',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                height: 80,
-                                child: ListView.builder(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: 6,
-                                  itemBuilder: (_, i) {
-                                    return Container(
-                                      width: 80, height: 80,
-                                      margin: const EdgeInsets.only(right: 8),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(12),
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            AppColors.primary.withOpacity(0.2 + i * 0.05),
-                                            AppColors.primaryDark.withOpacity(0.3),
-                                          ],
-                                        ),
-                                        border: Border.all(color: AppColors.glassBorder, width: 0.5),
-                                      ),
-                                      child: const Icon(Icons.photo_rounded, color: AppColors.textMuted, size: 24),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        // Members - loaded from Firestore
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Thành viên ($memberCount)',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary, fontSize: 14,
-                              fontWeight: FontWeight.w600, fontFamily: 'Inter',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        _buildMembersList(),
-                        const SizedBox(height: 20),
-                        // Actions
-                        const Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Tùy chọn',
-                            style: TextStyle(
-                              color: AppColors.textSecondary, fontSize: 14,
-                              fontWeight: FontWeight.w600, fontFamily: 'Inter',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        GlassCard(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Column(
-                            children: [
-                              _buildActionItem(Icons.push_pin_outlined, 'Ghim cuộc trò chuyện'),
-                              _buildActionItem(Icons.search_rounded, 'Tìm kiếm trong nhóm'),
-                              _buildActionItem(Icons.folder_outlined, 'File đã chia sẻ'),
-                              _buildActionItem(Icons.report_outlined, 'Báo cáo nhóm'),
-                              _buildActionItem(Icons.logout_rounded, 'Rời nhóm', isDestructive: true),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 40),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  State<GroupInfoScreen> createState() => _GroupInfoScreenState();
+}
+
+class _GroupInfoScreenState extends State<GroupInfoScreen> {
+  final GroupService _groupService = GroupService();
+  final String _currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+  bool _isPinned = false;
+  bool _isLoadingPin = true;
+  bool _isActionRunning = false;
+  List<String> _memberIds = const [];
+
+  bool _isEnglish(BuildContext context) =>
+      Localizations.localeOf(context).languageCode == 'en';
+
+  String _txt(
+    BuildContext context, {
+    required String vi,
+    required String en,
+  }) {
+    return _isEnglish(context) ? en : vi;
   }
 
-  Widget _buildMembersList() {
-    if (memberIds.isEmpty) {
-      // Fallback: load all users from Firestore
-      return StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').limit(memberCount).snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-          }
-          final members = snapshot.data!.docs.map((doc) => ChatUser.fromDocument(doc)).toList();
-          return _buildMembersCard(members);
-        },
+  @override
+  void initState() {
+    super.initState();
+    _memberIds = widget.memberIds;
+    _loadPinState();
+    _loadMembersIfMissing();
+  }
+
+  Future<void> _loadPinState() async {
+    if (_currentUserId.isEmpty) return;
+    try {
+      final myDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUserId)
+          .get();
+      final data = myDoc.data() ?? const <String, dynamic>{};
+      final groupMeta = data['groupMeta'];
+      bool pinned = false;
+      if (groupMeta is Map && groupMeta[widget.groupId] is Map) {
+        pinned = (groupMeta[widget.groupId] as Map)['pinned'] == true;
+      }
+      if (!mounted) return;
+      setState(() {
+        _isPinned = pinned;
+      });
+    } catch (_) {
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingPin = false);
+      }
+    }
+  }
+
+  Future<void> _loadMembersIfMissing() async {
+    if (_memberIds.isNotEmpty) return;
+    try {
+      final groupDoc = await FirebaseFirestore.instance
+          .collection('groups')
+          .doc(widget.groupId)
+          .get();
+      final data = groupDoc.data() ?? const <String, dynamic>{};
+      final raw = data['members'];
+      if (raw is! Iterable) return;
+      final ids = raw
+          .map((e) => e.toString())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList();
+      if (!mounted) return;
+      setState(() => _memberIds = ids);
+    } catch (_) {}
+  }
+
+  Future<List<ChatUser>> _loadMembers() async {
+    if (_memberIds.isEmpty) return const [];
+
+    const chunkSize = 10;
+    final futures = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
+    for (int i = 0; i < _memberIds.length; i += chunkSize) {
+      final end = (i + chunkSize < _memberIds.length)
+          ? i + chunkSize
+          : _memberIds.length;
+      final chunk = _memberIds.sublist(i, end);
+      futures.add(
+        FirebaseFirestore.instance
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: chunk)
+            .get(),
       );
     }
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .where(FieldPath.documentId, whereIn: memberIds.take(10).toList())
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-        }
-        final members = snapshot.data!.docs.map((doc) => ChatUser.fromDocument(doc)).toList();
-        return _buildMembersCard(members);
-      },
-    );
+    final snapshots = await Future.wait(futures);
+    final users = <ChatUser>[];
+    for (final snap in snapshots) {
+      users.addAll(snap.docs.map(ChatUser.fromDocument));
+    }
+    users.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return users;
   }
 
-  Widget _buildMembersCard(List<ChatUser> members) {
-    return GlassCard(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Column(
-        children: [
-          // Add member
-          ListTile(
-            leading: Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.15),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.person_add_rounded, color: AppColors.primaryLight, size: 20),
+  Future<void> _togglePin() async {
+    if (_isActionRunning) return;
+    final nextPinned = !_isPinned;
+    setState(() => _isActionRunning = true);
+    try {
+      await _groupService.setGroupPinned(widget.groupId, nextPinned);
+      if (!mounted) return;
+      setState(() => _isPinned = nextPinned);
+      final l10n = context.l10n;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              nextPinned ? l10n.groupsPinSuccess : l10n.groupsUnpinSuccess),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.commonUnexpectedError)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isActionRunning = false);
+      }
+    }
+  }
+
+  Future<void> _leaveGroup() async {
+    if (_isActionRunning) return;
+    final l10n = context.l10n;
+    final accepted = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: AppColors.bgSurface,
+            title: Text(
+              _txt(context, vi: 'Xác nhận rời nhóm', en: 'Leave group?'),
+              style: const TextStyle(color: AppColors.textPrimary),
             ),
-            title: const Text(
-              'Thêm thành viên',
-              style: TextStyle(
-                color: AppColors.primaryLight, fontSize: 14,
-                fontWeight: FontWeight.w600, fontFamily: 'Inter',
+            content: Text(
+              _txt(
+                context,
+                vi: 'Bạn có chắc muốn rời nhóm "${widget.groupName}"?',
+                en: 'Do you want to leave "${widget.groupName}"?',
               ),
+              style: const TextStyle(color: AppColors.textSecondary),
             ),
-            dense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(l10n.commonCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: Text(l10n.commonLeave),
+              ),
+            ],
           ),
-          ...members.asMap().entries.map((entry) {
-            final i = entry.key;
-            final user = entry.value;
-            return ListTile(
-              leading: AvatarWidget(name: user.name, size: 40, isOnline: user.isOnline),
-              title: Row(
+        ) ??
+        false;
+
+    if (!accepted) return;
+    setState(() => _isActionRunning = true);
+    try {
+      await _groupService.leaveGroup(widget.groupId);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.groupsLeaveSuccess)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.commonUnexpectedError)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isActionRunning = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final headerLetter = widget.groupName.trim().isEmpty
+        ? 'G'
+        : widget.groupName.trim().substring(0, 1).toUpperCase();
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: AppColors.bgSurface,
+        title: Text(
+          _txt(context, vi: 'Thông tin nhóm', en: 'Group info'),
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w700,
+            fontFamily: 'Inter',
+          ),
+        ),
+        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GlassCard(
+              padding: const EdgeInsets.all(18),
+              child: Row(
                 children: [
-                  Text(
-                    user.name,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary, fontSize: 14,
-                      fontWeight: FontWeight.w500, fontFamily: 'Inter',
+                  Container(
+                    width: 58,
+                    height: 58,
+                    decoration: const BoxDecoration(
+                      gradient: AppGradients.primary,
+                      shape: BoxShape.circle,
                     ),
-                  ),
-                  if (i == 0) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text(
-                        'Admin',
-                        style: TextStyle(
-                          color: AppColors.primaryLight, fontSize: 10,
-                          fontWeight: FontWeight.w600, fontFamily: 'Inter',
+                    child: Center(
+                      child: Text(
+                        headerLetter,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Inter',
                         ),
                       ),
                     ),
-                  ],
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.groupName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'Inter',
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          l10n.groupsMemberCount(_memberIds.isEmpty
+                              ? widget.memberCount
+                              : _memberIds.length),
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 13,
+                            fontFamily: 'Inter',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-              subtitle: Text(
-                user.isOnline ? 'Online' : 'Offline',
-                style: TextStyle(
-                  color: user.isOnline ? AppColors.accentGreen : AppColors.textMuted,
-                  fontSize: 12, fontFamily: 'Inter',
-                ),
+            ),
+            const SizedBox(height: 14),
+            GlassCard(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: Icon(
+                      _isPinned
+                          ? Icons.push_pin_rounded
+                          : Icons.push_pin_outlined,
+                      color: AppColors.primaryLight,
+                    ),
+                    title: Text(
+                      _isPinned ? l10n.commonUnpin : l10n.commonPin,
+                      style: const TextStyle(
+                          color: AppColors.textPrimary, fontFamily: 'Inter'),
+                    ),
+                    onTap:
+                        _isLoadingPin || _isActionRunning ? null : _togglePin,
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.search_rounded,
+                        color: AppColors.primaryLight),
+                    title: Text(
+                      _txt(context,
+                          vi: 'Tìm kiếm trong nhóm', en: 'Search in group'),
+                      style: const TextStyle(
+                          color: AppColors.textPrimary, fontFamily: 'Inter'),
+                    ),
+                    onTap: () =>
+                        Navigator.pop(context, GroupInfoAction.openSearch),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.logout_rounded,
+                        color: AppColors.error),
+                    title: Text(
+                      l10n.commonLeave,
+                      style: const TextStyle(
+                          color: AppColors.error, fontFamily: 'Inter'),
+                    ),
+                    onTap: _isActionRunning ? null : _leaveGroup,
+                  ),
+                ],
               ),
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-            );
-          }),
-        ],
-      ),
-    );
-  }
+            ),
+            const SizedBox(height: 14),
+            Text(
+              _txt(context, vi: 'Thành viên', en: 'Members'),
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Inter',
+              ),
+            ),
+            const SizedBox(height: 8),
+            FutureBuilder<List<ChatUser>>(
+              future: _loadMembers(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child:
+                          CircularProgressIndicator(color: AppColors.primary),
+                    ),
+                  );
+                }
 
-  Widget _buildActionItem(IconData icon, String title, {bool isDestructive = false}) {
-    return ListTile(
-      leading: Container(
-        width: 36, height: 36,
-        decoration: BoxDecoration(
-          color: isDestructive
-              ? AppColors.error.withOpacity(0.1)
-              : AppColors.primary.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(
-          icon,
-          color: isDestructive ? AppColors.error : AppColors.primaryLight,
-          size: 20,
+                final users = snapshot.data ?? const <ChatUser>[];
+                if (users.isEmpty) {
+                  return GlassCard(
+                    padding: const EdgeInsets.all(14),
+                    child: Text(
+                      _txt(context,
+                          vi: 'Chưa có dữ liệu thành viên.',
+                          en: 'No member data available.'),
+                      style: const TextStyle(
+                          color: AppColors.textMuted, fontFamily: 'Inter'),
+                    ),
+                  );
+                }
+
+                return GlassCard(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Column(
+                    children: users.map((user) {
+                      final isMe = user.id == _currentUserId;
+                      return ListTile(
+                        leading: AvatarWidget(
+                          name: user.name,
+                          imageUrl: user.avatar,
+                          size: 40,
+                          isOnline: user.isOnline,
+                          showStatus: true,
+                        ),
+                        title: Text(
+                          user.name,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'Inter',
+                          ),
+                        ),
+                        subtitle: Text(
+                          isMe
+                              ? _txt(context, vi: 'Bạn', en: 'You')
+                              : (user.isOnline
+                                  ? l10n.commonOnline
+                                  : l10n.commonOffline),
+                          style: TextStyle(
+                            color: user.isOnline
+                                ? AppColors.accentGreen
+                                : AppColors.textMuted,
+                            fontSize: 12,
+                            fontFamily: 'Inter',
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: isDestructive ? AppColors.error : AppColors.textPrimary,
-          fontSize: 14, fontWeight: FontWeight.w500, fontFamily: 'Inter',
-        ),
-      ),
-      trailing: Icon(
-        Icons.chevron_right_rounded,
-        color: isDestructive ? AppColors.error.withOpacity(0.5) : AppColors.textMuted,
-        size: 20,
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      dense: true,
     );
   }
 }

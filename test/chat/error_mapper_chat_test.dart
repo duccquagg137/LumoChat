@@ -10,7 +10,7 @@ void main() {
       );
     });
 
-    test('maps network and unavailable states', () {
+    test('maps network, timeout and unavailable states', () {
       expect(
         AppErrorMapper.mapChat(Exception('network-request-failed')),
         AppErrorReason.network,
@@ -18,6 +18,11 @@ void main() {
 
       expect(
         AppErrorMapper.mapChat(Exception('deadline-exceeded')),
+        AppErrorReason.timeout,
+      );
+
+      expect(
+        AppErrorMapper.mapChat(Exception('unavailable')),
         AppErrorReason.serviceUnavailable,
       );
     });

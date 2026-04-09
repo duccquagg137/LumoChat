@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../utils/retry_policy.dart';
+
 class FriendService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -12,6 +14,13 @@ class FriendService {
     return values.map((value) => value.toString()).toSet().toList();
   }
 
+  Future<void> _runWithRetry(String operation, Future<void> Function() task) {
+    return RetryPolicy.run(
+      operation: operation,
+      task: task,
+    );
+  }
+
   Future<void> sendFriendRequest(String targetUserId) async {
     final currentUserId = _currentUserId;
     if (currentUserId.isEmpty || targetUserId.isEmpty || currentUserId == targetUserId) {
@@ -21,49 +30,51 @@ class FriendService {
     final myRef = _firestore.collection('users').doc(currentUserId);
     final targetRef = _firestore.collection('users').doc(targetUserId);
 
-    await _firestore.runTransaction((tx) async {
-      final mySnap = await tx.get(myRef);
-      final targetSnap = await tx.get(targetRef);
-      if (!mySnap.exists || !targetSnap.exists) return;
+    await _runWithRetry('contacts.send_friend_request', () async {
+      await _firestore.runTransaction((tx) async {
+        final mySnap = await tx.get(myRef);
+        final targetSnap = await tx.get(targetRef);
+        if (!mySnap.exists || !targetSnap.exists) return;
 
-      final myData = mySnap.data();
-      final targetData = targetSnap.data();
+        final myData = mySnap.data();
+        final targetData = targetSnap.data();
 
-      final myFriends = _readStringList(myData, 'friends');
-      final mySent = _readStringList(myData, 'friendRequestsSent');
-      final myReceived = _readStringList(myData, 'friendRequestsReceived');
+        final myFriends = _readStringList(myData, 'friends');
+        final mySent = _readStringList(myData, 'friendRequestsSent');
+        final myReceived = _readStringList(myData, 'friendRequestsReceived');
 
-      final targetFriends = _readStringList(targetData, 'friends');
-      final targetSent = _readStringList(targetData, 'friendRequestsSent');
-      final targetReceived = _readStringList(targetData, 'friendRequestsReceived');
+        final targetFriends = _readStringList(targetData, 'friends');
+        final targetSent = _readStringList(targetData, 'friendRequestsSent');
+        final targetReceived = _readStringList(targetData, 'friendRequestsReceived');
 
-      if (myFriends.contains(targetUserId)) return;
+        if (myFriends.contains(targetUserId)) return;
 
-      // If target already sent me a request, auto accept.
-      if (myReceived.contains(targetUserId)) {
-        myReceived.remove(targetUserId);
-        targetSent.remove(currentUserId);
-        myFriends.add(targetUserId);
-        targetFriends.add(currentUserId);
+        // If target already sent me a request, auto accept.
+        if (myReceived.contains(targetUserId)) {
+          myReceived.remove(targetUserId);
+          targetSent.remove(currentUserId);
+          myFriends.add(targetUserId);
+          targetFriends.add(currentUserId);
 
-        tx.update(myRef, {
-          'friends': myFriends.toSet().toList(),
-          'friendRequestsReceived': myReceived,
-        });
-        tx.update(targetRef, {
-          'friends': targetFriends.toSet().toList(),
-          'friendRequestsSent': targetSent,
-        });
-        return;
-      }
+          tx.update(myRef, {
+            'friends': myFriends.toSet().toList(),
+            'friendRequestsReceived': myReceived,
+          });
+          tx.update(targetRef, {
+            'friends': targetFriends.toSet().toList(),
+            'friendRequestsSent': targetSent,
+          });
+          return;
+        }
 
-      if (mySent.contains(targetUserId)) return;
+        if (mySent.contains(targetUserId)) return;
 
-      mySent.add(targetUserId);
-      targetReceived.add(currentUserId);
+        mySent.add(targetUserId);
+        targetReceived.add(currentUserId);
 
-      tx.update(myRef, {'friendRequestsSent': mySent.toSet().toList()});
-      tx.update(targetRef, {'friendRequestsReceived': targetReceived.toSet().toList()});
+        tx.update(myRef, {'friendRequestsSent': mySent.toSet().toList()});
+        tx.update(targetRef, {'friendRequestsReceived': targetReceived.toSet().toList()});
+      });
     });
   }
 
@@ -76,16 +87,19 @@ class FriendService {
     final myRef = _firestore.collection('users').doc(currentUserId);
     final targetRef = _firestore.collection('users').doc(targetUserId);
 
-    await _firestore.runTransaction((tx) async {
-      final mySnap = await tx.get(myRef);
-      final targetSnap = await tx.get(targetRef);
-      if (!mySnap.exists || !targetSnap.exists) return;
+    await _runWithRetry('contacts.cancel_friend_request', () async {
+      await _firestore.runTransaction((tx) async {
+        final mySnap = await tx.get(myRef);
+        final targetSnap = await tx.get(targetRef);
+        if (!mySnap.exists || !targetSnap.exists) return;
 
-      final mySent = _readStringList(mySnap.data(), 'friendRequestsSent')..remove(targetUserId);
-      final targetReceived = _readStringList(targetSnap.data(), 'friendRequestsReceived')..remove(currentUserId);
+        final mySent = _readStringList(mySnap.data(), 'friendRequestsSent')..remove(targetUserId);
+        final targetReceived = _readStringList(targetSnap.data(), 'friendRequestsReceived')
+          ..remove(currentUserId);
 
-      tx.update(myRef, {'friendRequestsSent': mySent});
-      tx.update(targetRef, {'friendRequestsReceived': targetReceived});
+        tx.update(myRef, {'friendRequestsSent': mySent});
+        tx.update(targetRef, {'friendRequestsReceived': targetReceived});
+      });
     });
   }
 
@@ -98,27 +112,29 @@ class FriendService {
     final myRef = _firestore.collection('users').doc(currentUserId);
     final requesterRef = _firestore.collection('users').doc(requesterId);
 
-    await _firestore.runTransaction((tx) async {
-      final mySnap = await tx.get(myRef);
-      final requesterSnap = await tx.get(requesterRef);
-      if (!mySnap.exists || !requesterSnap.exists) return;
+    await _runWithRetry('contacts.accept_friend_request', () async {
+      await _firestore.runTransaction((tx) async {
+        final mySnap = await tx.get(myRef);
+        final requesterSnap = await tx.get(requesterRef);
+        if (!mySnap.exists || !requesterSnap.exists) return;
 
-      final myData = mySnap.data();
-      final requesterData = requesterSnap.data();
+        final myData = mySnap.data();
+        final requesterData = requesterSnap.data();
 
-      final myReceived = _readStringList(myData, 'friendRequestsReceived')..remove(requesterId);
-      final myFriends = _readStringList(myData, 'friends')..add(requesterId);
+        final myReceived = _readStringList(myData, 'friendRequestsReceived')..remove(requesterId);
+        final myFriends = _readStringList(myData, 'friends')..add(requesterId);
 
-      final requesterSent = _readStringList(requesterData, 'friendRequestsSent')..remove(currentUserId);
-      final requesterFriends = _readStringList(requesterData, 'friends')..add(currentUserId);
+        final requesterSent = _readStringList(requesterData, 'friendRequestsSent')..remove(currentUserId);
+        final requesterFriends = _readStringList(requesterData, 'friends')..add(currentUserId);
 
-      tx.update(myRef, {
-        'friendRequestsReceived': myReceived,
-        'friends': myFriends.toSet().toList(),
-      });
-      tx.update(requesterRef, {
-        'friendRequestsSent': requesterSent,
-        'friends': requesterFriends.toSet().toList(),
+        tx.update(myRef, {
+          'friendRequestsReceived': myReceived,
+          'friends': myFriends.toSet().toList(),
+        });
+        tx.update(requesterRef, {
+          'friendRequestsSent': requesterSent,
+          'friends': requesterFriends.toSet().toList(),
+        });
       });
     });
   }
@@ -132,16 +148,19 @@ class FriendService {
     final myRef = _firestore.collection('users').doc(currentUserId);
     final requesterRef = _firestore.collection('users').doc(requesterId);
 
-    await _firestore.runTransaction((tx) async {
-      final mySnap = await tx.get(myRef);
-      final requesterSnap = await tx.get(requesterRef);
-      if (!mySnap.exists || !requesterSnap.exists) return;
+    await _runWithRetry('contacts.reject_friend_request', () async {
+      await _firestore.runTransaction((tx) async {
+        final mySnap = await tx.get(myRef);
+        final requesterSnap = await tx.get(requesterRef);
+        if (!mySnap.exists || !requesterSnap.exists) return;
 
-      final myReceived = _readStringList(mySnap.data(), 'friendRequestsReceived')..remove(requesterId);
-      final requesterSent = _readStringList(requesterSnap.data(), 'friendRequestsSent')..remove(currentUserId);
+        final myReceived = _readStringList(mySnap.data(), 'friendRequestsReceived')..remove(requesterId);
+        final requesterSent = _readStringList(requesterSnap.data(), 'friendRequestsSent')
+          ..remove(currentUserId);
 
-      tx.update(myRef, {'friendRequestsReceived': myReceived});
-      tx.update(requesterRef, {'friendRequestsSent': requesterSent});
+        tx.update(myRef, {'friendRequestsReceived': myReceived});
+        tx.update(requesterRef, {'friendRequestsSent': requesterSent});
+      });
     });
   }
 
@@ -154,16 +173,18 @@ class FriendService {
     final myRef = _firestore.collection('users').doc(currentUserId);
     final friendRef = _firestore.collection('users').doc(friendId);
 
-    await _firestore.runTransaction((tx) async {
-      final mySnap = await tx.get(myRef);
-      final friendSnap = await tx.get(friendRef);
-      if (!mySnap.exists || !friendSnap.exists) return;
+    await _runWithRetry('contacts.unfriend', () async {
+      await _firestore.runTransaction((tx) async {
+        final mySnap = await tx.get(myRef);
+        final friendSnap = await tx.get(friendRef);
+        if (!mySnap.exists || !friendSnap.exists) return;
 
-      final myFriends = _readStringList(mySnap.data(), 'friends')..remove(friendId);
-      final friendFriends = _readStringList(friendSnap.data(), 'friends')..remove(currentUserId);
+        final myFriends = _readStringList(mySnap.data(), 'friends')..remove(friendId);
+        final friendFriends = _readStringList(friendSnap.data(), 'friends')..remove(currentUserId);
 
-      tx.update(myRef, {'friends': myFriends});
-      tx.update(friendRef, {'friends': friendFriends});
+        tx.update(myRef, {'friends': myFriends});
+        tx.update(friendRef, {'friends': friendFriends});
+      });
     });
   }
 }

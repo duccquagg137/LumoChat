@@ -36,6 +36,26 @@
   "@commonErrorServiceUnavailable": {
     "description": "Shown when backend service is unavailable"
   },
+  "commonErrorTimeout": "The request timed out. Please try again.",
+  "@commonErrorTimeout": {
+    "description": "Shown when the request exceeds timeout"
+  },
+  "commonErrorUnauthenticated": "Your session has expired. Please sign in again.",
+  "@commonErrorUnauthenticated": {
+    "description": "Shown when user is unauthenticated"
+  },
+  "commonErrorInvalidInput": "Invalid input. Please review and try again.",
+  "@commonErrorInvalidInput": {
+    "description": "Shown when provided input is invalid"
+  },
+  "commonErrorConflict": "This action conflicts with current data.",
+  "@commonErrorConflict": {
+    "description": "Shown when data conflict occurs"
+  },
+  "commonErrorNotFound": "Requested data was not found.",
+  "@commonErrorNotFound": {
+    "description": "Shown when requested data does not exist"
+  },
   "commonNoSearchResults": "No results found",
   "@commonNoSearchResults": {
     "description": "Shown when search has no result"
@@ -43,6 +63,10 @@
   "commonCancel": "Cancel",
   "@commonCancel": {
     "description": "Generic cancel label"
+  },
+  "commonRetry": "Retry",
+  "@commonRetry": {
+    "description": "Generic retry action"
   },
   "commonAddFriend": "Add friend",
   "@commonAddFriend": {
@@ -115,6 +139,14 @@
   "chatListTyping": "typing...",
   "@chatListTyping": {
     "description": "Typing indicator text"
+  },
+  "chatSearchHint": "Search in conversation...",
+  "@chatSearchHint": {
+    "description": "Hint text for searching messages inside a conversation"
+  },
+  "chatSearchNoMatches": "No matching messages",
+  "@chatSearchNoMatches": {
+    "description": "Shown when conversation search has no matching messages"
   },
   "chatInputHint": "Type a message...",
   "@chatInputHint": {
@@ -440,6 +472,14 @@
         "type": "String"
       }
     }
+  },
+  "groupsPinSuccess": "Group chat pinned",
+  "@groupsPinSuccess": {
+    "description": "Success message after pinning a group conversation"
+  },
+  "groupsUnpinSuccess": "Group chat unpinned",
+  "@groupsUnpinSuccess": {
+    "description": "Success message after unpinning a group conversation"
   },
   "groupsAddMembersDialogTitle": "Add members to group",
   "@groupsAddMembersDialogTitle": {

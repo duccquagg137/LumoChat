@@ -1,4 +1,6 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -21,6 +23,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ChatService _chatService = ChatService();
   final Set<String> _busyChatIds = {};
+  Timer? _searchDebounce;
   String _searchQuery = '';
 
   String get _currentUserId => FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -47,6 +50,69 @@ class _ChatListScreenState extends State<ChatListScreen> {
     final room = chatMeta[roomId];
     if (room is! Map) return false;
     return room[key] == true;
+  }
+
+  DateTime _roomTimestamp(Map<String, dynamic>? roomData) {
+    if (roomData == null) return DateTime.fromMillisecondsSinceEpoch(0);
+    final raw = roomData['lastTimestamp'];
+    if (raw is Timestamp) return raw.toDate();
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  String _roomTimeText(Map<String, dynamic>? roomData) {
+    if (roomData == null) return '';
+    final raw = roomData['lastTimestamp'];
+    if (raw is! Timestamp) return '';
+    final date = raw.toDate();
+    return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  int _roomUnreadCount(Map<String, dynamic>? roomData) {
+    if (roomData == null) return 0;
+    final rawUnread = roomData['unreadCountByUser'];
+    if (rawUnread is! Map) return 0;
+    final value = rawUnread[_currentUserId];
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return 0;
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 220), () {
+      if (!mounted) return;
+      setState(() => _searchQuery = value.trim().toLowerCase());
+    });
+  }
+
+  Widget _buildStateView({
+    required IconData icon,
+    required String message,
+    bool showRetry = false,
+    VoidCallback? onRetry,
+  }) {
+    final l10n = context.l10n;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: AppColors.textMuted, size: 36),
+            const SizedBox(height: 10),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 14, fontFamily: 'Inter'),
+            ),
+            if (showRetry) ...[
+              const SizedBox(height: 12),
+              TextButton(onPressed: onRetry, child: Text(l10n.commonRetry)),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _runChatAction(String roomId, Future<void> Function() action, String successText) async {
@@ -131,6 +197,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -191,7 +258,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     ),
                     child: TextField(
                       controller: _searchController,
-                      onChanged: (value) => setState(() => _searchQuery = value.trim().toLowerCase()),
+                      onChanged: _onSearchChanged,
                       style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
                       decoration: InputDecoration(
                         prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
@@ -208,10 +275,18 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     stream: FirebaseFirestore.instance.collection('users').doc(_currentUserId).snapshots(),
                     builder: (context, mySnapshot) {
                       if (mySnapshot.hasError) {
-                        return Center(child: Text(l10n.commonUnexpectedError, style: const TextStyle(color: AppColors.textMuted)));
+                        return _buildStateView(
+                          icon: Icons.error_outline_rounded,
+                          message: l10n.commonUnexpectedError,
+                          showRetry: true,
+                          onRetry: () => setState(() {}),
+                        );
                       }
                       if (mySnapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                        return _buildStateView(
+                          icon: Icons.hourglass_top_rounded,
+                          message: l10n.commonLoading,
+                        );
                       }
 
                       final myData = mySnapshot.data?.data() as Map<String, dynamic>? ?? const {};
@@ -219,12 +294,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       final chatMeta = _readChatMeta(myData['chatMeta']);
 
                       if (friendIds.isEmpty) {
-                        return Center(
-                          child: Text(
-                            l10n.chatListNoFriendsPrompt,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: AppColors.textMuted),
-                          ),
+                        return _buildStateView(
+                          icon: Icons.people_alt_outlined,
+                          message: l10n.chatListNoFriendsPrompt,
                         );
                       }
 
@@ -232,162 +304,221 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         stream: FirebaseFirestore.instance.collection('users').snapshots(),
                         builder: (context, usersSnapshot) {
                           if (usersSnapshot.hasError) {
-                            return Center(child: Text(l10n.commonUnexpectedError, style: const TextStyle(color: AppColors.textMuted)));
+                            return _buildStateView(
+                              icon: Icons.error_outline_rounded,
+                              message: l10n.commonUnexpectedError,
+                              showRetry: true,
+                              onRetry: () => setState(() {}),
+                            );
                           }
                           if (usersSnapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                            return _buildStateView(
+                              icon: Icons.hourglass_top_rounded,
+                              message: l10n.commonLoading,
+                            );
                           }
                           if (!usersSnapshot.hasData || usersSnapshot.data == null) {
                             return const SizedBox.shrink();
                           }
 
-                          final usersList = usersSnapshot.data!.docs
-                              .map((doc) => ChatUser.fromDocument(doc))
-                              .where((user) => user.id != _currentUserId)
-                              .where((user) => friendIds.contains(user.id))
-                              .where((user) => user.name.toLowerCase().contains(_searchQuery))
-                              .where((user) {
-                                final roomId = _chatService.buildChatRoomId(user.id);
-                                return !_chatFlag(chatMeta, roomId, 'hidden');
-                              })
-                              .toList()
-                            ..sort((a, b) {
-                              final roomA = _chatService.buildChatRoomId(a.id);
-                              final roomB = _chatService.buildChatRoomId(b.id);
-                              final pinA = _chatFlag(chatMeta, roomA, 'pinned');
-                              final pinB = _chatFlag(chatMeta, roomB, 'pinned');
-                              if (pinA != pinB) {
-                                return pinB ? 1 : -1;
+                          return StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('chat_rooms')
+                                .where('participants', arrayContains: _currentUserId)
+                                .snapshots(),
+                            builder: (context, roomsSnapshot) {
+                              if (roomsSnapshot.hasError) {
+                                return _buildStateView(
+                                  icon: Icons.error_outline_rounded,
+                                  message: l10n.commonUnexpectedError,
+                                  showRetry: true,
+                                  onRetry: () => setState(() {}),
+                                );
                               }
-                              return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-                            });
+                              if (roomsSnapshot.connectionState == ConnectionState.waiting) {
+                                return _buildStateView(
+                                  icon: Icons.hourglass_top_rounded,
+                                  message: l10n.commonLoading,
+                                );
+                              }
 
-                          if (usersList.isEmpty) {
-                            return Center(
-                              child: Text(
-                                _searchQuery.isEmpty ? l10n.chatListNoConversations : l10n.commonNoSearchResults,
-                                style: const TextStyle(color: AppColors.textMuted),
-                              ),
-                            );
-                          }
+                              final roomDataById = <String, Map<String, dynamic>>{};
+                              for (final doc in roomsSnapshot.data?.docs ?? const <QueryDocumentSnapshot>[]) {
+                                final data = doc.data();
+                                if (data is Map<String, dynamic>) {
+                                  roomDataById[doc.id] = data;
+                                }
+                              }
 
-                          return Column(
-                            children: [
-                              SizedBox(
-                                height: 100,
-                                child: ListView(
-                                  scrollDirection: Axis.horizontal,
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                                  children: [
-                                    _buildStoryItem(l10n.chatListYourStory, true, true),
-                                    ...usersList.take(7).map(
-                                      (user) => _buildStoryItem(user.name.split(' ').last, false, user.isOnline),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Expanded(
-                                child: ListView.builder(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                                  itemCount: usersList.length,
-                                  itemBuilder: (context, i) {
-                                    final user = usersList[i];
-                                    final chatRoomId = _chatService.buildChatRoomId(user.id);
-                                    final isPinned = _chatFlag(chatMeta, chatRoomId, 'pinned');
+                              return StreamBuilder<QuerySnapshot>(
+                                stream: FirebaseFirestore.instance
+                                    .collectionGroup('messages')
+                                    .where('receiverId', isEqualTo: _currentUserId)
+                                    .where('isRead', isEqualTo: false)
+                                    .snapshots(),
+                                builder: (context, unreadSnapshot) {
+                                  final unreadByRoom = <String, int>{};
+                                  if (unreadSnapshot.hasData) {
+                                    for (final doc in unreadSnapshot.data!.docs) {
+                                      final roomId = doc.reference.parent.parent?.id;
+                                      if (roomId == null || roomId.isEmpty) continue;
+                                      final data = doc.data();
+                                      if (data is Map<String, dynamic>) {
+                                        final senderId = data['senderId']?.toString();
+                                        if (senderId == _currentUserId) continue;
+                                      }
+                                      unreadByRoom[roomId] = (unreadByRoom[roomId] ?? 0) + 1;
+                                    }
+                                  }
 
-                                    return StreamBuilder<DocumentSnapshot>(
-                                      stream: FirebaseFirestore.instance.collection('chat_rooms').doc(chatRoomId).snapshots(),
-                                      builder: (context, roomSnapshot) {
-                                        String lastText = l10n.chatListTapToStart;
-                                        String timeTxt = '';
+                                  final usersList = usersSnapshot.data!.docs
+                                      .map((doc) => ChatUser.fromDocument(doc))
+                                      .where((user) => user.id != _currentUserId)
+                                      .where((user) => friendIds.contains(user.id))
+                                      .where((user) => user.name.toLowerCase().contains(_searchQuery))
+                                      .where((user) {
+                                        final roomId = _chatService.buildChatRoomId(user.id);
+                                        return !_chatFlag(chatMeta, roomId, 'hidden');
+                                      })
+                                      .toList()
+                                    ..sort((a, b) {
+                                      final roomA = _chatService.buildChatRoomId(a.id);
+                                      final roomB = _chatService.buildChatRoomId(b.id);
+                                      final pinA = _chatFlag(chatMeta, roomA, 'pinned');
+                                      final pinB = _chatFlag(chatMeta, roomB, 'pinned');
+                                      if (pinA != pinB) {
+                                        return pinA ? -1 : 1;
+                                      }
 
-                                        if (roomSnapshot.hasData && roomSnapshot.data!.exists) {
-                                          final data = roomSnapshot.data!.data() as Map<String, dynamic>;
-                                          lastText = data['lastMessage'] ?? lastText;
-                                          if (data['lastTimestamp'] != null) {
-                                            final ts = data['lastTimestamp'] as Timestamp;
-                                            final date = ts.toDate();
-                                            timeTxt = '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-                                          }
-                                        }
+                                      final tsA = _roomTimestamp(roomDataById[roomA]);
+                                      final tsB = _roomTimestamp(roomDataById[roomB]);
+                                      final recentCompare = tsB.compareTo(tsA);
+                                      if (recentCompare != 0) return recentCompare;
+                                      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+                                    });
 
-                                        final conv = Conversation(
-                                          id: user.id,
-                                          user: user,
-                                          lastMessage: lastText,
-                                          time: timeTxt,
-                                          isPinned: isPinned,
-                                        );
-
-                                        return Dismissible(
-                                          key: ValueKey('chat-$chatRoomId-${user.id}'),
-                                          direction: DismissDirection.horizontal,
-                                          confirmDismiss: (direction) async {
-                                            if (direction == DismissDirection.startToEnd) {
-                                              final nextPinned = !isPinned;
-                                              await _runChatAction(
-                                                chatRoomId,
-                                                () => _chatService.setChatPinned(user.id, nextPinned),
-                                                nextPinned ? l10n.chatListPinSuccess : l10n.chatListUnpinSuccess,
-                                              );
-                                              return false;
-                                            }
-
-                                            await _showChatActionsBottomSheet(
-                                              roomId: chatRoomId,
-                                              peerId: user.id,
-                                              peerName: user.name,
-                                            );
-                                            return false;
-                                          },
-                                          background: Container(
-                                            margin: const EdgeInsets.only(bottom: 4),
-                                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                                            decoration: BoxDecoration(
-                                              borderRadius: BorderRadius.circular(16),
-                                              color: AppColors.primary.withOpacity(0.2),
-                                            ),
-                                            alignment: Alignment.centerLeft,
-                                            child: Row(
-                                              children: [
-                                                Icon(isPinned ? Icons.push_pin_outlined : Icons.push_pin_rounded, color: AppColors.primaryLight),
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  isPinned ? l10n.commonUnpin : l10n.commonPin,
-                                                  style: const TextStyle(color: AppColors.primaryLight, fontWeight: FontWeight.w600),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          secondaryBackground: Container(
-                                            margin: const EdgeInsets.only(bottom: 4),
-                                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                                            decoration: BoxDecoration(
-                                              borderRadius: BorderRadius.circular(16),
-                                              color: AppColors.error.withOpacity(0.18),
-                                            ),
-                                            alignment: Alignment.centerRight,
-                                            child: Row(
-                                              mainAxisAlignment: MainAxisAlignment.end,
-                                              children: [
-                                                const Icon(Icons.more_horiz_rounded, color: AppColors.error),
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  l10n.commonMore,
-                                                  style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.w600),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          child: _buildConversationItem(context, conv),
-                                        );
-                                      },
+                                  if (usersList.isEmpty) {
+                                    return _buildStateView(
+                                      icon: Icons.chat_bubble_outline_rounded,
+                                      message: _searchQuery.isEmpty ? l10n.chatListNoConversations : l10n.commonNoSearchResults,
                                     );
-                                  },
-                                ),
-                              ),
-                            ],
+                                  }
+
+                                  return Column(
+                                    children: [
+                                      SizedBox(
+                                        height: 100,
+                                        child: ListView(
+                                          scrollDirection: Axis.horizontal,
+                                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                                          children: [
+                                            _buildStoryItem(l10n.chatListYourStory, true, true),
+                                            ...usersList.take(7).map(
+                                              (user) => _buildStoryItem(user.name.split(' ').last, false, user.isOnline),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Expanded(
+                                        child: ListView.builder(
+                                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                                          itemCount: usersList.length,
+                                          itemBuilder: (context, i) {
+                                            final user = usersList[i];
+                                            final chatRoomId = _chatService.buildChatRoomId(user.id);
+                                            final roomData = roomDataById[chatRoomId];
+                                            final isPinned = _chatFlag(chatMeta, chatRoomId, 'pinned');
+
+                                            final hasLastMessage = roomData?['lastMessage']?.toString().trim().isNotEmpty ?? false;
+                                            final lastText = hasLastMessage
+                                                ? roomData!['lastMessage'].toString()
+                                                : l10n.chatListTapToStart;
+                                            final timeTxt = _roomTimeText(roomData);
+                                            final unreadCount = unreadByRoom[chatRoomId] ?? _roomUnreadCount(roomData);
+
+                                            final conv = Conversation(
+                                              id: user.id,
+                                              user: user,
+                                              lastMessage: lastText,
+                                              time: timeTxt,
+                                              unreadCount: unreadCount,
+                                              isPinned: isPinned,
+                                            );
+
+                                            return Dismissible(
+                                              key: ValueKey('chat-$chatRoomId-${user.id}'),
+                                              direction: DismissDirection.horizontal,
+                                              confirmDismiss: (direction) async {
+                                                if (direction == DismissDirection.startToEnd) {
+                                                  final nextPinned = !isPinned;
+                                                  await _runChatAction(
+                                                    chatRoomId,
+                                                    () => _chatService.setChatPinned(user.id, nextPinned),
+                                                    nextPinned ? l10n.chatListPinSuccess : l10n.chatListUnpinSuccess,
+                                                  );
+                                                  return false;
+                                                }
+
+                                                await _showChatActionsBottomSheet(
+                                                  roomId: chatRoomId,
+                                                  peerId: user.id,
+                                                  peerName: user.name,
+                                                );
+                                                return false;
+                                              },
+                                              background: Container(
+                                                margin: const EdgeInsets.only(bottom: 4),
+                                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                                decoration: BoxDecoration(
+                                                  borderRadius: BorderRadius.circular(16),
+                                                  color: AppColors.primary.withOpacity(0.2),
+                                                ),
+                                                alignment: Alignment.centerLeft,
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      isPinned ? Icons.push_pin_outlined : Icons.push_pin_rounded,
+                                                      color: AppColors.primaryLight,
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      isPinned ? l10n.commonUnpin : l10n.commonPin,
+                                                      style: const TextStyle(color: AppColors.primaryLight, fontWeight: FontWeight.w600),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              secondaryBackground: Container(
+                                                margin: const EdgeInsets.only(bottom: 4),
+                                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                                decoration: BoxDecoration(
+                                                  borderRadius: BorderRadius.circular(16),
+                                                  color: AppColors.error.withOpacity(0.18),
+                                                ),
+                                                alignment: Alignment.centerRight,
+                                                child: Row(
+                                                  mainAxisAlignment: MainAxisAlignment.end,
+                                                  children: [
+                                                    const Icon(Icons.more_horiz_rounded, color: AppColors.error),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      l10n.commonMore,
+                                                      style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.w600),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              child: _buildConversationItem(context, conv),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+                            },
                           );
                         },
                       );
@@ -604,3 +735,4 @@ class _ChatListScreenState extends State<ChatListScreen> {
     );
   }
 }
+

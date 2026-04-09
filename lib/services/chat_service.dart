@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../utils/retry_policy.dart';
+
 class ChatService {
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
   FirebaseAuth get _auth => FirebaseAuth.instance;
@@ -48,8 +50,11 @@ class ChatService {
 
   Future<void> sendMessage(String receiverId, String text, {String? replyTo}) async {
     final timestamp = Timestamp.now();
+    final chatRoomRef = _chatRoomRef(receiverId);
+    final messageRef = chatRoomRef.collection('messages').doc();
 
     final newMessage = <String, dynamic>{
+      'id': messageRef.id,
       'senderId': _currentUserId,
       'receiverId': receiverId,
       'text': text,
@@ -61,30 +66,41 @@ class ChatService {
       if (replyTo != null) 'replyTo': replyTo,
     };
 
-    await _chatRoomRef(receiverId).collection('messages').add(newMessage);
-
-    await _chatRoomRef(receiverId).set({
-      'lastMessage': text,
-      'lastTimestamp': timestamp,
-      'participants': [_currentUserId, receiverId],
-    }, SetOptions(merge: true));
-
-    await markConversationVisible(receiverId);
+    await RetryPolicy.run(
+      operation: 'chat.send_message',
+      task: () async {
+        await messageRef.set(newMessage, SetOptions(merge: true));
+        await chatRoomRef.set({
+          'lastMessage': text,
+          'lastTimestamp': timestamp,
+          'participants': [_currentUserId, receiverId],
+        }, SetOptions(merge: true));
+        await markConversationVisible(receiverId);
+      },
+    );
   }
 
   Future<void> sendImageMessage(String receiverId, File imageFile, {String? replyTo}) async {
     final timestamp = Timestamp.now();
+    final chatRoomRef = _chatRoomRef(receiverId);
+    final messageRef = chatRoomRef.collection('messages').doc();
 
     final cloudinary = CloudinaryPublic('dds49mcmb', 'lumo_preset', cache: false);
-    final response = await cloudinary.uploadFile(
-      CloudinaryFile.fromFile(
-        imageFile.path,
-        resourceType: CloudinaryResourceType.Image,
-      ),
+    final imageUrl = await RetryPolicy.run<String>(
+      operation: 'chat.upload_image',
+      task: () async {
+        final response = await cloudinary.uploadFile(
+          CloudinaryFile.fromFile(
+            imageFile.path,
+            resourceType: CloudinaryResourceType.Image,
+          ),
+        );
+        return response.secureUrl;
+      },
     );
-    final imageUrl = response.secureUrl;
 
     final newMessage = <String, dynamic>{
+      'id': messageRef.id,
       'senderId': _currentUserId,
       'receiverId': receiverId,
       'text': imageUrl,
@@ -96,15 +112,18 @@ class ChatService {
       if (replyTo != null) 'replyTo': replyTo,
     };
 
-    await _chatRoomRef(receiverId).collection('messages').add(newMessage);
-
-    await _chatRoomRef(receiverId).set({
-      'lastMessage': '?? [image]',
-      'lastTimestamp': timestamp,
-      'participants': [_currentUserId, receiverId],
-    }, SetOptions(merge: true));
-
-    await markConversationVisible(receiverId);
+    await RetryPolicy.run(
+      operation: 'chat.send_image_message',
+      task: () async {
+        await messageRef.set(newMessage, SetOptions(merge: true));
+        await chatRoomRef.set({
+          'lastMessage': '📷 [image]',
+          'lastTimestamp': timestamp,
+          'participants': [_currentUserId, receiverId],
+        }, SetOptions(merge: true));
+        await markConversationVisible(receiverId);
+      },
+    );
   }
 
   Future<void> updateTypingStatus(String receiverId, bool isTyping) async {

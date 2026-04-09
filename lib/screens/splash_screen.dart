@@ -6,10 +6,12 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import '../services/onboarding_service.dart';
 import '../theme/app_theme.dart';
 import 'chat_screen.dart';
 import 'home_screen.dart';
 import 'landing_screen.dart';
+import 'onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   final bool isFirebaseInitialized;
@@ -33,7 +35,8 @@ class _SplashScreenState extends State<SplashScreen> {
     // Keep splash visible briefly to avoid abrupt flash.
     await Future.delayed(const Duration(milliseconds: 900));
 
-    final firebaseReady = widget.isFirebaseInitialized || Firebase.apps.isNotEmpty;
+    final firebaseReady =
+        widget.isFirebaseInitialized || Firebase.apps.isNotEmpty;
     if (!firebaseReady) {
       debugPrint('Splash -> Landing (firebase not ready)');
       return const LandingScreen();
@@ -41,6 +44,11 @@ class _SplashScreenState extends State<SplashScreen> {
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
+      final onboardingCompleted = await OnboardingService().isCompleted();
+      if (!onboardingCompleted) {
+        debugPrint('Splash -> Onboarding (first run)');
+        return const OnboardingScreen();
+      }
       debugPrint('Splash -> Landing (no signed-in user)');
       return const LandingScreen();
     }
@@ -66,7 +74,9 @@ class _SplashScreenState extends State<SplashScreen> {
             userAvatar: (screenData['userAvatar'] ?? '').toString(),
             isOnline: screenData['isOnline'] == true,
             isGroup: screenData['isGroup'] == true,
-            memberCount: (screenData['memberCount'] is int) ? screenData['memberCount'] as int : 0,
+            memberCount: (screenData['memberCount'] is int)
+                ? screenData['memberCount'] as int
+                : 0,
           );
         }
       }

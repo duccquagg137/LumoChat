@@ -36,6 +36,26 @@
   "@commonErrorServiceUnavailable": {
     "description": "Thông báo khi dịch vụ tạm thời không khả dụng"
   },
+  "commonErrorTimeout": "Yêu cầu đang bị quá thời gian. Vui lòng thử lại.",
+  "@commonErrorTimeout": {
+    "description": "Thông báo khi thao tác bị timeout"
+  },
+  "commonErrorUnauthenticated": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+  "@commonErrorUnauthenticated": {
+    "description": "Thông báo khi người dùng chưa đăng nhập hoặc phiên đã hết hạn"
+  },
+  "commonErrorInvalidInput": "Dữ liệu không hợp lệ. Vui lòng kiểm tra và thử lại.",
+  "@commonErrorInvalidInput": {
+    "description": "Thông báo khi dữ liệu đầu vào không hợp lệ"
+  },
+  "commonErrorConflict": "Thao tác bị xung đột với dữ liệu hiện tại.",
+  "@commonErrorConflict": {
+    "description": "Thông báo khi xảy ra xung đột dữ liệu"
+  },
+  "commonErrorNotFound": "Không tìm thấy dữ liệu yêu cầu.",
+  "@commonErrorNotFound": {
+    "description": "Thông báo khi dữ liệu không tồn tại"
+  },
   "commonNoSearchResults": "Không tìm thấy kết quả",
   "@commonNoSearchResults": {
     "description": "Thông báo khi không có kết quả tìm kiếm"
@@ -43,6 +63,10 @@
   "commonCancel": "Hủy",
   "@commonCancel": {
     "description": "Nhãn hành động hủy"
+  },
+  "commonRetry": "Thử lại",
+  "@commonRetry": {
+    "description": "Nhãn hành động thử lại"
   },
   "commonAddFriend": "Kết bạn",
   "@commonAddFriend": {
@@ -115,6 +139,14 @@
   "chatListTyping": "đang nhập...",
   "@chatListTyping": {
     "description": "Nhãn trạng thái đang nhập"
+  },
+  "chatSearchHint": "Tìm trong cuộc trò chuyện...",
+  "@chatSearchHint": {
+    "description": "Gợi ý tìm kiếm tin nhắn trong cuộc trò chuyện"
+  },
+  "chatSearchNoMatches": "Không có tin nhắn phù hợp",
+  "@chatSearchNoMatches": {
+    "description": "Thông báo khi không có kết quả tìm kiếm trong cuộc trò chuyện"
   },
   "chatInputHint": "Nhập tin nhắn...",
   "@chatInputHint": {
@@ -440,6 +472,14 @@
         "type": "String"
       }
     }
+  },
+  "groupsPinSuccess": "Đã ghim nhóm trò chuyện",
+  "@groupsPinSuccess": {
+    "description": "Thông báo khi ghim nhóm thành công"
+  },
+  "groupsUnpinSuccess": "Đã bỏ ghim nhóm trò chuyện",
+  "@groupsUnpinSuccess": {
+    "description": "Thông báo khi bỏ ghim nhóm thành công"
   },
   "groupsAddMembersDialogTitle": "Thêm thành viên vào nhóm",
   "@groupsAddMembersDialogTitle": {

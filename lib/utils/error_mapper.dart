@@ -12,8 +12,13 @@ enum AppErrorReason {
   smsQuotaExceeded,
   billingNotEnabled,
   operationNotAllowed,
+  invalidInput,
+  conflict,
+  notFound,
+  unauthenticated,
   permissionDenied,
   network,
+  timeout,
   serviceUnavailable,
   unknown,
 }
@@ -67,28 +72,88 @@ class AppErrorMapper {
   }
 
   static AppErrorReason mapChat(Object error) {
-    return _mapSharedReason(_normalizedError(error));
+    final raw = _normalizedError(error);
+    if (_containsAny(raw, const ['chat-room-not-found', 'message-not-found', 'not-found'])) {
+      return AppErrorReason.notFound;
+    }
+    if (_containsAny(raw, const [
+      'message-too-long',
+      'invalid-argument',
+      'failed-precondition',
+      'out-of-range',
+    ])) {
+      return AppErrorReason.invalidInput;
+    }
+    return _mapSharedReason(raw);
   }
 
   static AppErrorReason mapContacts(Object error) {
-    return _mapSharedReason(_normalizedError(error));
+    final raw = _normalizedError(error);
+    if (_containsAny(raw, const [
+      'already-friends',
+      'request-already-sent',
+      'already-exists',
+      'duplicate',
+    ])) {
+      return AppErrorReason.conflict;
+    }
+    if (_containsAny(raw, const ['user-not-found', 'not-found'])) {
+      return AppErrorReason.notFound;
+    }
+    if (_containsAny(raw, const ['invalid-argument', 'failed-precondition'])) {
+      return AppErrorReason.invalidInput;
+    }
+    return _mapSharedReason(raw);
   }
 
   static AppErrorReason mapGroups(Object error) {
-    return _mapSharedReason(_normalizedError(error));
+    final raw = _normalizedError(error);
+    if (_containsAny(raw, const ['group-not-found', 'not-found'])) {
+      return AppErrorReason.notFound;
+    }
+    if (_containsAny(raw, const ['not-allowed'])) {
+      return AppErrorReason.permissionDenied;
+    }
+    if (_containsAny(raw, const ['invalid-argument', 'failed-precondition'])) {
+      return AppErrorReason.invalidInput;
+    }
+    return _mapSharedReason(raw);
   }
 
+  static bool isRetryableForChat(Object error) => _isRetryable(mapChat(error));
+
+  static bool isRetryableForContacts(Object error) => _isRetryable(mapContacts(error));
+
+  static bool isRetryableForGroups(Object error) => _isRetryable(mapGroups(error));
+
   static AppErrorReason _mapSharedReason(String raw) {
+    if (_containsAny(raw, const ['unauthenticated', 'requires-recent-login'])) {
+      return AppErrorReason.unauthenticated;
+    }
     if (_containsAny(raw, const ['permission-denied'])) {
       return AppErrorReason.permissionDenied;
     }
-    if (_containsAny(raw, const ['network-request-failed', 'network'])) {
+    if (_containsAny(raw, const ['network-request-failed', 'network', 'socketexception'])) {
       return AppErrorReason.network;
     }
-    if (_containsAny(raw, const ['unavailable', 'deadline-exceeded', 'timeout'])) {
+    if (_containsAny(raw, const ['deadline-exceeded', 'timeout', 'timed-out'])) {
+      return AppErrorReason.timeout;
+    }
+    if (_containsAny(raw, const ['unavailable', 'service unavailable'])) {
       return AppErrorReason.serviceUnavailable;
     }
     return AppErrorReason.unknown;
+  }
+
+  static bool _isRetryable(AppErrorReason reason) {
+    switch (reason) {
+      case AppErrorReason.network:
+      case AppErrorReason.timeout:
+      case AppErrorReason.serviceUnavailable:
+        return true;
+      default:
+        return false;
+    }
   }
 
   static bool _containsAny(String raw, List<String> markers) {
@@ -100,6 +165,9 @@ class AppErrorMapper {
 
   static String _normalizedError(Object error) {
     if (error is FirebaseAuthException) {
+      return error.code.toLowerCase().replaceAll('_', '-');
+    }
+    if (error is FirebaseException) {
       return error.code.toLowerCase().replaceAll('_', '-');
     }
 
@@ -162,10 +230,20 @@ class AppErrorText {
         return l10n.authErrorBillingNotEnabled;
       case AppErrorReason.operationNotAllowed:
         return l10n.authErrorOperationNotAllowed;
+      case AppErrorReason.invalidInput:
+        return l10n.commonErrorInvalidInput;
+      case AppErrorReason.conflict:
+        return l10n.commonErrorConflict;
+      case AppErrorReason.notFound:
+        return l10n.commonErrorNotFound;
+      case AppErrorReason.unauthenticated:
+        return l10n.commonErrorUnauthenticated;
       case AppErrorReason.permissionDenied:
         return l10n.commonErrorPermissionDenied;
       case AppErrorReason.network:
         return l10n.commonErrorNetwork;
+      case AppErrorReason.timeout:
+        return l10n.commonErrorTimeout;
       case AppErrorReason.serviceUnavailable:
         return l10n.commonErrorServiceUnavailable;
       case AppErrorReason.unknown:

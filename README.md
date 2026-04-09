@@ -1,16 +1,35 @@
-# lumochat
+# LumoChat
 
-A new Flutter project.
+Flutter chat application with direct messages, groups, contacts, and profile flows.
 
-## Getting Started
+## Current Release
+- App version: `1.0.1+2`
+- Changelog: [CHANGELOG.md](./CHANGELOG.md)
 
-This project is a starting point for a Flutter application.
+## Quality Gate
+Every pull request to `main`/`master` runs the CI workflow at
+`.github/workflows/flutter-ci.yml` with the following required steps:
+- `flutter pub get`
+- `flutter gen-l10n`
+- `flutter analyze`
+- `flutter test`
+- `flutter build apk --debug` (artifact upload)
 
-A few resources to get you started if this is your first Flutter project:
+## Local Checks
+Run before opening PR:
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```bash
+flutter pub get
+flutter gen-l10n
+flutter analyze
+flutter test
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Security Rules
+- Firestore rules: `firestore.rules`
+- Storage rules: `storage.rules`
+- Security regression checklist: `docs/security-checklist-giai-doan-9.md`
+
+## Notes
+- On first run (not signed in), app opens onboarding once and stores completion state locally.
+- Group chat now links directly to Group Info from the conversation header.

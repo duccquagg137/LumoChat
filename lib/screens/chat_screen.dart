@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,8 +11,10 @@ import '../models/chat_models.dart';
 import '../services/chat_service.dart';
 import '../services/group_service.dart';
 import '../services/auth_service.dart';
+import '../utils/app_logger.dart';
 import '../utils/error_mapper.dart';
 import '../utils/l10n.dart';
+import 'group_info_screen.dart';
 import 'user_profile_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -39,26 +41,50 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
+  final TextEditingController _messageSearchController =
+      TextEditingController();
+  final FocusNode _messageSearchFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   final ChatService _chatService = ChatService();
   final GroupService _groupService = GroupService();
   final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
-  String _currentUserName = FirebaseAuth.instance.currentUser?.displayName ?? '';
+  String _currentUserName =
+      FirebaseAuth.instance.currentUser?.displayName ?? '';
 
   File? _pickedImage;
   bool _isOtherTyping = false;
   bool _isMeTyping = false;
+  bool _isSearchingMessages = false;
+  String _messageSearchQuery = '';
   Timer? _typingTimer;
+  Timer? _messageSearchDebounce;
   Timer? _readReceiptTimer;
+  Timer? _groupReadTimer;
   StreamSubscription? _chatRoomSubscription;
   int _lastMessageCount = -1;
   bool _isSyncingReceipts = false;
+  bool _isSyncingGroupReads = false;
   bool _isUploadingImage = false;
   File? _failedImageUpload;
   String? _failedImageReplyId;
+  final Map<String, int> _imageReloadAttempts = {};
 
   // Reply state
   ChatMessage? _replyingTo;
+
+  String _resolvedMessageImageUrl(ChatMessage message) {
+    final attempt = _imageReloadAttempts[message.id] ?? 0;
+    if (attempt <= 0) return message.text;
+    final separator = message.text.contains('#') ? '&' : '#';
+    return '${message.text}${separator}retry=$attempt';
+  }
+
+  void _retryLoadMessageImage(String messageId) {
+    setState(() {
+      _imageReloadAttempts[messageId] =
+          (_imageReloadAttempts[messageId] ?? 0) + 1;
+    });
+  }
 
   @override
   void initState() {
@@ -69,13 +95,20 @@ class _ChatScreenState extends State<ChatScreen> {
     _recordLastScreen();
     if (!widget.isGroup) {
       _chatService.markConversationVisible(widget.receiverId);
+    } else {
+      _groupService
+          .markGroupMessagesRead(widget.receiverId)
+          .catchError((_) => 0);
     }
   }
 
   Future<void> _loadCurrentUserProfile() async {
     if (currentUserId.isEmpty) return;
     try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(currentUserId).get();
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId)
+          .get();
       if (!doc.exists || !mounted) return;
       final data = doc.data();
       final name = data?['name']?.toString().trim();
@@ -198,7 +231,9 @@ class _ChatScreenState extends State<ChatScreen> {
       final senderId = data['senderId']?.toString();
       final receiverId = data['receiverId']?.toString();
       final isRead = data['isRead'] == true;
-      return senderId != currentUserId && receiverId == currentUserId && !isRead;
+      return senderId != currentUserId &&
+          receiverId == currentUserId &&
+          !isRead;
     });
   }
 
@@ -221,6 +256,91 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  bool _hasUnreadIncomingGroupMessages(List<DocumentSnapshot> docs) {
+    if (!widget.isGroup || currentUserId.isEmpty) return false;
+    return docs.any((doc) {
+      final data = doc.data() as Map<String, dynamic>?;
+      if (data == null) return false;
+      final senderId = data['senderId']?.toString();
+      if (senderId == null ||
+          senderId.isEmpty ||
+          senderId == currentUserId ||
+          senderId == 'system') {
+        return false;
+      }
+
+      final readBy = List<dynamic>.from(data['readBy'] ?? const []);
+      return !readBy.map((e) => e.toString()).contains(currentUserId);
+    });
+  }
+
+  void _syncGroupReadsIfNeeded(List<DocumentSnapshot> docs) {
+    if (!_hasUnreadIncomingGroupMessages(docs) || _isSyncingGroupReads) {
+      return;
+    }
+
+    _isSyncingGroupReads = true;
+    _groupReadTimer?.cancel();
+    _groupReadTimer = Timer(const Duration(milliseconds: 700), () async {
+      try {
+        await _groupService.markGroupMessagesRead(widget.receiverId);
+      } catch (_) {
+      } finally {
+        _isSyncingGroupReads = false;
+      }
+    });
+  }
+
+  void _toggleMessageSearch() {
+    if (_isSearchingMessages) {
+      _closeMessageSearch();
+      return;
+    }
+
+    setState(() => _isSearchingMessages = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _messageSearchFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _closeMessageSearch() {
+    _messageSearchDebounce?.cancel();
+    _messageSearchController.clear();
+    _messageSearchFocusNode.unfocus();
+    setState(() {
+      _isSearchingMessages = false;
+      _messageSearchQuery = '';
+    });
+  }
+
+  void _onMessageSearchChanged(String value) {
+    _messageSearchDebounce?.cancel();
+    _messageSearchDebounce = Timer(const Duration(milliseconds: 220), () {
+      if (!mounted) return;
+      setState(() {
+        _messageSearchQuery = value.trim().toLowerCase();
+      });
+    });
+  }
+
+  List<DocumentSnapshot> _filterMessagesBySearch(List<DocumentSnapshot> docs) {
+    if (_messageSearchQuery.isEmpty) return docs;
+    final query = _messageSearchQuery;
+    return docs.where((doc) {
+      final data = doc.data() as Map<String, dynamic>?;
+      if (data == null) return false;
+
+      final rawType = data['type']?.toString() ?? 'text';
+      if (rawType == 'deleted') return false;
+
+      final text = data['text']?.toString().toLowerCase() ?? '';
+      final senderName = data['senderName']?.toString().toLowerCase() ?? '';
+      return text.contains(query) || senderName.contains(query);
+    }).toList();
+  }
+
   void _openUserProfile(String userId) {
     if (userId.isEmpty || userId == currentUserId) return;
     Navigator.push(
@@ -229,8 +349,49 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Future<void> _openGroupInfo() async {
+    if (!widget.isGroup) return;
+    try {
+      final groupDoc = await FirebaseFirestore.instance
+          .collection('groups')
+          .doc(widget.receiverId)
+          .get();
+      final data = groupDoc.data() ?? const <String, dynamic>{};
+      final memberIds = (data['members'] is Iterable)
+          ? (data['members'] as Iterable)
+              .map((e) => e.toString())
+              .where((e) => e.isNotEmpty)
+              .toList()
+          : <String>[];
+      if (!mounted) return;
+
+      final result = await Navigator.push<GroupInfoAction>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => GroupInfoScreen(
+            groupId: widget.receiverId,
+            groupName: widget.userName,
+            memberCount: widget.memberCount,
+            memberIds: memberIds,
+          ),
+        ),
+      );
+
+      if (!mounted) return;
+      if (result == GroupInfoAction.openSearch && !_isSearchingMessages) {
+        _toggleMessageSearch();
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.commonUnexpectedError)),
+      );
+    }
+  }
+
   void _setReplyingWithKeepPosition(ChatMessage message) {
-    final offset = _scrollController.hasClients ? _scrollController.offset : null;
+    final offset =
+        _scrollController.hasClients ? _scrollController.offset : null;
     setState(() => _replyingTo = message);
     if (offset == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -242,7 +403,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _clearReplyingWithKeepPosition() {
     if (_replyingTo == null) return;
-    final offset = _scrollController.hasClients ? _scrollController.offset : null;
+    final offset =
+        _scrollController.hasClients ? _scrollController.offset : null;
     setState(() => _replyingTo = null);
     if (offset == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -270,7 +432,10 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .snapshots(),
       builder: (context, snapshot) {
         final data = snapshot.data?.data() as Map<String, dynamic>?;
         final name = data?['name']?.toString() ?? fallbackName;
@@ -291,8 +456,12 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _setMeTyping(false);
     _typingTimer?.cancel();
+    _messageSearchDebounce?.cancel();
     _readReceiptTimer?.cancel();
+    _groupReadTimer?.cancel();
     _chatRoomSubscription?.cancel();
+    _messageSearchController.dispose();
+    _messageSearchFocusNode.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -313,7 +482,10 @@ class _ChatScreenState extends State<ChatScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [AppColors.primary.withOpacity(0.1), Colors.transparent],
+                  colors: [
+                    AppColors.primary.withOpacity(0.1),
+                    Colors.transparent
+                  ],
                 ),
               ),
             ),
@@ -340,7 +512,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     }
 
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                      return const Center(
+                          child: CircularProgressIndicator(
+                              color: AppColors.primary));
                     }
 
                     if (!snapshot.hasData) {
@@ -348,7 +522,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     }
 
                     final messageDocs = snapshot.data!.docs.toList()
-                      ..sort((a, b) => _messageTimestamp(a).compareTo(_messageTimestamp(b)));
+                      ..sort((a, b) =>
+                          _messageTimestamp(a).compareTo(_messageTimestamp(b)));
 
                     if (messageDocs.isEmpty) {
                       return Center(
@@ -359,15 +534,32 @@ class _ChatScreenState extends State<ChatScreen> {
                       );
                     }
 
-                    _syncDirectReceiptsIfNeeded(messageDocs);
-                    _syncScrollToLatest(messageDocs.length);
+                    if (widget.isGroup) {
+                      _syncGroupReadsIfNeeded(messageDocs);
+                    } else {
+                      _syncDirectReceiptsIfNeeded(messageDocs);
+                    }
+                    if (_messageSearchQuery.isEmpty) {
+                      _syncScrollToLatest(messageDocs.length);
+                    }
+
+                    final visibleDocs = _filterMessagesBySearch(messageDocs);
+                    if (visibleDocs.isEmpty) {
+                      return Center(
+                        child: Text(
+                          l10n.chatSearchNoMatches,
+                          style: const TextStyle(color: AppColors.textMuted),
+                        ),
+                      );
+                    }
 
                     return ListView.builder(
                       controller: _scrollController,
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      itemCount: messageDocs.length,
+                      itemCount: visibleDocs.length,
                       itemBuilder: (context, i) {
-                        final msgData = ChatMessage.fromDocument(messageDocs[i]);
+                        final msgData =
+                            ChatMessage.fromDocument(visibleDocs[i]);
                         if (msgData.deletedFor.contains(currentUserId)) {
                           return const SizedBox.shrink();
                         }
@@ -446,11 +638,20 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Row(
           children: [
             IconButton(
-              icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary, size: 20),
-              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back_ios_rounded,
+                  color: AppColors.textPrimary, size: 20),
+              onPressed: () {
+                if (_isSearchingMessages) {
+                  _closeMessageSearch();
+                  return;
+                }
+                Navigator.pop(context);
+              },
             ),
             GestureDetector(
-              onTap: widget.isGroup ? null : () => _openUserProfile(widget.receiverId),
+              onTap: widget.isGroup
+                  ? null
+                  : () => _openUserProfile(widget.receiverId),
               child: _buildUserAvatarById(
                 userId: widget.isGroup ? null : widget.receiverId,
                 fallbackName: widget.userName,
@@ -462,56 +663,118 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: widget.isGroup ? null : () => _openUserProfile(widget.receiverId),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      widget.userName,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Inter',
+              child: _isSearchingMessages
+                  ? Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.glassBg,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color: AppColors.glassBorder, width: 0.5),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      widget.isGroup
-                          ? l10n.groupsMemberCount(widget.memberCount)
-                          : widget.isOnline
-                              ? l10n.commonOnline
-                              : l10n.commonOffline,
-                      style: TextStyle(
-                        color: widget.isOnline ? AppColors.accentGreen : AppColors.textMuted,
-                        fontSize: 12,
-                        fontFamily: 'Inter',
+                      child: TextField(
+                        controller: _messageSearchController,
+                        focusNode: _messageSearchFocusNode,
+                        onChanged: _onMessageSearchChanged,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                          fontFamily: 'Inter',
+                        ),
+                        decoration: InputDecoration(
+                          hintText: l10n.chatSearchHint,
+                          hintStyle: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 13,
+                            fontFamily: 'Inter',
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
+                          prefixIcon: const Icon(Icons.search_rounded,
+                              color: AppColors.textMuted, size: 18),
+                        ),
+                      ),
+                    )
+                  : GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: widget.isGroup
+                          ? null
+                          : () => _openUserProfile(widget.receiverId),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            widget.userName,
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              fontFamily: 'Inter',
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.isGroup
+                                ? l10n.groupsMemberCount(widget.memberCount)
+                                : widget.isOnline
+                                    ? l10n.commonOnline
+                                    : l10n.commonOffline,
+                            style: TextStyle(
+                              color: widget.isOnline
+                                  ? AppColors.accentGreen
+                                  : AppColors.textMuted,
+                              fontSize: 12,
+                              fontFamily: 'Inter',
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
             ),
-            _buildActionIcon(Icons.call_outlined),
-            _buildActionIcon(Icons.videocam_outlined),
-            _buildActionIcon(Icons.more_vert_rounded),
+            if (_isSearchingMessages)
+              _buildActionIcon(
+                Icons.close_rounded,
+                onTap: _closeMessageSearch,
+              )
+            else ...[
+              if (widget.isGroup) ...[
+                _buildActionIcon(
+                  Icons.search_rounded,
+                  onTap: _toggleMessageSearch,
+                ),
+                _buildActionIcon(
+                  Icons.info_outline_rounded,
+                  onTap: _openGroupInfo,
+                ),
+              ] else ...[
+                _buildActionIcon(Icons.call_outlined),
+                _buildActionIcon(Icons.videocam_outlined),
+                _buildActionIcon(
+                  Icons.search_rounded,
+                  onTap: _toggleMessageSearch,
+                ),
+              ],
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildActionIcon(IconData icon) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 2),
-      width: 36,
-      height: 36,
-      child: Icon(icon, color: AppColors.textSecondary, size: 22),
+  Widget _buildActionIcon(IconData icon, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        width: 36,
+        height: 36,
+        child: Icon(icon, color: AppColors.textSecondary, size: 22),
+      ),
     );
   }
 
@@ -538,13 +801,17 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     final isSent = message.isSent;
-    final senderLabel = message.senderName ?? message.senderId ?? context.l10n.profileFallbackUser;
-    final isDeletedMessage = message.type == MessageType.deleted || message.isRecalledForEveryone;
+    final senderLabel = message.senderName ??
+        message.senderId ??
+        context.l10n.profileFallbackUser;
+    final isDeletedMessage =
+        message.type == MessageType.deleted || message.isRecalledForEveryone;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
-        mainAxisAlignment: isSent ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isSent ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isSent && widget.isGroup) ...[
@@ -561,7 +828,8 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment: isSent ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  isSent ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 if (!isSent && widget.isGroup)
                   Padding(
@@ -581,17 +849,24 @@ class _ChatScreenState extends State<ChatScreen> {
                     maxWidth: MediaQuery.of(context).size.width * 0.72,
                   ),
                   child: GestureDetector(
-                    onLongPress: isDeletedMessage ? null : () => _showContextMenu(message),
+                    onLongPress: isDeletedMessage
+                        ? null
+                        : () => _showContextMenu(message),
                     child: Column(
-                      crossAxisAlignment: isSent ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                      crossAxisAlignment: isSent
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
                       children: [
-                        if (message.replyTo != null) _buildReplyPreview(message.replyTo!, isSent),
+                        if (message.replyTo != null)
+                          _buildReplyPreview(message.replyTo!, isSent),
                         isDeletedMessage
                             ? _buildDeletedBubble(isSent)
                             : message.type == MessageType.image
-                            ? _buildImageMessage(isSent, message)
-                            : _buildTextBubble(isSent, message),
-                        if (!isDeletedMessage && message.reactions != null && message.reactions!.isNotEmpty)
+                                ? _buildImageMessage(isSent, message)
+                                : _buildTextBubble(isSent, message),
+                        if (!isDeletedMessage &&
+                            message.reactions != null &&
+                            message.reactions!.isNotEmpty)
                           _buildReactionsDisplay(message.reactions!),
                       ],
                     ),
@@ -628,8 +903,10 @@ class _ChatScreenState extends State<ChatScreen> {
         if (snapshot.hasData && snapshot.data!.exists) {
           final data = snapshot.data!.data() as Map<String, dynamic>;
           final deletedFor = List<dynamic>.from(data['deletedFor'] ?? const []);
-          final isDeletedForMe = deletedFor.map((e) => e.toString()).contains(currentUserId);
-          final isRecalled = data['recalledForEveryone'] == true || data['type'] == 'deleted';
+          final isDeletedForMe =
+              deletedFor.map((e) => e.toString()).contains(currentUserId);
+          final isRecalled =
+              data['recalledForEveryone'] == true || data['type'] == 'deleted';
           if (isDeletedForMe || isRecalled) {
             replyText = l10n.chatMessageRecalled;
           } else {
@@ -644,13 +921,19 @@ class _ChatScreenState extends State<ChatScreen> {
           decoration: BoxDecoration(
             color: Colors.white10,
             borderRadius: BorderRadius.circular(8),
-            border: Border(left: BorderSide(color: isMe ? Colors.white70 : AppColors.primary, width: 3)),
+            border: Border(
+                left: BorderSide(
+                    color: isMe ? Colors.white70 : AppColors.primary,
+                    width: 3)),
           ),
           child: Text(
             replyText,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white60, fontSize: 12, fontStyle: FontStyle.italic),
+            style: const TextStyle(
+                color: Colors.white60,
+                fontSize: 12,
+                fontStyle: FontStyle.italic),
           ),
         );
       },
@@ -671,7 +954,8 @@ class _ChatScreenState extends State<ChatScreen> {
         children: reactions.entries.map((e) {
           return Padding(
             padding: const EdgeInsets.only(right: 4),
-            child: Text('${e.key} ${e.value.length}', style: const TextStyle(fontSize: 10)),
+            child: Text('${e.key} ${e.value.length}',
+                style: const TextStyle(fontSize: 10)),
           );
         }).toList(),
       ),
@@ -728,11 +1012,14 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Color _deliveryStatusColor(MessageDeliveryStatus status, bool onDarkBackground) {
+  Color _deliveryStatusColor(
+      MessageDeliveryStatus status, bool onDarkBackground) {
     if (status == MessageDeliveryStatus.read) {
       return const Color(0xFF60A5FA);
     }
-    return onDarkBackground ? Colors.white.withOpacity(0.72) : AppColors.textMuted;
+    return onDarkBackground
+        ? Colors.white.withOpacity(0.72)
+        : AppColors.textMuted;
   }
 
   Widget _buildDeliveryStatusBadge(
@@ -740,7 +1027,8 @@ class _ChatScreenState extends State<ChatScreen> {
     required bool onDarkBackground,
     bool showLabel = true,
   }) {
-    final color = _deliveryStatusColor(message.deliveryStatus, onDarkBackground);
+    final color =
+        _deliveryStatusColor(message.deliveryStatus, onDarkBackground);
     final label = _deliveryStatusLabel(message.deliveryStatus);
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -778,7 +1066,9 @@ class _ChatScreenState extends State<ChatScreen> {
           bottomLeft: Radius.circular(isSent ? 20 : 4),
           bottomRight: Radius.circular(isSent ? 4 : 20),
         ),
-        border: isSent ? null : Border.all(color: AppColors.glassBorder, width: 0.5),
+        border: isSent
+            ? null
+            : Border.all(color: AppColors.glassBorder, width: 0.5),
         boxShadow: isSent
             ? [
                 BoxShadow(
@@ -808,7 +1098,9 @@ class _ChatScreenState extends State<ChatScreen> {
               Text(
                 message.time,
                 style: TextStyle(
-                  color: isSent ? Colors.white.withOpacity(0.7) : AppColors.textMuted,
+                  color: isSent
+                      ? Colors.white.withOpacity(0.7)
+                      : AppColors.textMuted,
                   fontSize: 11,
                   fontFamily: 'Inter',
                 ),
@@ -829,8 +1121,16 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildImageMessage(bool isSent, ChatMessage message) {
+    final l10n = context.l10n;
+    final pixelRatio = MediaQuery.of(context).devicePixelRatio;
+    final cacheWidth = (220 * pixelRatio).round();
+    final cacheHeight = (160 * pixelRatio).round();
+    final imageUrl = _resolvedMessageImageUrl(message);
+    final retryVersion = _imageReloadAttempts[message.id] ?? 0;
+
     return Column(
-      crossAxisAlignment: isSent ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment:
+          isSent ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         Container(
           width: 220,
@@ -851,20 +1151,65 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 // Render image from Firebase Storage
                 Image.network(
-                  message.text, 
+                  imageUrl,
+                  key: ValueKey('message-image-${message.id}-$retryVersion'),
                   fit: BoxFit.cover,
+                  cacheWidth: cacheWidth,
+                  cacheHeight: cacheHeight,
+                  filterQuality: FilterQuality.medium,
+                  frameBuilder:
+                      (context, child, frame, wasSynchronouslyLoaded) {
+                    if (wasSynchronouslyLoaded) return child;
+                    return AnimatedOpacity(
+                      opacity: frame == null ? 0 : 1,
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      child: child,
+                    );
+                  },
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;
-                    return const Center(child: CircularProgressIndicator(color: AppColors.primaryLight));
+                    return const Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primaryLight,
+                        ),
+                      ),
+                    );
                   },
-                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image_rounded, color: AppColors.textMuted, size: 48),
+                  errorBuilder: (context, error, stackTrace) => Center(
+                    child: GestureDetector(
+                      onTap: () => _retryLoadMessageImage(message.id),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.broken_image_rounded,
+                              color: AppColors.textMuted, size: 38),
+                          const SizedBox(height: 6),
+                          Text(
+                            l10n.commonRetry,
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: 'Inter',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
                 // Time overlay
                 Positioned(
                   right: 8,
                   bottom: 8,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.5),
                       borderRadius: BorderRadius.circular(8),
@@ -874,7 +1219,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       children: [
                         Text(
                           message.time,
-                          style: const TextStyle(color: Colors.white, fontSize: 11),
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 11),
                         ),
                         if (isSent) ...[
                           const SizedBox(width: 4),
@@ -915,7 +1261,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildInputBar() {
     final l10n = context.l10n;
-    final canSend = !_isUploadingImage && (_messageController.text.isNotEmpty || _pickedImage != null);
+    final canSend = !_isUploadingImage &&
+        (_messageController.text.isNotEmpty || _pickedImage != null);
     return Container(
       padding: EdgeInsets.only(
         left: 12,
@@ -934,7 +1281,7 @@ class _ChatScreenState extends State<ChatScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (_replyingTo != null) _buildReplyInputBar(),
-          if (_pickedImage != null) 
+          if (_pickedImage != null)
             Padding(
               padding: const EdgeInsets.only(left: 52, bottom: 12),
               child: _buildImagePreview(),
@@ -948,7 +1295,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   decoration: BoxDecoration(
                     color: AppColors.glassBg,
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: AppColors.glassBorder, width: 0.5),
+                    border:
+                        Border.all(color: AppColors.glassBorder, width: 0.5),
                   ),
                   child: Row(
                     children: [
@@ -962,20 +1310,28 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                           decoration: InputDecoration(
                             hintText: l10n.chatInputHint,
-                            hintStyle: const TextStyle(color: AppColors.textMuted),
+                            hintStyle:
+                                const TextStyle(color: AppColors.textMuted),
                             border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 10),
                           ),
                         ),
                       ),
                       GestureDetector(
-                        onTap: _isUploadingImage ? null : () => _sendImage(ImageSource.gallery),
-                        child: const Icon(Icons.add_photo_alternate_outlined, color: AppColors.textMuted, size: 22),
+                        onTap: _isUploadingImage
+                            ? null
+                            : () => _sendImage(ImageSource.gallery),
+                        child: const Icon(Icons.add_photo_alternate_outlined,
+                            color: AppColors.textMuted, size: 22),
                       ),
                       const SizedBox(width: 8),
                       GestureDetector(
-                        onTap: _isUploadingImage ? null : () => _sendImage(ImageSource.camera),
-                        child: const Icon(Icons.camera_alt_outlined, color: AppColors.textMuted, size: 22),
+                        onTap: _isUploadingImage
+                            ? null
+                            : () => _sendImage(ImageSource.camera),
+                        child: const Icon(Icons.camera_alt_outlined,
+                            color: AppColors.textMuted, size: 22),
                       ),
                       const SizedBox(width: 12),
                     ],
@@ -1006,10 +1362,12 @@ class _ChatScreenState extends State<ChatScreen> {
                             padding: EdgeInsets.all(12),
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
-                        : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                        : const Icon(Icons.send_rounded,
+                            color: Colors.white, size: 20),
                   ),
                 ),
               ),
@@ -1028,7 +1386,8 @@ class _ChatScreenState extends State<ChatScreen> {
       decoration: BoxDecoration(
         color: AppColors.glassBg,
         borderRadius: BorderRadius.circular(12),
-        border: const Border(left: BorderSide(color: AppColors.primary, width: 4)),
+        border:
+            const Border(left: BorderSide(color: AppColors.primary, width: 4)),
       ),
       child: Row(
         children: [
@@ -1039,17 +1398,22 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 Text(
                   l10n.chatReplyingTo,
-                  style: const TextStyle(color: AppColors.primaryLight, fontSize: 12, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      color: AppColors.primaryLight,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold),
                 ),
                 Text(
                   (_replyingTo!.type == MessageType.image)
                       ? l10n.chatImagePlaceholder
-                      : (_replyingTo!.type == MessageType.deleted || _replyingTo!.isRecalledForEveryone)
+                      : (_replyingTo!.type == MessageType.deleted ||
+                              _replyingTo!.isRecalledForEveryone)
                           ? l10n.chatMessageRecalled
                           : _replyingTo!.text,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  style:
+                      const TextStyle(color: AppColors.textMuted, fontSize: 13),
                 ),
               ],
             ),
@@ -1063,8 +1427,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-
-
   Widget _buildAddButton() {
     return Container(
       width: 44,
@@ -1074,7 +1436,8 @@ class _ChatScreenState extends State<ChatScreen> {
         shape: BoxShape.circle,
         border: Border.all(color: AppColors.glassBorder, width: 0.5),
       ),
-      child: const Icon(Icons.add_rounded, color: AppColors.textSecondary, size: 22),
+      child: const Icon(Icons.add_rounded,
+          color: AppColors.textSecondary, size: 22),
     );
   }
 
@@ -1100,7 +1463,8 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(15),
-            child: Image.file(_pickedImage!, height: 100, width: 100, fit: BoxFit.cover),
+            child: Image.file(_pickedImage!,
+                height: 100, width: 100, fit: BoxFit.cover),
           ),
         ),
         if (_isUploadingImage)
@@ -1132,7 +1496,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 child: Text(
                   l10n.chatRetry,
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'Inter'),
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 11, fontFamily: 'Inter'),
                 ),
               ),
             ),
@@ -1172,10 +1537,13 @@ class _ChatScreenState extends State<ChatScreen> {
     return colors[name.hashCode.abs() % colors.length];
   }
 
-  Future<bool> _uploadImageWithRetry(File imageFile, {String? replyTo, bool isRetry = false}) async {
+  Future<bool> _uploadImageWithRetry(File imageFile,
+      {String? replyTo, bool isRetry = false}) async {
     final l10n = context.l10n;
     final messenger = ScaffoldMessenger.of(context);
-    final senderName = _currentUserName.trim().isNotEmpty ? _currentUserName.trim() : l10n.profileFallbackUser;
+    final senderName = _currentUserName.trim().isNotEmpty
+        ? _currentUserName.trim()
+        : l10n.profileFallbackUser;
 
     if (!isRetry) {
       messenger.showSnackBar(SnackBar(content: Text(l10n.chatUploadingImage)));
@@ -1211,7 +1579,20 @@ class _ChatScreenState extends State<ChatScreen> {
         });
       }
       return true;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      final reason = AppErrorMapper.mapChat(e);
+      AppLogger.error(
+        'Failed to upload image message',
+        tag: 'chat',
+        error: e,
+        stackTrace: stackTrace,
+        context: {
+          'operation': 'chat.upload_image',
+          'isGroup': widget.isGroup,
+          'receiverId': widget.receiverId,
+          'reason': reason.name,
+        },
+      );
       if (mounted) {
         setState(() {
           _pickedImage = imageFile;
@@ -1220,7 +1601,8 @@ class _ChatScreenState extends State<ChatScreen> {
         });
         messenger.showSnackBar(
           SnackBar(
-            content: Text(l10n.chatImageUploadFailedWithReason(AppErrorText.forChat(context, e))),
+            content: Text(l10n.chatImageUploadFailedWithReason(
+                AppErrorText.forChat(context, e))),
             backgroundColor: Colors.redAccent,
             action: SnackBarAction(
               label: l10n.chatRetry,
@@ -1242,7 +1624,77 @@ class _ChatScreenState extends State<ChatScreen> {
   void _retryFailedImageUpload() {
     final imageFile = _failedImageUpload;
     if (imageFile == null || _isUploadingImage) return;
-    _uploadImageWithRetry(imageFile, replyTo: _failedImageReplyId, isRetry: true);
+    _uploadImageWithRetry(imageFile,
+        replyTo: _failedImageReplyId, isRetry: true);
+  }
+
+  Future<bool> _sendTextMessage({
+    required String text,
+    required String senderName,
+    String? replyId,
+  }) async {
+    final l10n = context.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      if (widget.isGroup) {
+        await _groupService.sendGroupMessage(
+          widget.receiverId,
+          senderName,
+          text,
+          replyTo: replyId,
+        );
+      } else {
+        await _chatService.sendMessage(
+          widget.receiverId,
+          text,
+          replyTo: replyId,
+        );
+      }
+      return true;
+    } catch (e, stackTrace) {
+      final reason = AppErrorMapper.mapChat(e);
+      AppLogger.error(
+        'Failed to send text message',
+        tag: 'chat',
+        error: e,
+        stackTrace: stackTrace,
+        context: {
+          'operation': 'chat.send_text',
+          'isGroup': widget.isGroup,
+          'receiverId': widget.receiverId,
+          'reason': reason.name,
+        },
+      );
+      if (!mounted) return false;
+
+      final shouldOfferRetry = AppErrorMapper.isRetryableForChat(e);
+      if (_messageController.text.trim().isEmpty) {
+        _messageController.text = text;
+        _messageController.selection = TextSelection.fromPosition(
+          TextPosition(offset: _messageController.text.length),
+        );
+      }
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(l10n.chatSendFailed(AppErrorText.forChat(context, e))),
+          backgroundColor: Colors.redAccent,
+          action: shouldOfferRetry
+              ? SnackBarAction(
+                  label: l10n.commonRetry,
+                  onPressed: () {
+                    _sendTextMessage(
+                      text: text,
+                      senderName: senderName,
+                      replyId: replyId,
+                    );
+                  },
+                )
+              : null,
+        ),
+      );
+      return false;
+    }
   }
 
   void _sendMessage() async {
@@ -1258,41 +1710,23 @@ class _ChatScreenState extends State<ChatScreen> {
 
     var sentAnything = false;
     final l10n = context.l10n;
-    final messenger = ScaffoldMessenger.of(context);
-    final senderName = _currentUserName.trim().isNotEmpty ? _currentUserName.trim() : l10n.profileFallbackUser;
+    final senderName = _currentUserName.trim().isNotEmpty
+        ? _currentUserName.trim()
+        : l10n.profileFallbackUser;
 
     if (imageToUpload != null) {
-      final imageSent = await _uploadImageWithRetry(imageToUpload, replyTo: replyId);
+      final imageSent =
+          await _uploadImageWithRetry(imageToUpload, replyTo: replyId);
       sentAnything = sentAnything || imageSent;
     }
 
     if (text.isNotEmpty) {
-      try {
-        if (widget.isGroup) {
-          await _groupService.sendGroupMessage(
-            widget.receiverId,
-            senderName,
-            text,
-            replyTo: replyId,
-          );
-        } else {
-          await _chatService.sendMessage(
-            widget.receiverId,
-            text,
-            replyTo: replyId,
-          );
-        }
-        sentAnything = true;
-      } catch (e) {
-        if (mounted) {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(l10n.chatSendFailed(AppErrorText.forChat(context, e))),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
-      }
+      final textSent = await _sendTextMessage(
+        text: text,
+        senderName: senderName,
+        replyId: replyId,
+      );
+      sentAnything = sentAnything || textSent;
     }
 
     if (sentAnything) {
@@ -1310,7 +1744,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final l10n = context.l10n;
     final ImagePicker picker = ImagePicker();
     try {
-      final XFile? image = await picker.pickImage(source: source, imageQuality: 70);
+      final XFile? image =
+          await picker.pickImage(source: source, imageQuality: 70);
       if (image != null) {
         setState(() {
           _pickedImage = File(image.path);
@@ -1318,11 +1753,24 @@ class _ChatScreenState extends State<ChatScreen> {
           _failedImageReplyId = null;
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      final reason = AppErrorMapper.mapChat(e);
+      AppLogger.error(
+        'Failed to pick image',
+        tag: 'chat',
+        error: e,
+        stackTrace: stackTrace,
+        context: {
+          'operation': 'chat.pick_image',
+          'source': source.name,
+          'reason': reason.name,
+        },
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(l10n.chatImagePickFailed(AppErrorText.forChat(context, e))),
+            content: Text(
+                l10n.chatImagePickFailed(AppErrorText.forChat(context, e))),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -1333,7 +1781,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void _showContextMenu(ChatMessage message) {
     final l10n = context.l10n;
     final bool isMyMessage = message.senderId == currentUserId;
-    final bool isDeletedMessage = message.type == MessageType.deleted || message.isRecalledForEveryone;
+    final bool isDeletedMessage =
+        message.type == MessageType.deleted || message.isRecalledForEveryone;
 
     showModalBottomSheet(
       context: context,
@@ -1356,9 +1805,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   return GestureDetector(
                     onTap: () {
                       if (widget.isGroup) {
-                        _groupService.toggleReaction(widget.receiverId, message.id, emoji);
+                        _groupService.toggleReaction(
+                            widget.receiverId, message.id, emoji);
                       } else {
-                        _chatService.toggleReaction(widget.receiverId, message.id, emoji);
+                        _chatService.toggleReaction(
+                            widget.receiverId, message.id, emoji);
                       }
                       Navigator.pop(context);
                     },
@@ -1367,36 +1818,49 @@ class _ChatScreenState extends State<ChatScreen> {
                 }).toList(),
               ),
               const SizedBox(height: 24),
-              _buildContextMenuItem(Icons.reply_rounded, l10n.chatContextReply, () {
+              _buildContextMenuItem(Icons.reply_rounded, l10n.chatContextReply,
+                  () {
                 Navigator.pop(context);
                 _setReplyingWithKeepPosition(message);
               }),
-              _buildContextMenuItem(Icons.copy_rounded, l10n.chatContextCopy, () {
+              _buildContextMenuItem(Icons.copy_rounded, l10n.chatContextCopy,
+                  () {
                 Clipboard.setData(ClipboardData(text: message.text));
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.chatCopied)));
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text(l10n.chatCopied)));
               }),
             ],
             if (isMyMessage && !isDeletedMessage) ...[
-              _buildContextMenuItem(Icons.visibility_off_outlined, l10n.chatRecallForMe, () async {
+              _buildContextMenuItem(
+                  Icons.visibility_off_outlined, l10n.chatRecallForMe,
+                  () async {
                 final messenger = ScaffoldMessenger.of(context);
                 Navigator.pop(context);
                 if (widget.isGroup) {
-                  await _groupService.recallMessageForMe(widget.receiverId, message.id);
+                  await _groupService.recallMessageForMe(
+                      widget.receiverId, message.id);
                 } else {
-                  await _chatService.recallMessageForMe(widget.receiverId, message.id);
+                  await _chatService.recallMessageForMe(
+                      widget.receiverId, message.id);
                 }
-                messenger.showSnackBar(SnackBar(content: Text(l10n.chatRecalledForMeSuccess)));
+                messenger.showSnackBar(
+                    SnackBar(content: Text(l10n.chatRecalledForMeSuccess)));
               }, color: AppColors.error),
-              _buildContextMenuItem(Icons.delete_outline_rounded, l10n.chatRecallForEveryone, () async {
+              _buildContextMenuItem(
+                  Icons.delete_outline_rounded, l10n.chatRecallForEveryone,
+                  () async {
                 final messenger = ScaffoldMessenger.of(context);
                 Navigator.pop(context);
                 if (widget.isGroup) {
-                  await _groupService.recallMessageForEveryone(widget.receiverId, message.id);
+                  await _groupService.recallMessageForEveryone(
+                      widget.receiverId, message.id);
                 } else {
-                  await _chatService.recallMessageForEveryone(widget.receiverId, message.id);
+                  await _chatService.recallMessageForEveryone(
+                      widget.receiverId, message.id);
                 }
-                messenger.showSnackBar(SnackBar(content: Text(l10n.chatRecalledForEveryoneSuccess)));
+                messenger.showSnackBar(SnackBar(
+                    content: Text(l10n.chatRecalledForEveryoneSuccess)));
               }, color: AppColors.error),
             ],
           ],
@@ -1405,12 +1869,13 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildContextMenuItem(IconData icon, String label, VoidCallback onTap, {Color? color}) {
+  Widget _buildContextMenuItem(IconData icon, String label, VoidCallback onTap,
+      {Color? color}) {
     return ListTile(
       leading: Icon(icon, color: color ?? AppColors.textPrimary),
-      title: Text(label, style: TextStyle(color: color ?? AppColors.textPrimary)),
+      title:
+          Text(label, style: TextStyle(color: color ?? AppColors.textPrimary)),
       onTap: onTap,
     );
   }
 }
-

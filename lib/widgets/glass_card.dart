@@ -224,6 +224,9 @@ class AvatarWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
     final hasImage = imageUrl != null && imageUrl!.trim().isNotEmpty;
+    final pixelRatio = MediaQuery.of(context).devicePixelRatio;
+    final rawCacheSize = (size * pixelRatio).round();
+    final cacheSize = rawCacheSize < 48 ? 48 : (rawCacheSize > 512 ? 512 : rawCacheSize);
     final colors = [
       AppColors.primary,
       AppColors.accent,
@@ -252,6 +255,31 @@ class AvatarWidget extends StatelessWidget {
                 ? Image.network(
                     imageUrl!,
                     fit: BoxFit.cover,
+                    cacheWidth: cacheSize,
+                    cacheHeight: cacheSize,
+                    filterQuality: FilterQuality.medium,
+                    frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                      if (wasSynchronouslyLoaded) return child;
+                      return AnimatedOpacity(
+                        opacity: frame == null ? 0 : 1,
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOut,
+                        child: child,
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: SizedBox(
+                          width: size * 0.34,
+                          height: size * 0.34,
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      );
+                    },
                     errorBuilder: (_, __, ___) => Center(
                       child: Text(
                         initial,

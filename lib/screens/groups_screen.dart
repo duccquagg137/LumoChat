@@ -1,4 +1,6 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -7,6 +9,7 @@ import '../services/group_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/error_mapper.dart';
 import '../utils/l10n.dart';
+import '../widgets/glass_card.dart';
 import 'chat_screen.dart';
 import 'create_group_screen.dart';
 
@@ -33,6 +36,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
   final GroupService _groupService = GroupService();
   final TextEditingController _searchController = TextEditingController();
   final Set<String> _busyGroupIds = {};
+  Timer? _searchDebounce;
   _GroupSortMode _sortMode = _GroupSortMode.recent;
   String _searchQuery = '';
 
@@ -49,7 +53,40 @@ class _GroupsScreenState extends State<GroupsScreen> {
 
   List<String> _readIdList(dynamic raw) {
     if (raw is! Iterable) return <String>[];
-    return raw.map((e) => e.toString()).where((e) => e.isNotEmpty).toSet().toList();
+    return raw
+        .map((e) => e.toString())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList();
+  }
+
+  Map<String, dynamic> _readGroupMeta(dynamic raw) {
+    if (raw is! Map) return <String, dynamic>{};
+    return raw.map((key, value) {
+      if (value is Map<String, dynamic>) {
+        return MapEntry(key.toString(), value);
+      }
+      if (value is Map) {
+        return MapEntry(
+            key.toString(), value.map((k, v) => MapEntry(k.toString(), v)));
+      }
+      return MapEntry(key.toString(), <String, dynamic>{});
+    });
+  }
+
+  bool _groupFlag(Map<String, dynamic> groupMeta, String groupId, String key) {
+    final groupData = groupMeta[groupId];
+    if (groupData is! Map) return false;
+    return groupData[key] == true;
+  }
+
+  int _groupUnreadCount(Map<String, dynamic> groupMeta, String groupId) {
+    final groupData = groupMeta[groupId];
+    if (groupData is! Map) return 0;
+    final value = groupData['unreadCount'];
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return 0;
   }
 
   String _normalize(String value) => value.trim().toLowerCase();
@@ -74,42 +111,93 @@ class _GroupsScreenState extends State<GroupsScreen> {
     return nameA.compareTo(nameB);
   }
 
-  void _sortGroups(List<DocumentSnapshot> groups) {
-    switch (_sortMode) {
-      case _GroupSortMode.recent:
-        groups.sort((a, b) => _groupTimestamp(b).compareTo(_groupTimestamp(a)));
-        break;
-      case _GroupSortMode.name:
-        groups.sort(_compareByName);
-        break;
-      case _GroupSortMode.members:
-        groups.sort((a, b) {
-          final memberCompare = _groupMemberCount(b).compareTo(_groupMemberCount(a));
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 220), () {
+      if (!mounted) return;
+      setState(() => _searchQuery = _normalize(value));
+    });
+  }
+
+  void _sortGroups(
+      List<DocumentSnapshot> groups, Map<String, dynamic> groupMeta) {
+    groups.sort((a, b) {
+      final pinA = _groupFlag(groupMeta, a.id, 'pinned');
+      final pinB = _groupFlag(groupMeta, b.id, 'pinned');
+      if (pinA != pinB) {
+        return pinA ? -1 : 1;
+      }
+
+      switch (_sortMode) {
+        case _GroupSortMode.recent:
+          return _groupTimestamp(b).compareTo(_groupTimestamp(a));
+        case _GroupSortMode.name:
+          return _compareByName(a, b);
+        case _GroupSortMode.members:
+          final memberCompare =
+              _groupMemberCount(b).compareTo(_groupMemberCount(a));
           if (memberCompare != 0) return memberCompare;
           return _compareByName(a, b);
-        });
-        break;
-    }
+      }
+    });
+  }
+
+  Widget _buildStateView({
+    required IconData icon,
+    required String message,
+    bool showRetry = false,
+    VoidCallback? onRetry,
+  }) {
+    final l10n = context.l10n;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: AppColors.textMuted, size: 36),
+            const SizedBox(height: 10),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 14,
+                  fontFamily: 'Inter'),
+            ),
+            if (showRetry) ...[
+              const SizedBox(height: 12),
+              TextButton(onPressed: onRetry, child: Text(l10n.commonRetry)),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _runGroupAction(String groupId, Future<void> Function() action, String successText) async {
+  Future<void> _runGroupAction(String groupId, Future<void> Function() action,
+      String successText) async {
     if (_busyGroupIds.contains(groupId)) return;
     setState(() => _busyGroupIds.add(groupId));
     final l10n = context.l10n;
     try {
       await action();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(successText)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(successText)));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.groupsActionFailed(AppErrorText.forGroupsL10n(l10n, e)))),
+        SnackBar(
+            content: Text(
+                l10n.groupsActionFailed(AppErrorText.forGroupsL10n(l10n, e)))),
       );
     } finally {
       if (mounted) {
@@ -118,27 +206,39 @@ class _GroupsScreenState extends State<GroupsScreen> {
     }
   }
 
-  Future<_MemberCandidateResult> _loadAddMemberCandidates(List<String> currentMemberIds) async {
-    final myDoc = await FirebaseFirestore.instance.collection('users').doc(_currentUserId).get();
+  Future<_MemberCandidateResult> _loadAddMemberCandidates(
+      List<String> currentMemberIds) async {
+    final myDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentUserId)
+        .get();
     final myData = myDoc.data() ?? const <String, dynamic>{};
     final friendIds = _readIdList(myData['friends']);
     if (friendIds.isEmpty) {
-      return const _MemberCandidateResult(candidates: <ChatUser>[], hasFriends: false);
+      return const _MemberCandidateResult(
+          candidates: <ChatUser>[], hasFriends: false);
     }
 
     final existing = currentMemberIds.toSet();
     final candidates = <ChatUser>[];
 
     const chunkSize = 10;
+    final queries = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
     for (int i = 0; i < friendIds.length; i += chunkSize) {
-      final end = (i + chunkSize < friendIds.length) ? i + chunkSize : friendIds.length;
+      final end =
+          (i + chunkSize < friendIds.length) ? i + chunkSize : friendIds.length;
       final chunk = friendIds.sublist(i, end);
 
-      final snap = await FirebaseFirestore.instance
-          .collection('users')
-          .where(FieldPath.documentId, whereIn: chunk)
-          .get();
+      queries.add(
+        FirebaseFirestore.instance
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: chunk)
+            .get(),
+      );
+    }
 
+    final snapshots = await Future.wait(queries);
+    for (final snap in snapshots) {
       for (final doc in snap.docs) {
         final user = ChatUser.fromDocument(doc);
         if (user.id.isEmpty || user.id == _currentUserId) continue;
@@ -166,12 +266,14 @@ class _GroupsScreenState extends State<GroupsScreen> {
     if (!mounted) return;
 
     if (!result.hasFriends) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.groupsAddMembersNoFriends)));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.groupsAddMembersNoFriends)));
       return;
     }
 
     if (result.candidates.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.groupsAddMembersNoCandidates)));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.groupsAddMembersNoCandidates)));
       return;
     }
 
@@ -203,23 +305,30 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TextField(
-                      onChanged: (value) => setDialogState(() => dialogQuery = value),
-                      style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
+                      onChanged: (value) =>
+                          setDialogState(() => dialogQuery = value),
+                      style: const TextStyle(
+                          color: AppColors.textPrimary, fontFamily: 'Inter'),
                       decoration: InputDecoration(
                         hintText: l10n.groupsAddMembersSearchHint,
-                        hintStyle: const TextStyle(color: AppColors.textMuted, fontFamily: 'Inter'),
-                        prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
+                        hintStyle: const TextStyle(
+                            color: AppColors.textMuted, fontFamily: 'Inter'),
+                        prefixIcon: const Icon(Icons.search_rounded,
+                            color: AppColors.textMuted, size: 20),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: AppColors.glassBorder.withOpacity(0.5)),
+                          borderSide: BorderSide(
+                              color: AppColors.glassBorder.withOpacity(0.5)),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: AppColors.glassBorder.withOpacity(0.5)),
+                          borderSide: BorderSide(
+                              color: AppColors.glassBorder.withOpacity(0.5)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: AppColors.primary.withOpacity(0.7)),
+                          borderSide: BorderSide(
+                              color: AppColors.primary.withOpacity(0.7)),
                         ),
                       ),
                     ),
@@ -229,10 +338,13 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       child: filteredCandidates.isEmpty
                           ? Center(
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 24),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 24),
                                 child: Text(
                                   l10n.commonNoSearchResults,
-                                  style: const TextStyle(color: AppColors.textMuted, fontFamily: 'Inter'),
+                                  style: const TextStyle(
+                                      color: AppColors.textMuted,
+                                      fontFamily: 'Inter'),
                                 ),
                               ),
                             )
@@ -256,15 +368,22 @@ class _GroupsScreenState extends State<GroupsScreen> {
                                   activeColor: AppColors.primary,
                                   title: Text(
                                     user.name,
-                                    style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter', fontSize: 14),
+                                    style: const TextStyle(
+                                        color: AppColors.textPrimary,
+                                        fontFamily: 'Inter',
+                                        fontSize: 14),
                                   ),
                                   subtitle: Text(
                                     user.bio ?? '',
-                                    style: const TextStyle(color: AppColors.textMuted, fontFamily: 'Inter', fontSize: 12),
+                                    style: const TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontFamily: 'Inter',
+                                        fontSize: 12),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  controlAffinity: ListTileControlAffinity.leading,
+                                  controlAffinity:
+                                      ListTileControlAffinity.leading,
                                 );
                               },
                             ),
@@ -285,7 +404,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
                           await _runGroupAction(
                             groupId,
                             () async {
-                              final added = await _groupService.addMembers(groupId, selected.toList());
+                              final added = await _groupService.addMembers(
+                                  groupId, selected.toList());
                               if (added <= 0) return;
                             },
                             l10n.groupsAddMembersSuccess(selected.length),
@@ -301,17 +421,24 @@ class _GroupsScreenState extends State<GroupsScreen> {
     );
   }
 
-  Future<void> _confirmLeaveGroup({required String groupId, required String groupName}) async {
+  Future<void> _confirmLeaveGroup(
+      {required String groupId, required String groupName}) async {
     final l10n = context.l10n;
     final accepted = await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             backgroundColor: AppColors.bgSurface,
-            title: Text(l10n.groupsLeaveConfirmTitle, style: const TextStyle(color: AppColors.textPrimary)),
-            content: Text(l10n.groupsLeaveConfirmMessage(groupName), style: const TextStyle(color: AppColors.textSecondary)),
+            title: Text(l10n.groupsLeaveConfirmTitle,
+                style: const TextStyle(color: AppColors.textPrimary)),
+            content: Text(l10n.groupsLeaveConfirmMessage(groupName),
+                style: const TextStyle(color: AppColors.textSecondary)),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(l10n.commonCancel)),
-              TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(l10n.commonLeave)),
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: Text(l10n.commonCancel)),
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: Text(l10n.commonLeave)),
             ],
           ),
         ) ??
@@ -334,7 +461,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
     final l10n = context.l10n;
 
     if (!canDelete) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.groupsDeleteNotAllowed)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(l10n.groupsDeleteNotAllowed)));
       return;
     }
 
@@ -342,11 +470,17 @@ class _GroupsScreenState extends State<GroupsScreen> {
           context: context,
           builder: (dialogContext) => AlertDialog(
             backgroundColor: AppColors.bgSurface,
-            title: Text(l10n.groupsDeleteConfirmTitle, style: const TextStyle(color: AppColors.textPrimary)),
-            content: Text(l10n.groupsDeleteConfirmMessage(groupName), style: const TextStyle(color: AppColors.textSecondary)),
+            title: Text(l10n.groupsDeleteConfirmTitle,
+                style: const TextStyle(color: AppColors.textPrimary)),
+            content: Text(l10n.groupsDeleteConfirmMessage(groupName),
+                style: const TextStyle(color: AppColors.textSecondary)),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(l10n.commonCancel)),
-              TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(l10n.commonDelete)),
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: Text(l10n.commonCancel)),
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: Text(l10n.commonDelete)),
             ],
           ),
         ) ??
@@ -395,26 +529,34 @@ class _GroupsScreenState extends State<GroupsScreen> {
               ),
               const SizedBox(height: 10),
               ListTile(
-                leading: const Icon(Icons.person_add_alt_1_rounded, color: AppColors.primaryLight),
-                title: Text(l10n.groupsActionAddMembers, style: const TextStyle(color: AppColors.textPrimary)),
+                leading: const Icon(Icons.person_add_alt_1_rounded,
+                    color: AppColors.primaryLight),
+                title: Text(l10n.groupsActionAddMembers,
+                    style: const TextStyle(color: AppColors.textPrimary)),
                 onTap: () async {
                   Navigator.pop(sheetContext);
-                  await _showAddMembersDialog(groupId: groupId, memberIds: members);
+                  await _showAddMembersDialog(
+                      groupId: groupId, memberIds: members);
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.logout_rounded, color: AppColors.error),
-                title: Text(l10n.groupsActionLeaveGroup, style: const TextStyle(color: AppColors.error)),
+                leading:
+                    const Icon(Icons.logout_rounded, color: AppColors.error),
+                title: Text(l10n.groupsActionLeaveGroup,
+                    style: const TextStyle(color: AppColors.error)),
                 onTap: () async {
                   Navigator.pop(sheetContext);
-                  await _confirmLeaveGroup(groupId: groupId, groupName: groupName);
+                  await _confirmLeaveGroup(
+                      groupId: groupId, groupName: groupName);
                 },
               ),
               ListTile(
-                leading: Icon(Icons.delete_forever_rounded, color: canDelete ? AppColors.error : AppColors.textMuted),
+                leading: Icon(Icons.delete_forever_rounded,
+                    color: canDelete ? AppColors.error : AppColors.textMuted),
                 title: Text(
                   l10n.groupsActionDeleteGroup,
-                  style: TextStyle(color: canDelete ? AppColors.error : AppColors.textMuted),
+                  style: TextStyle(
+                      color: canDelete ? AppColors.error : AppColors.textMuted),
                 ),
                 onTap: () async {
                   Navigator.pop(sheetContext);
@@ -448,7 +590,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [AppColors.primary.withOpacity(0.12), Colors.transparent],
+                  colors: [
+                    AppColors.primary.withOpacity(0.12),
+                    Colors.transparent
+                  ],
                 ),
               ),
             ),
@@ -472,7 +617,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       const Spacer(),
                       GestureDetector(
                         onTap: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateGroupScreen()));
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const CreateGroupScreen()));
                         },
                         child: Container(
                           width: 36,
@@ -481,14 +629,16 @@ class _GroupsScreenState extends State<GroupsScreen> {
                             gradient: AppGradients.primary,
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
+                          child: const Icon(Icons.add_rounded,
+                              color: Colors.white, size: 22),
                         ),
                       ),
                     ],
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   child: Container(
                     decoration: BoxDecoration(
                       color: AppColors.bgCard.withOpacity(0.5),
@@ -497,14 +647,20 @@ class _GroupsScreenState extends State<GroupsScreen> {
                     ),
                     child: TextField(
                       controller: _searchController,
-                      onChanged: (value) => setState(() => _searchQuery = _normalize(value)),
-                      style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
+                      onChanged: _onSearchChanged,
+                      style: const TextStyle(
+                          color: AppColors.textPrimary, fontFamily: 'Inter'),
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
+                        prefixIcon: const Icon(Icons.search_rounded,
+                            color: AppColors.textMuted, size: 20),
                         hintText: l10n.groupsSearchHint,
-                        hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14, fontFamily: 'Inter'),
+                        hintStyle: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 14,
+                            fontFamily: 'Inter'),
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
                       ),
                     ),
                   ),
@@ -518,138 +674,218 @@ class _GroupsScreenState extends State<GroupsScreen> {
                         _buildSortChip(
                           label: l10n.groupsSortRecent,
                           selected: _sortMode == _GroupSortMode.recent,
-                          onTap: () => setState(() => _sortMode = _GroupSortMode.recent),
+                          onTap: () =>
+                              setState(() => _sortMode = _GroupSortMode.recent),
                         ),
                         _buildSortChip(
                           label: l10n.groupsSortName,
                           selected: _sortMode == _GroupSortMode.name,
-                          onTap: () => setState(() => _sortMode = _GroupSortMode.name),
+                          onTap: () =>
+                              setState(() => _sortMode = _GroupSortMode.name),
                         ),
                         _buildSortChip(
                           label: l10n.groupsSortMembers,
                           selected: _sortMode == _GroupSortMode.members,
-                          onTap: () => setState(() => _sortMode = _GroupSortMode.members),
+                          onTap: () => setState(
+                              () => _sortMode = _GroupSortMode.members),
                         ),
                       ],
                     ),
                   ),
                 ),
                 Expanded(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: _groupService.getUserGroups(),
-                    builder: (context, snapshot) {
-                      if (snapshot.hasError) {
-                        final reason = AppErrorText.forGroups(
-                          context,
-                          snapshot.error ?? Exception('groups-load-error'),
-                        );
-                        return Center(
-                          child: Text(
-                            l10n.groupsLoadError(reason),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: AppColors.textMuted),
-                          ),
+                  child: StreamBuilder<DocumentSnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(_currentUserId)
+                        .snapshots(),
+                    builder: (context, mySnapshot) {
+                      if (mySnapshot.hasError) {
+                        return _buildStateView(
+                          icon: Icons.error_outline_rounded,
+                          message: l10n.commonUnexpectedError,
+                          showRetry: true,
+                          onRetry: () => setState(() {}),
                         );
                       }
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-                      }
-
-                      final sourceGroups = (snapshot.data?.docs ?? []).toList();
-                      final groups = sourceGroups.where((doc) {
-                        final data = doc.data() as Map<String, dynamic>? ?? const {};
-                        return _matchGroup(data);
-                      }).toList();
-                      _sortGroups(groups);
-
-                      if (groups.isEmpty) {
-                        final emptyText = sourceGroups.isNotEmpty && _searchQuery.isNotEmpty
-                            ? l10n.groupsNoSearchResults
-                            : l10n.groupsEmpty;
-                        return Center(
-                          child: Text(
-                            emptyText,
-                            style: const TextStyle(color: AppColors.textMuted, fontSize: 14, fontFamily: 'Inter'),
-                          ),
+                      if (mySnapshot.connectionState ==
+                          ConnectionState.waiting) {
+                        return _buildStateView(
+                          icon: Icons.hourglass_top_rounded,
+                          message: l10n.commonLoading,
                         );
                       }
 
-                      return ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: groups.length,
-                        itemBuilder: (context, i) {
-                          final doc = groups[i];
-                          final data = doc.data() as Map<String, dynamic>;
-                          final groupId = doc.id;
-                          final name = (data['name'] ?? l10n.groupsUnnamed).toString();
-                          final lastMessage = (data['lastMessage'] ?? '').toString();
-                          final displayMessage = lastMessage.trim().isEmpty ? l10n.groupsNoMessagesYet : lastMessage;
-                          final members = _readIdList(data['members']);
+                      final myData =
+                          mySnapshot.data?.data() as Map<String, dynamic>? ??
+                              const {};
+                      final groupMeta = _readGroupMeta(myData['groupMeta']);
 
-                          String timeTxt = '';
-                          if (data['lastTimestamp'] is Timestamp) {
-                            final ts = data['lastTimestamp'] as Timestamp;
-                            final date = ts.toDate();
-                            timeTxt = '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+                      return StreamBuilder<QuerySnapshot>(
+                        stream: _groupService.getUserGroups(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasError) {
+                            final reason = AppErrorText.forGroups(
+                              context,
+                              snapshot.error ?? Exception('groups-load-error'),
+                            );
+                            return _buildStateView(
+                              icon: Icons.error_outline_rounded,
+                              message: l10n.groupsLoadError(reason),
+                              showRetry: true,
+                              onRetry: () => setState(() {}),
+                            );
+                          }
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return _buildStateView(
+                              icon: Icons.hourglass_top_rounded,
+                              message: l10n.commonLoading,
+                            );
                           }
 
-                          return Dismissible(
-                            key: ValueKey('group-$groupId'),
-                            direction: DismissDirection.horizontal,
-                            confirmDismiss: (direction) async {
-                              if (direction == DismissDirection.startToEnd) {
-                                await _showAddMembersDialog(groupId: groupId, memberIds: members);
-                                return false;
+                          final sourceGroups =
+                              (snapshot.data?.docs ?? []).toList();
+                          final groups = sourceGroups.where((doc) {
+                            final data =
+                                doc.data() as Map<String, dynamic>? ?? const {};
+                            return _matchGroup(data);
+                          }).toList();
+                          _sortGroups(groups, groupMeta);
+
+                          if (groups.isEmpty) {
+                            final emptyText = sourceGroups.isNotEmpty &&
+                                    _searchQuery.isNotEmpty
+                                ? l10n.groupsNoSearchResults
+                                : l10n.groupsEmpty;
+                            return _buildStateView(
+                              icon: Icons.groups_outlined,
+                              message: emptyText,
+                            );
+                          }
+
+                          return ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: groups.length,
+                            itemBuilder: (context, i) {
+                              final doc = groups[i];
+                              final data = doc.data() as Map<String, dynamic>;
+                              final groupId = doc.id;
+                              final isPinned =
+                                  _groupFlag(groupMeta, groupId, 'pinned');
+                              final unreadCount =
+                                  _groupUnreadCount(groupMeta, groupId);
+                              final name = (data['name'] ?? l10n.groupsUnnamed)
+                                  .toString();
+                              final avatarUrl =
+                                  (data['avatar'] ?? '').toString();
+                              final lastMessage =
+                                  (data['lastMessage'] ?? '').toString();
+                              final displayMessage = lastMessage.trim().isEmpty
+                                  ? l10n.groupsNoMessagesYet
+                                  : lastMessage;
+                              final members = _readIdList(data['members']);
+
+                              String timeTxt = '';
+                              if (data['lastTimestamp'] is Timestamp) {
+                                final ts = data['lastTimestamp'] as Timestamp;
+                                final date = ts.toDate();
+                                timeTxt =
+                                    '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
                               }
 
-                              await _showGroupActionsSheet(
-                                groupId: groupId,
-                                groupName: name,
-                                members: members,
-                                groupData: data,
+                              return Dismissible(
+                                key: ValueKey('group-$groupId'),
+                                direction: DismissDirection.horizontal,
+                                confirmDismiss: (direction) async {
+                                  if (direction ==
+                                      DismissDirection.startToEnd) {
+                                    final nextPinned = !isPinned;
+                                    await _runGroupAction(
+                                      groupId,
+                                      () => _groupService.setGroupPinned(
+                                          groupId, nextPinned),
+                                      nextPinned
+                                          ? l10n.groupsPinSuccess
+                                          : l10n.groupsUnpinSuccess,
+                                    );
+                                    return false;
+                                  }
+
+                                  await _showGroupActionsSheet(
+                                    groupId: groupId,
+                                    groupName: name,
+                                    members: members,
+                                    groupData: data,
+                                  );
+                                  return false;
+                                },
+                                background: Container(
+                                  margin: const EdgeInsets.only(bottom: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 20),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    color: AppColors.primary.withOpacity(0.2),
+                                  ),
+                                  alignment: Alignment.centerLeft,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isPinned
+                                            ? Icons.push_pin_outlined
+                                            : Icons.push_pin_rounded,
+                                        color: AppColors.primaryLight,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        isPinned
+                                            ? l10n.commonUnpin
+                                            : l10n.commonPin,
+                                        style: const TextStyle(
+                                            color: AppColors.primaryLight,
+                                            fontWeight: FontWeight.w600),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                secondaryBackground: Container(
+                                  margin: const EdgeInsets.only(bottom: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 20),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    color: AppColors.error.withOpacity(0.18),
+                                  ),
+                                  alignment: Alignment.centerRight,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      const Icon(Icons.more_horiz_rounded,
+                                          color: AppColors.error),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        l10n.commonMore,
+                                        style: const TextStyle(
+                                            color: AppColors.error,
+                                            fontWeight: FontWeight.w600),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                child: _buildGroupItem(
+                                  context,
+                                  groupId,
+                                  name,
+                                  avatarUrl,
+                                  displayMessage,
+                                  timeTxt,
+                                  members.length,
+                                  unreadCount: unreadCount,
+                                  isPinned: isPinned,
+                                ),
                               );
-                              return false;
                             },
-                            background: Container(
-                              margin: const EdgeInsets.only(bottom: 4),
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                color: AppColors.primary.withOpacity(0.2),
-                              ),
-                              alignment: Alignment.centerLeft,
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.person_add_alt_1_rounded, color: AppColors.primaryLight),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    l10n.groupsActionAddMembers,
-                                    style: const TextStyle(color: AppColors.primaryLight, fontWeight: FontWeight.w600),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            secondaryBackground: Container(
-                              margin: const EdgeInsets.only(bottom: 4),
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                color: AppColors.error.withOpacity(0.18),
-                              ),
-                              alignment: Alignment.centerRight,
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  const Icon(Icons.more_horiz_rounded, color: AppColors.error),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    l10n.commonMore,
-                                    style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.w600),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            child: _buildGroupItem(context, groupId, name, displayMessage, timeTxt, members.length),
                           );
                         },
                       );
@@ -664,7 +900,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
             bottom: 20,
             child: GestureDetector(
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateGroupScreen()));
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const CreateGroupScreen()));
               },
               child: Container(
                 width: 56,
@@ -673,10 +912,14 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   gradient: AppGradients.primary,
                   shape: BoxShape.circle,
                   boxShadow: [
-                    BoxShadow(color: AppColors.primary.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8)),
+                    BoxShadow(
+                        color: AppColors.primary.withOpacity(0.4),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8)),
                   ],
                 ),
-                child: const Icon(Icons.group_add_rounded, color: Colors.white, size: 26),
+                child: const Icon(Icons.group_add_rounded,
+                    color: Colors.white, size: 26),
               ),
             ),
           ),
@@ -697,16 +940,21 @@ class _GroupsScreenState extends State<GroupsScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: selected ? AppColors.primary.withOpacity(0.2) : AppColors.glassBg,
+            color: selected
+                ? AppColors.primary.withOpacity(0.2)
+                : AppColors.glassBg,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: selected ? AppColors.primary.withOpacity(0.4) : AppColors.glassBorder,
+              color: selected
+                  ? AppColors.primary.withOpacity(0.4)
+                  : AppColors.glassBorder,
             ),
           ),
           child: Text(
             label,
             style: TextStyle(
-              color: selected ? AppColors.primaryLight : AppColors.textSecondary,
+              color:
+                  selected ? AppColors.primaryLight : AppColors.textSecondary,
               fontSize: 12,
               fontWeight: FontWeight.w600,
               fontFamily: 'Inter',
@@ -717,12 +965,24 @@ class _GroupsScreenState extends State<GroupsScreen> {
     );
   }
 
-  Widget _buildGroupItem(BuildContext context, String groupId, String name, String lastMessage, String timeStr, int memberCount) {
+  Widget _buildGroupItem(
+    BuildContext context,
+    String groupId,
+    String name,
+    String avatarUrl,
+    String lastMessage,
+    String timeStr,
+    int memberCount, {
+    required int unreadCount,
+    required bool isPinned,
+  }) {
     final l10n = context.l10n;
     final subtitle = '${l10n.groupsMemberCount(memberCount)} • $lastMessage';
+    final hasUnread = unreadCount > 0;
 
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
+        unawaited(_groupService.markGroupMessagesRead(groupId).then((_) {}));
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -740,7 +1000,9 @@ class _GroupsScreenState extends State<GroupsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: Colors.transparent,
+          color: hasUnread
+              ? AppColors.primary.withOpacity(0.06)
+              : Colors.transparent,
         ),
         child: Row(
           children: [
@@ -748,18 +1010,15 @@ class _GroupsScreenState extends State<GroupsScreen> {
               clipBehavior: Clip.none,
               children: [
                 Container(
-                  width: 52,
-                  height: 52,
                   decoration: BoxDecoration(
-                    gradient: AppGradients.primary,
                     shape: BoxShape.circle,
                     border: Border.all(color: AppColors.bgDark, width: 2),
                   ),
-                  child: Center(
-                    child: Text(
-                      name.isNotEmpty ? name[0].toUpperCase() : 'G',
-                      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700),
-                    ),
+                  child: AvatarWidget(
+                    name: name,
+                    imageUrl: avatarUrl,
+                    size: 52,
+                    showStatus: false,
                   ),
                 ),
                 Positioned(
@@ -772,7 +1031,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       shape: BoxShape.circle,
                       border: Border.all(color: AppColors.bgDark, width: 1.5),
                     ),
-                    child: const Icon(Icons.group_rounded, color: AppColors.primaryLight, size: 12),
+                    child: const Icon(Icons.group_rounded,
+                        color: AppColors.primaryLight, size: 12),
                   ),
                 ),
               ],
@@ -784,13 +1044,20 @@ class _GroupsScreenState extends State<GroupsScreen> {
                 children: [
                   Row(
                     children: [
+                      if (isPinned)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 4),
+                          child: Icon(Icons.push_pin_rounded,
+                              size: 14, color: AppColors.primaryLight),
+                        ),
                       Expanded(
                         child: Text(
                           name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.textPrimary,
                             fontSize: 15,
-                            fontWeight: FontWeight.w600,
+                            fontWeight:
+                                hasUnread ? FontWeight.w700 : FontWeight.w600,
                             fontFamily: 'Inter',
                           ),
                           maxLines: 1,
@@ -799,8 +1066,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       ),
                       Text(
                         timeStr,
-                        style: const TextStyle(
-                          color: AppColors.textMuted,
+                        style: TextStyle(
+                          color: hasUnread
+                              ? AppColors.primaryLight
+                              : AppColors.textMuted,
                           fontSize: 12,
                           fontFamily: 'Inter',
                         ),
@@ -813,8 +1082,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       Expanded(
                         child: Text(
                           subtitle,
-                          style: const TextStyle(
-                            color: AppColors.textMuted,
+                          style: TextStyle(
+                            color: hasUnread
+                                ? AppColors.textSecondary
+                                : AppColors.textMuted,
                             fontSize: 13,
                             fontFamily: 'Inter',
                           ),
@@ -822,6 +1093,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (hasUnread) ...[
+                        const SizedBox(width: 8),
+                        UnreadBadge(count: unreadCount),
+                      ],
                     ],
                   ),
                 ],

@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isGroupMember(groupId) {
+      return isSignedIn() &&
+        request.auth.uid in firestore.get(/databases/(default)/documents/groups/$(groupId)).data.members;
+    }
+
+    function isChatParticipant(roomId) {
+      return isSignedIn() &&
+        request.auth.uid in firestore.get(/databases/(default)/documents/chat_rooms/$(roomId)).data.participants;
+    }
+
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(userId);
+    }
+
+    match /groups/{groupId}/{allPaths=**} {
+      allow read, write: if isGroupMember(groupId);
+    }
+
+    match /chat/{roomId}/{allPaths=**} {
+      allow read, write: if isChatParticipant(roomId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
