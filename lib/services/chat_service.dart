@@ -182,6 +182,13 @@ class ChatService {
       'recalledAt': Timestamp.now(),
       'reactions': FieldValue.delete(),
     });
+
+    final roomSnapshot = await _chatRoomRef(receiverId).get();
+    final roomData = roomSnapshot.data();
+    final pinned = roomData?['pinnedMessage'];
+    if (pinned is Map && pinned['messageId']?.toString() == messageId) {
+      await clearPinnedMessage(receiverId);
+    }
   }
 
   Future<void> deleteMessage(String receiverId, String messageId) async {
@@ -192,6 +199,33 @@ class ChatService {
     await _updateChatMeta(receiverId, {
       'pinned': pinned,
     });
+  }
+
+  Future<void> setPinnedMessage(
+    String receiverId, {
+    required String messageId,
+    required String previewText,
+    required String messageType,
+    String? senderId,
+    String? senderName,
+  }) async {
+    await _chatRoomRef(receiverId).set({
+      'pinnedMessage': {
+        'messageId': messageId,
+        'previewText': previewText,
+        'messageType': messageType,
+        'senderId': senderId ?? '',
+        'senderName': senderName ?? '',
+        'pinnedBy': _currentUserId,
+        'pinnedAt': Timestamp.now(),
+      },
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> clearPinnedMessage(String receiverId) async {
+    await _chatRoomRef(receiverId).set({
+      'pinnedMessage': FieldValue.delete(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> hideConversation(String receiverId) async {

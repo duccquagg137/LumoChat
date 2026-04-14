@@ -132,6 +132,183 @@
   "@chatListYourStory": {
     "description": "Nhãn story của người dùng hiện tại"
   },
+  "storyActionViewMyStory": "Xem tin của bạn",
+  "@storyActionViewMyStory": {
+    "description": "Nhãn mở story hiện tại của chính người dùng"
+  },
+  "storyActionAddStory": "Đăng tin mới",
+  "@storyActionAddStory": {
+    "description": "Nhãn hành động thêm story mới"
+  },
+  "storyComposeTitle": "Tạo tin",
+  "@storyComposeTitle": {
+    "description": "Tiêu đề hộp thoại soạn story"
+  },
+  "storyCaptionHint": "Nhập chú thích...",
+  "@storyCaptionHint": {
+    "description": "Gợi ý ô nhập chú thích story"
+  },
+  "storyVisibilityLabel": "Quyền xem",
+  "@storyVisibilityLabel": {
+    "description": "Nhãn chọn quyền xem story"
+  },
+  "storyVisibilityFriends": "Chỉ bạn bè",
+  "@storyVisibilityFriends": {
+    "description": "Tùy chọn quyền xem story cho bạn bè"
+  },
+  "storyVisibilityPublic": "Công khai",
+  "@storyVisibilityPublic": {
+    "description": "Tùy chọn quyền xem story công khai"
+  },
+  "storyPublishAction": "Đăng",
+  "@storyPublishAction": {
+    "description": "Nhãn nút đăng story"
+  },
+  "storyPublishSuccess": "Đã đăng tin",
+  "@storyPublishSuccess": {
+    "description": "Thông báo khi đăng story thành công"
+  },
+  "storyPublishFailed": "Không thể đăng tin: {error}",
+  "@storyPublishFailed": {
+    "description": "Thông báo lỗi khi đăng story thất bại",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "storySourcePhotoGallery": "Ảnh từ thư viện",
+  "@storySourcePhotoGallery": {
+    "description": "Hành động chọn ảnh story từ thư viện"
+  },
+  "storySourcePhotoCamera": "Ảnh từ camera",
+  "@storySourcePhotoCamera": {
+    "description": "Hành động chụp ảnh story từ camera"
+  },
+  "storySourceVideoGallery": "Video từ thư viện",
+  "@storySourceVideoGallery": {
+    "description": "Hành động chọn video story từ thư viện"
+  },
+  "storySourceVideoCamera": "Video từ camera",
+  "@storySourceVideoCamera": {
+    "description": "Hành động quay video story từ camera"
+  },
+  "storyViewerVideoFallback": "Tin video",
+  "@storyViewerVideoFallback": {
+    "description": "Nhãn fallback khi không thể hiển thị preview video story"
+  },
+  "storyViewerNow": "vừa xong",
+  "@storyViewerNow": {
+    "description": "Nhãn thời gian tương đối cho story mới đăng"
+  },
+  "storyAudienceTitle": "Người đã xem",
+  "@storyAudienceTitle": {
+    "description": "Tiêu đề danh sách người đã xem story"
+  },
+  "storyAudienceCount": "{count} lượt xem",
+  "@storyAudienceCount": {
+    "description": "Nhãn gọn hiển thị số lượt xem story",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "storyAudienceEmpty": "Chưa có ai xem story này",
+  "@storyAudienceEmpty": {
+    "description": "Trạng thái rỗng khi story chưa có người xem"
+  },
+  "storyAudienceNoReaction": "Chưa thả cảm xúc",
+  "@storyAudienceNoReaction": {
+    "description": "Nhãn cho người xem chưa thả cảm xúc vào story"
+  },
+  "storyDeleteTitle": "Xóa story này?",
+  "@storyDeleteTitle": {
+    "description": "Tiêu đề hộp thoại xác nhận xóa story"
+  },
+  "storyDeleteConfirm": "Story sẽ bị xóa ngay lập tức.",
+  "@storyDeleteConfirm": {
+    "description": "Nội dung hộp thoại xác nhận xóa story"
+  },
+  "storyDeleteSuccess": "Đã xóa story",
+  "@storyDeleteSuccess": {
+    "description": "Thông báo sau khi xóa story thành công"
+  },
+  "storyDeleteFailed": "Không thể xóa story",
+  "@storyDeleteFailed": {
+    "description": "Thông báo khi xóa story thất bại"
+  },
+  "storyEditorTitle": "Chỉnh sửa tin",
+  "@storyEditorTitle": {
+    "description": "Tiêu đề màn chỉnh sửa ảnh story trước khi đăng"
+  },
+  "storyEditorResetZoom": "Đặt lại thu phóng",
+  "@storyEditorResetZoom": {
+    "description": "Tooltip đặt lại thao tác zoom và kéo trên màn chỉnh sửa story"
+  },
+  "storyEditorTextHint": "Thêm chữ lên story...",
+  "@storyEditorTextHint": {
+    "description": "Gợi ý nhập chữ đè lên story"
+  },
+  "storyEditorTextDragHint": "Kéo chữ trực tiếp trên ảnh để đổi vị trí",
+  "@storyEditorTextDragHint": {
+    "description": "Gợi ý thao tác di chuyển chữ trong màn chỉnh sửa story"
+  },
+  "storyEditorTextSizeLabel": "Cỡ chữ",
+  "@storyEditorTextSizeLabel": {
+    "description": "Nhãn điều chỉnh cỡ chữ trong màn chỉnh sửa story"
+  },
+  "storyEditorTextColorLabel": "Màu chữ",
+  "@storyEditorTextColorLabel": {
+    "description": "Nhãn điều chỉnh màu chữ trong màn chỉnh sửa story"
+  },
+  "storyEditorTextBold": "Chữ đậm",
+  "@storyEditorTextBold": {
+    "description": "Tooltip bật/tắt chữ đậm trong màn chỉnh sửa story"
+  },
+  "storyEditorUsePhoto": "Dùng ảnh này",
+  "@storyEditorUsePhoto": {
+    "description": "Hành động xác nhận ảnh story đã chỉnh sửa"
+  },
+  "storyEditorExportFailed": "Không thể áp dụng chỉnh sửa. Vui lòng thử lại.",
+  "@storyEditorExportFailed": {
+    "description": "Thông báo khi xuất ảnh chỉnh sửa story thất bại"
+  },
+  "storyMusicTrackLabel": "Nhạc",
+  "@storyMusicTrackLabel": {
+    "description": "Nhãn chọn bài nhạc khi soạn story"
+  },
+  "storyMusicNone": "Không dùng nhạc",
+  "@storyMusicNone": {
+    "description": "Tùy chọn story không có nhạc"
+  },
+  "storyMusicStartLabel": "Bắt đầu từ {time}",
+  "@storyMusicStartLabel": {
+    "description": "Nhãn vị trí bắt đầu nhạc trong màn soạn story",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "storyMusicVolumeLabel": "Âm lượng {percent}",
+  "@storyMusicVolumeLabel": {
+    "description": "Nhãn âm lượng nhạc story",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "storyMusicPlayingLabel": "Nhạc: {track}",
+  "@storyMusicPlayingLabel": {
+    "description": "Nhãn hiển thị khi story có nhạc",
+    "placeholders": {
+      "track": {
+        "type": "String"
+      }
+    }
+  },
   "chatListTapToStart": "Chạm để bắt đầu trò chuyện",
   "@chatListTapToStart": {
     "description": "Nội dung tin nhắn mặc định"
@@ -227,6 +404,18 @@
   "@chatContextCopy": {
     "description": "Nhãn hành động sao chép trong menu tin nhắn"
   },
+  "chatContextPinMessage": "Ghim tin nhắn",
+  "@chatContextPinMessage": {
+    "description": "Nhãn hành động ghim tin nhắn trong menu tin nhắn"
+  },
+  "chatContextUnpinMessage": "Bỏ ghim tin nhắn",
+  "@chatContextUnpinMessage": {
+    "description": "Nhãn hành động bỏ ghim tin nhắn trong menu tin nhắn"
+  },
+  "chatPinnedMessageTitle": "Tin nhắn đã ghim",
+  "@chatPinnedMessageTitle": {
+    "description": "Tiêu đề vùng hiển thị tin nhắn ghim trong màn chat"
+  },
   "chatCopied": "Đã sao chép",
   "@chatCopied": {
     "description": "Thông báo khi sao chép tin nhắn thành công"
@@ -246,6 +435,23 @@
   "chatRecalledForEveryoneSuccess": "Đã thu hồi cho mọi người",
   "@chatRecalledForEveryoneSuccess": {
     "description": "Thông báo khi thu hồi tin nhắn cho mọi người thành công"
+  },
+  "chatMessagePinnedSuccess": "Đã ghim tin nhắn",
+  "@chatMessagePinnedSuccess": {
+    "description": "Thông báo khi ghim tin nhắn thành công"
+  },
+  "chatMessageUnpinnedSuccess": "Đã bỏ ghim tin nhắn",
+  "@chatMessageUnpinnedSuccess": {
+    "description": "Thông báo khi bỏ ghim tin nhắn thành công"
+  },
+  "chatPinnedActionFailed": "Thao tác ghim tin nhắn thất bại: {error}",
+  "@chatPinnedActionFailed": {
+    "description": "Thông báo lỗi khi ghim hoặc bỏ ghim tin nhắn",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   },
   "chatListPinSuccess": "Đã ghim đoạn chat",
   "@chatListPinSuccess": {

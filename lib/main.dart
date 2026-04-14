@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'firebase_options.dart';
 import 'screens/splash_screen.dart';
 import 'services/app_locale_controller.dart';
+import 'services/app_providers.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -28,7 +30,7 @@ void main() async {
     debugPrint('Firebase initialization failed: $e');
   }
 
-  await AppLocaleController.loadSavedLocale();
+  final initialLocale = await AppLocaleController.loadSavedLocale();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -39,34 +41,37 @@ void main() async {
     ),
   );
 
-  runApp(LumoChatApp(isFirebaseInitialized: isFirebaseInitialized));
+  runApp(
+    ProviderScope(
+      overrides: [
+        appLocaleProvider.overrideWith((ref) => initialLocale),
+      ],
+      child: LumoChatApp(isFirebaseInitialized: isFirebaseInitialized),
+    ),
+  );
 }
 
-class LumoChatApp extends StatelessWidget {
+class LumoChatApp extends ConsumerWidget {
   final bool isFirebaseInitialized;
 
   const LumoChatApp({super.key, required this.isFirebaseInitialized});
 
   @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<Locale>(
-      valueListenable: AppLocaleController.localeNotifier,
-      builder: (context, locale, _) {
-        return MaterialApp(
-          locale: locale,
-          onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.darkTheme,
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: SplashScreen(isFirebaseInitialized: isFirebaseInitialized),
-        );
-      },
+  Widget build(BuildContext context, WidgetRef ref) {
+    final locale = ref.watch(appLocaleProvider);
+    return MaterialApp(
+      locale: locale,
+      onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.darkTheme,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: SplashScreen(isFirebaseInitialized: isFirebaseInitialized),
     );
   }
 }

@@ -1,27 +1,43 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
-import '../services/app_locale_controller.dart';
+import '../models/call_models.dart';
+import '../services/app_providers.dart';
 import '../services/auth_service.dart';
+import '../services/call_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/l10n.dart';
 import '../widgets/glass_card.dart';
+import 'notification_center_screen.dart';
 import 'edit_profile_screen.dart';
 import 'landing_screen.dart';
 
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _darkMode = true;
   bool _notifications = true;
   bool _settingsLoaded = false;
+  final CallService _callService = CallService();
+
+  bool _isEnglish(BuildContext context) =>
+      Localizations.localeOf(context).languageCode == 'en';
+
+  String _txt(
+    BuildContext context, {
+    required String vi,
+    required String en,
+  }) {
+    return _isEnglish(context) ? en : vi;
+  }
 
   String _displayOrFallback(dynamic value, {required String fallback}) {
     final text = (value ?? '').toString().trim();
@@ -64,7 +80,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _setLanguage(String languageCode) async {
-    await AppLocaleController.setLocale(languageCode);
+    await ref.read(appLocaleActionsProvider).setLocale(languageCode);
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
@@ -108,7 +124,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _showLanguageDialog() {
     final l10n = context.l10n;
-    final currentCode = AppLocaleController.currentLanguageCode;
+    final currentCode = ref.read(appLanguageCodeProvider);
 
     showDialog(
       context: context,
@@ -163,7 +179,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String _currentLanguageLabel() {
     final l10n = context.l10n;
-    return AppLocaleController.currentLanguageCode == 'en'
+    return ref.watch(appLanguageCodeProvider) == 'en'
         ? l10n.profileLanguageEnglish
         : l10n.profileLanguageVietnamese;
   }
@@ -222,7 +238,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _notifications = settings['notifications'] != false;
                   final savedLanguage = (settings['languageCode'] ?? '').toString();
                   if (savedLanguage == 'vi' || savedLanguage == 'en') {
-                    AppLocaleController.setLocale(savedLanguage);
+                    ref.read(appLocaleActionsProvider).setLocale(savedLanguage);
                   }
                   _settingsLoaded = true;
                 }
@@ -438,7 +454,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ]),
                       const SizedBox(height: 16),
+                      _buildSection(
+                        _txt(
+                          context,
+                          vi: 'Lịch sử cuộc gọi',
+                          en: 'Call history',
+                        ),
+                        [
+                          _buildCallHistoryList(
+                            currentUserId: uid,
+                            currentUserName: name,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
                       _buildSection(l10n.profileSectionSupport, [
+                        _buildMenuItem(
+                          Icons.notifications_active_outlined,
+                          _txt(
+                            context,
+                            vi: 'Trung tâm thông báo',
+                            en: 'Notification Center',
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              profileContext,
+                              MaterialPageRoute(
+                                builder: (_) => const NotificationCenterScreen(),
+                              ),
+                            );
+                          },
+                        ),
                         _buildMenuItem(
                           Icons.help_outline_rounded,
                           l10n.profileMenuHelpCenter,
@@ -516,6 +562,168 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildCallHistoryList({
+    required String currentUserId,
+    required String currentUserName,
+  }) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _callService.watchCallHistory(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Text(
+              _txt(
+                context,
+                vi: 'Không tải được lịch sử cuộc gọi',
+                en: 'Unable to load call history',
+              ),
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontFamily: 'Inter',
+                fontSize: 13,
+              ),
+            ),
+          );
+        }
+
+        if (!snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+          );
+        }
+
+        final calls = snapshot.data!.docs
+            .map(AppCall.fromDocument)
+            .where((call) => call.status != CallStatus.ringing)
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+        if (calls.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Text(
+              _txt(
+                context,
+                vi: 'Chưa có cuộc gọi nào',
+                en: 'No calls yet',
+              ),
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontFamily: 'Inter',
+                fontSize: 13,
+              ),
+            ),
+          );
+        }
+
+        return Column(
+          children: calls.take(8).map((call) {
+            return _buildCallHistoryTile(
+              call: call,
+              currentUserId: currentUserId,
+              currentUserName: currentUserName,
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildCallHistoryTile({
+    required AppCall call,
+    required String currentUserId,
+    required String currentUserName,
+  }) {
+    final isIncoming = call.isIncomingFor(currentUserId);
+    final peerName = call.peerNameFor(currentUserId).trim().isEmpty
+        ? currentUserName
+        : call.peerNameFor(currentUserId);
+    final icon = call.type == CallType.video
+        ? (isIncoming ? Icons.video_call_rounded : Icons.videocam_outlined)
+        : (isIncoming ? Icons.call_received_rounded : Icons.call_made_rounded);
+    final isFailed = call.status == CallStatus.missed ||
+        call.status == CallStatus.declined ||
+        call.status == CallStatus.cancelled;
+    final iconColor = isFailed ? AppColors.error : AppColors.primaryLight;
+    final subtitle = '${_callHistoryStatus(call, isIncoming)} • ${_formatCallTime(call.createdAt)}';
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      dense: true,
+      leading: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: iconColor.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: iconColor, size: 20),
+      ),
+      title: Text(
+        peerName,
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          fontFamily: 'Inter',
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(
+          color: AppColors.textMuted,
+          fontSize: 12,
+          fontFamily: 'Inter',
+        ),
+      ),
+    );
+  }
+
+  String _callHistoryStatus(AppCall call, bool isIncoming) {
+    switch (call.status) {
+      case CallStatus.missed:
+        return isIncoming
+            ? _txt(context, vi: 'Cuộc gọi nhỡ', en: 'Missed call')
+            : _txt(context, vi: 'Không trả lời', en: 'No answer');
+      case CallStatus.declined:
+        return isIncoming
+            ? _txt(context, vi: 'Bạn đã từ chối', en: 'You declined')
+            : _txt(context, vi: 'Đã bị từ chối', en: 'Declined');
+      case CallStatus.cancelled:
+        return isIncoming
+            ? _txt(context, vi: 'Đã bị hủy', en: 'Canceled')
+            : _txt(context, vi: 'Bạn đã hủy', en: 'You canceled');
+      case CallStatus.accepted:
+      case CallStatus.ended:
+        return isIncoming
+            ? _txt(context, vi: 'Cuộc gọi đến', en: 'Incoming')
+            : _txt(context, vi: 'Cuộc gọi đi', en: 'Outgoing');
+      case CallStatus.ringing:
+        return _txt(context, vi: 'Đang đổ chuông', en: 'Ringing');
+      case CallStatus.unknown:
+        return _txt(context, vi: 'Không xác định', en: 'Unknown');
+    }
+  }
+
+  String _formatCallTime(DateTime dateTime) {
+    final dd = dateTime.day.toString().padLeft(2, '0');
+    final mm = dateTime.month.toString().padLeft(2, '0');
+    final hh = dateTime.hour.toString().padLeft(2, '0');
+    final min = dateTime.minute.toString().padLeft(2, '0');
+    return '$dd/$mm $hh:$min';
   }
 
   Widget _buildStat(String value, String label) {
@@ -653,3 +861,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
+

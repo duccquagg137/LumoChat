@@ -3,28 +3,28 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/chat_models.dart';
 import '../services/chat_service.dart';
+import '../services/chat_list_state_controller.dart';
 import '../theme/app_theme.dart';
 import '../utils/error_mapper.dart';
 import '../utils/l10n.dart';
 import '../widgets/glass_card.dart';
 import 'chat_screen.dart';
 
-class ChatListScreen extends StatefulWidget {
+class ChatListScreen extends ConsumerStatefulWidget {
   const ChatListScreen({super.key});
 
   @override
-  State<ChatListScreen> createState() => _ChatListScreenState();
+  ConsumerState<ChatListScreen> createState() => _ChatListScreenState();
 }
 
-class _ChatListScreenState extends State<ChatListScreen> {
+class _ChatListScreenState extends ConsumerState<ChatListScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ChatService _chatService = ChatService();
-  final Set<String> _busyChatIds = {};
   Timer? _searchDebounce;
-  String _searchQuery = '';
 
   String get _currentUserId => FirebaseAuth.instance.currentUser?.uid ?? '';
 
@@ -81,7 +81,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 220), () {
       if (!mounted) return;
-      setState(() => _searchQuery = value.trim().toLowerCase());
+      ref.read(chatListUiControllerProvider.notifier).setSearchQuery(value);
     });
   }
 
@@ -116,8 +116,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Future<void> _runChatAction(String roomId, Future<void> Function() action, String successText) async {
-    if (_busyChatIds.contains(roomId)) return;
-    setState(() => _busyChatIds.add(roomId));
+    final stateController = ref.read(chatListUiControllerProvider.notifier);
+    if (!stateController.beginAction(roomId)) return;
     try {
       await action();
       if (!mounted) return;
@@ -128,9 +128,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         SnackBar(content: Text(context.l10n.chatListActionFailed(AppErrorText.forChat(context, e)))),
       );
     } finally {
-      if (mounted) {
-        setState(() => _busyChatIds.remove(roomId));
-      }
+      stateController.endAction(roomId);
     }
   }
 
@@ -205,6 +203,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final uiState = ref.watch(chatListUiControllerProvider);
+    final searchQuery = uiState.searchQuery;
 
     return Scaffold(
       body: Stack(
@@ -375,7 +375,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                       .map((doc) => ChatUser.fromDocument(doc))
                                       .where((user) => user.id != _currentUserId)
                                       .where((user) => friendIds.contains(user.id))
-                                      .where((user) => user.name.toLowerCase().contains(_searchQuery))
+                                      .where((user) => user.name.toLowerCase().contains(searchQuery))
                                       .where((user) {
                                         final roomId = _chatService.buildChatRoomId(user.id);
                                         return !_chatFlag(chatMeta, roomId, 'hidden');
@@ -400,121 +400,101 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                   if (usersList.isEmpty) {
                                     return _buildStateView(
                                       icon: Icons.chat_bubble_outline_rounded,
-                                      message: _searchQuery.isEmpty ? l10n.chatListNoConversations : l10n.commonNoSearchResults,
+                                      message: searchQuery.isEmpty ? l10n.chatListNoConversations : l10n.commonNoSearchResults,
                                     );
                                   }
 
-                                  return Column(
-                                    children: [
-                                      SizedBox(
-                                        height: 100,
-                                        child: ListView(
-                                          scrollDirection: Axis.horizontal,
-                                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                                          children: [
-                                            _buildStoryItem(l10n.chatListYourStory, true, true),
-                                            ...usersList.take(7).map(
-                                              (user) => _buildStoryItem(user.name.split(' ').last, false, user.isOnline),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Expanded(
-                                        child: ListView.builder(
-                                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                                          itemCount: usersList.length,
-                                          itemBuilder: (context, i) {
-                                            final user = usersList[i];
-                                            final chatRoomId = _chatService.buildChatRoomId(user.id);
-                                            final roomData = roomDataById[chatRoomId];
-                                            final isPinned = _chatFlag(chatMeta, chatRoomId, 'pinned');
+                                  return ListView.builder(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                    itemCount: usersList.length,
+                                    itemBuilder: (context, i) {
+                                      final user = usersList[i];
+                                      final chatRoomId = _chatService.buildChatRoomId(user.id);
+                                      final roomData = roomDataById[chatRoomId];
+                                      final isPinned = _chatFlag(chatMeta, chatRoomId, 'pinned');
 
-                                            final hasLastMessage = roomData?['lastMessage']?.toString().trim().isNotEmpty ?? false;
-                                            final lastText = hasLastMessage
-                                                ? roomData!['lastMessage'].toString()
-                                                : l10n.chatListTapToStart;
-                                            final timeTxt = _roomTimeText(roomData);
-                                            final unreadCount = unreadByRoom[chatRoomId] ?? _roomUnreadCount(roomData);
+                                      final hasLastMessage = roomData?['lastMessage']?.toString().trim().isNotEmpty ?? false;
+                                      final lastText = hasLastMessage
+                                          ? roomData!['lastMessage'].toString()
+                                          : l10n.chatListTapToStart;
+                                      final timeTxt = _roomTimeText(roomData);
+                                      final unreadCount = unreadByRoom[chatRoomId] ?? _roomUnreadCount(roomData);
 
-                                            final conv = Conversation(
-                                              id: user.id,
-                                              user: user,
-                                              lastMessage: lastText,
-                                              time: timeTxt,
-                                              unreadCount: unreadCount,
-                                              isPinned: isPinned,
+                                      final conv = Conversation(
+                                        id: user.id,
+                                        user: user,
+                                        lastMessage: lastText,
+                                        time: timeTxt,
+                                        unreadCount: unreadCount,
+                                        isPinned: isPinned,
+                                      );
+
+                                      return Dismissible(
+                                        key: ValueKey('chat-$chatRoomId-${user.id}'),
+                                        direction: DismissDirection.horizontal,
+                                        confirmDismiss: (direction) async {
+                                          if (direction == DismissDirection.startToEnd) {
+                                            final nextPinned = !isPinned;
+                                            await _runChatAction(
+                                              chatRoomId,
+                                              () => _chatService.setChatPinned(user.id, nextPinned),
+                                              nextPinned ? l10n.chatListPinSuccess : l10n.chatListUnpinSuccess,
                                             );
+                                            return false;
+                                          }
 
-                                            return Dismissible(
-                                              key: ValueKey('chat-$chatRoomId-${user.id}'),
-                                              direction: DismissDirection.horizontal,
-                                              confirmDismiss: (direction) async {
-                                                if (direction == DismissDirection.startToEnd) {
-                                                  final nextPinned = !isPinned;
-                                                  await _runChatAction(
-                                                    chatRoomId,
-                                                    () => _chatService.setChatPinned(user.id, nextPinned),
-                                                    nextPinned ? l10n.chatListPinSuccess : l10n.chatListUnpinSuccess,
-                                                  );
-                                                  return false;
-                                                }
-
-                                                await _showChatActionsBottomSheet(
-                                                  roomId: chatRoomId,
-                                                  peerId: user.id,
-                                                  peerName: user.name,
-                                                );
-                                                return false;
-                                              },
-                                              background: Container(
-                                                margin: const EdgeInsets.only(bottom: 4),
-                                                padding: const EdgeInsets.symmetric(horizontal: 20),
-                                                decoration: BoxDecoration(
-                                                  borderRadius: BorderRadius.circular(16),
-                                                  color: AppColors.primary.withOpacity(0.2),
-                                                ),
-                                                alignment: Alignment.centerLeft,
-                                                child: Row(
-                                                  children: [
-                                                    Icon(
-                                                      isPinned ? Icons.push_pin_outlined : Icons.push_pin_rounded,
-                                                      color: AppColors.primaryLight,
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Text(
-                                                      isPinned ? l10n.commonUnpin : l10n.commonPin,
-                                                      style: const TextStyle(color: AppColors.primaryLight, fontWeight: FontWeight.w600),
-                                                    ),
-                                                  ],
-                                                ),
+                                          await _showChatActionsBottomSheet(
+                                            roomId: chatRoomId,
+                                            peerId: user.id,
+                                            peerName: user.name,
+                                          );
+                                          return false;
+                                        },
+                                        background: Container(
+                                          margin: const EdgeInsets.only(bottom: 4),
+                                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(16),
+                                            color: AppColors.primary.withOpacity(0.2),
+                                          ),
+                                          alignment: Alignment.centerLeft,
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                isPinned ? Icons.push_pin_outlined : Icons.push_pin_rounded,
+                                                color: AppColors.primaryLight,
                                               ),
-                                              secondaryBackground: Container(
-                                                margin: const EdgeInsets.only(bottom: 4),
-                                                padding: const EdgeInsets.symmetric(horizontal: 20),
-                                                decoration: BoxDecoration(
-                                                  borderRadius: BorderRadius.circular(16),
-                                                  color: AppColors.error.withOpacity(0.18),
-                                                ),
-                                                alignment: Alignment.centerRight,
-                                                child: Row(
-                                                  mainAxisAlignment: MainAxisAlignment.end,
-                                                  children: [
-                                                    const Icon(Icons.more_horiz_rounded, color: AppColors.error),
-                                                    const SizedBox(width: 8),
-                                                    Text(
-                                                      l10n.commonMore,
-                                                      style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.w600),
-                                                    ),
-                                                  ],
-                                                ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                isPinned ? l10n.commonUnpin : l10n.commonPin,
+                                                style: const TextStyle(color: AppColors.primaryLight, fontWeight: FontWeight.w600),
                                               ),
-                                              child: _buildConversationItem(context, conv),
-                                            );
-                                          },
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                        secondaryBackground: Container(
+                                          margin: const EdgeInsets.only(bottom: 4),
+                                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(16),
+                                            color: AppColors.error.withOpacity(0.18),
+                                          ),
+                                          alignment: Alignment.centerRight,
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.end,
+                                            children: [
+                                              const Icon(Icons.more_horiz_rounded, color: AppColors.error),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                l10n.commonMore,
+                                                style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.w600),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        child: _buildConversationItem(context, conv),
+                                      );
+                                    },
                                   );
                                 },
                               );
@@ -543,67 +523,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
         border: Border.all(color: AppColors.glassBorder, width: 0.5),
       ),
       child: Icon(icon, color: AppColors.textPrimary, size: 20),
-    );
-  }
-
-  Widget _buildStoryItem(String name, bool isAdd, bool isOnline) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 62,
-            height: 62,
-            padding: const EdgeInsets.all(2.5),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: isAdd
-                  ? null
-                  : isOnline
-                      ? AppGradients.primary
-                      : null,
-              border: isAdd || !isOnline
-                  ? Border.all(color: AppColors.textMuted.withOpacity(0.3), width: 2)
-                  : null,
-            ),
-            child: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.bgCard,
-                border: Border.all(color: AppColors.bgDark, width: 2),
-              ),
-              child: isAdd
-                  ? const Icon(Icons.add_rounded, color: AppColors.primary, size: 24)
-                  : Center(
-                      child: Text(
-                        name[0],
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          SizedBox(
-            width: 64,
-            child: Text(
-              name,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 11,
-                fontFamily: 'Inter',
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -735,4 +654,5 @@ class _ChatListScreenState extends State<ChatListScreen> {
     );
   }
 }
+
 

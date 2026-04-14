@@ -132,6 +132,183 @@
   "@chatListYourStory": {
     "description": "Story bubble label for current user"
   },
+  "storyActionViewMyStory": "View my story",
+  "@storyActionViewMyStory": {
+    "description": "Action label to open current user's active story"
+  },
+  "storyActionAddStory": "Add new story",
+  "@storyActionAddStory": {
+    "description": "Action label to add a new story"
+  },
+  "storyComposeTitle": "Create story",
+  "@storyComposeTitle": {
+    "description": "Dialog title when composing a story"
+  },
+  "storyCaptionHint": "Write a caption...",
+  "@storyCaptionHint": {
+    "description": "Hint for story caption input"
+  },
+  "storyVisibilityLabel": "Visibility",
+  "@storyVisibilityLabel": {
+    "description": "Label for story visibility selector"
+  },
+  "storyVisibilityFriends": "Friends only",
+  "@storyVisibilityFriends": {
+    "description": "Story visibility option for friends"
+  },
+  "storyVisibilityPublic": "Public",
+  "@storyVisibilityPublic": {
+    "description": "Story visibility option for all users"
+  },
+  "storyPublishAction": "Post",
+  "@storyPublishAction": {
+    "description": "Action label to publish story"
+  },
+  "storyPublishSuccess": "Story posted",
+  "@storyPublishSuccess": {
+    "description": "Snackbar shown after posting story successfully"
+  },
+  "storyPublishFailed": "Unable to post story: {error}",
+  "@storyPublishFailed": {
+    "description": "Error message when posting story fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "storySourcePhotoGallery": "Photo from gallery",
+  "@storySourcePhotoGallery": {
+    "description": "Story source action for picking a photo in gallery"
+  },
+  "storySourcePhotoCamera": "Photo from camera",
+  "@storySourcePhotoCamera": {
+    "description": "Story source action for capturing photo from camera"
+  },
+  "storySourceVideoGallery": "Video from gallery",
+  "@storySourceVideoGallery": {
+    "description": "Story source action for picking a video in gallery"
+  },
+  "storySourceVideoCamera": "Video from camera",
+  "@storySourceVideoCamera": {
+    "description": "Story source action for capturing video from camera"
+  },
+  "storyViewerVideoFallback": "Video story",
+  "@storyViewerVideoFallback": {
+    "description": "Fallback title shown when video story preview is unavailable"
+  },
+  "storyViewerNow": "now",
+  "@storyViewerNow": {
+    "description": "Relative time label for newly posted stories"
+  },
+  "storyAudienceTitle": "Story viewers",
+  "@storyAudienceTitle": {
+    "description": "Title for sheet showing who viewed a story"
+  },
+  "storyAudienceCount": "{count} views",
+  "@storyAudienceCount": {
+    "description": "Compact label showing number of story views",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "storyAudienceEmpty": "No one has viewed this story yet",
+  "@storyAudienceEmpty": {
+    "description": "Empty state when a story has no viewers"
+  },
+  "storyAudienceNoReaction": "No reaction",
+  "@storyAudienceNoReaction": {
+    "description": "Label shown for viewers that have not reacted to a story"
+  },
+  "storyDeleteTitle": "Delete story?",
+  "@storyDeleteTitle": {
+    "description": "Dialog title for deleting story"
+  },
+  "storyDeleteConfirm": "This story will be removed immediately.",
+  "@storyDeleteConfirm": {
+    "description": "Dialog body for confirming story deletion"
+  },
+  "storyDeleteSuccess": "Story deleted",
+  "@storyDeleteSuccess": {
+    "description": "Snackbar shown after deleting story"
+  },
+  "storyDeleteFailed": "Unable to delete story",
+  "@storyDeleteFailed": {
+    "description": "Snackbar shown when deleting story fails"
+  },
+  "storyEditorTitle": "Edit story",
+  "@storyEditorTitle": {
+    "description": "Title for story image editor screen before publish"
+  },
+  "storyEditorResetZoom": "Reset zoom",
+  "@storyEditorResetZoom": {
+    "description": "Tooltip for resetting zoom and pan in story image editor"
+  },
+  "storyEditorTextHint": "Add text on your story...",
+  "@storyEditorTextHint": {
+    "description": "Hint text for story overlay text input"
+  },
+  "storyEditorTextDragHint": "Drag text directly on photo to reposition",
+  "@storyEditorTextDragHint": {
+    "description": "Hint shown in story editor for moving overlay text"
+  },
+  "storyEditorTextSizeLabel": "Text size",
+  "@storyEditorTextSizeLabel": {
+    "description": "Label for text size control in story editor"
+  },
+  "storyEditorTextColorLabel": "Text color",
+  "@storyEditorTextColorLabel": {
+    "description": "Label for text color control in story editor"
+  },
+  "storyEditorTextBold": "Bold text",
+  "@storyEditorTextBold": {
+    "description": "Tooltip for toggling bold overlay text in story editor"
+  },
+  "storyEditorUsePhoto": "Use this photo",
+  "@storyEditorUsePhoto": {
+    "description": "Primary action to confirm edited story image"
+  },
+  "storyEditorExportFailed": "Could not apply edits. Please try again.",
+  "@storyEditorExportFailed": {
+    "description": "Snackbar shown when story image editor fails to export"
+  },
+  "storyMusicTrackLabel": "Music",
+  "@storyMusicTrackLabel": {
+    "description": "Label for selecting a music track when composing story"
+  },
+  "storyMusicNone": "No music",
+  "@storyMusicNone": {
+    "description": "Option label for story without music"
+  },
+  "storyMusicStartLabel": "Start at {time}",
+  "@storyMusicStartLabel": {
+    "description": "Label for music start offset in story composer",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "storyMusicVolumeLabel": "Volume {percent}",
+  "@storyMusicVolumeLabel": {
+    "description": "Label for story music volume",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "storyMusicPlayingLabel": "Music: {track}",
+  "@storyMusicPlayingLabel": {
+    "description": "Badge text shown when story has music",
+    "placeholders": {
+      "track": {
+        "type": "String"
+      }
+    }
+  },
   "chatListTapToStart": "Tap to start chatting",
   "@chatListTapToStart": {
     "description": "Default last message text"
@@ -227,6 +404,18 @@
   "@chatContextCopy": {
     "description": "Copy action label in message context menu"
   },
+  "chatContextPinMessage": "Pin message",
+  "@chatContextPinMessage": {
+    "description": "Pin message action label in message context menu"
+  },
+  "chatContextUnpinMessage": "Unpin message",
+  "@chatContextUnpinMessage": {
+    "description": "Unpin message action label in message context menu"
+  },
+  "chatPinnedMessageTitle": "Pinned message",
+  "@chatPinnedMessageTitle": {
+    "description": "Title for pinned message banner in chat screen"
+  },
   "chatCopied": "Copied",
   "@chatCopied": {
     "description": "Toast/snackbar text when message is copied"
@@ -246,6 +435,23 @@
   "chatRecalledForEveryoneSuccess": "Message recalled for everyone",
   "@chatRecalledForEveryoneSuccess": {
     "description": "Success message after recalling message for everyone"
+  },
+  "chatMessagePinnedSuccess": "Message pinned",
+  "@chatMessagePinnedSuccess": {
+    "description": "Success message after pinning a message"
+  },
+  "chatMessageUnpinnedSuccess": "Message unpinned",
+  "@chatMessageUnpinnedSuccess": {
+    "description": "Success message after unpinning a message"
+  },
+  "chatPinnedActionFailed": "Pinned message action failed: {error}",
+  "@chatPinnedActionFailed": {
+    "description": "Error when pin/unpin message action fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   },
   "chatListPinSuccess": "Chat has been pinned",
   "@chatListPinSuccess": {

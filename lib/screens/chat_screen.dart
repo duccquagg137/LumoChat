@@ -8,14 +8,25 @@ import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
 import '../models/chat_models.dart';
+import '../models/call_models.dart';
 import '../services/chat_service.dart';
+import '../services/call_service.dart';
 import '../services/group_service.dart';
 import '../services/auth_service.dart';
 import '../utils/app_logger.dart';
 import '../utils/error_mapper.dart';
 import '../utils/l10n.dart';
+import 'call_session_screen.dart';
 import 'group_info_screen.dart';
 import 'user_profile_screen.dart';
+
+class _ScrollAnchor {
+  final double distanceFromBottom;
+
+  const _ScrollAnchor({
+    required this.distanceFromBottom,
+  });
+}
 
 class ChatScreen extends StatefulWidget {
   final String userName;
@@ -46,6 +57,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final FocusNode _messageSearchFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   final ChatService _chatService = ChatService();
+  final CallService _callService = CallService();
   final GroupService _groupService = GroupService();
   final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
   String _currentUserName =
@@ -65,9 +77,15 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isSyncingReceipts = false;
   bool _isSyncingGroupReads = false;
   bool _isUploadingImage = false;
+  bool _isStartingCall = false;
   File? _failedImageUpload;
   String? _failedImageReplyId;
   final Map<String, int> _imageReloadAttempts = {};
+  final Map<String, GlobalKey> _messageItemKeys = {};
+  Map<String, dynamic>? _pinnedMessageData;
+  _ScrollAnchor? _pendingScrollAnchor;
+  double _lastKnownOffset = 0;
+  double _lastKnownMaxScrollExtent = 0;
 
   // Reply state
   ChatMessage? _replyingTo;
@@ -86,9 +104,256 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  void _rememberScrollMetrics() {
+    if (!_scrollController.hasClients) return;
+    _lastKnownOffset = _scrollController.offset;
+    _lastKnownMaxScrollExtent = _scrollController.position.maxScrollExtent;
+  }
+
+  _ScrollAnchor? _captureScrollAnchor() {
+    if (_scrollController.hasClients) {
+      final offset = _scrollController.offset;
+      final max = _scrollController.position.maxScrollExtent;
+      return _ScrollAnchor(
+        distanceFromBottom: (max - offset).clamp(0.0, double.infinity),
+      );
+    }
+
+    if (_lastKnownOffset <= 0 && _lastKnownMaxScrollExtent <= 0) {
+      return null;
+    }
+
+    return _ScrollAnchor(
+      distanceFromBottom:
+          (_lastKnownMaxScrollExtent - _lastKnownOffset).clamp(0.0, double.infinity),
+    );
+  }
+
+  void _queueScrollRestore([_ScrollAnchor? anchor]) {
+    final selected = anchor ?? _captureScrollAnchor();
+    if (selected == null) return;
+    _pendingScrollAnchor = selected;
+  }
+
+  void _restorePendingScrollAnchor() {
+    final anchor = _pendingScrollAnchor;
+    if (anchor == null) return;
+    _pendingScrollAnchor = null;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final max = _scrollController.position.maxScrollExtent;
+      final target = (max - anchor.distanceFromBottom).clamp(0.0, max).toDouble();
+      _scrollController.jumpTo(target);
+      _rememberScrollMetrics();
+    });
+  }
+
+  Future<void> _runWithScrollLock(Future<void> Function() action) async {
+    final anchor = _captureScrollAnchor();
+    try {
+      await action();
+    } finally {
+      _queueScrollRestore(anchor);
+      _restorePendingScrollAnchor();
+    }
+  }
+
+  bool _isSamePinnedMessage(
+    Map<String, dynamic>? a,
+    Map<String, dynamic>? b,
+  ) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null) return a == null && b == null;
+    return a['messageId']?.toString() == b['messageId']?.toString() &&
+        a['previewText']?.toString() == b['previewText']?.toString() &&
+        a['messageType']?.toString() == b['messageType']?.toString() &&
+        a['senderId']?.toString() == b['senderId']?.toString() &&
+        a['senderName']?.toString() == b['senderName']?.toString();
+  }
+
+  GlobalKey _messageItemKey(String messageId) {
+    return _messageItemKeys.putIfAbsent(
+      messageId,
+      () => GlobalKey(debugLabel: 'message-$messageId'),
+    );
+  }
+
+  void _syncMessageItemKeys(List<DocumentSnapshot> visibleDocs) {
+    final visibleIds = visibleDocs.map((doc) => doc.id).toSet();
+    _messageItemKeys.removeWhere((messageId, _) => !visibleIds.contains(messageId));
+    for (final messageId in visibleIds) {
+      _messageItemKey(messageId);
+    }
+  }
+
+  bool _tryScrollToMessageById(String messageId) {
+    final targetContext = _messageItemKeys[messageId]?.currentContext;
+    if (targetContext == null) return false;
+    Scrollable.ensureVisible(
+      targetContext,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      alignment: 0.2,
+    );
+    _rememberScrollMetrics();
+    return true;
+  }
+
+  Future<bool> _scrollToMessageById(String messageId) async {
+    for (var attempt = 0; attempt < 6; attempt++) {
+      if (_tryScrollToMessageById(messageId)) {
+        return true;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+    }
+    return false;
+  }
+
+  Future<void> _jumpToPinnedMessage() async {
+    final messageId = _pinnedMessageData?['messageId']?.toString() ?? '';
+    if (messageId.isEmpty) return;
+
+    if (_isSearchingMessages && _messageSearchQuery.isNotEmpty) {
+      _closeMessageSearch();
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+    }
+
+    final found = await _scrollToMessageById(messageId);
+    if (!found && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.chatMessageDeleted)),
+      );
+    }
+  }
+
+  Map<String, dynamic>? _readPinnedMessage(dynamic raw) {
+    if (raw is! Map) return null;
+    final mapped = raw.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    final messageId = mapped['messageId']?.toString() ?? '';
+    if (messageId.isEmpty) return null;
+    return mapped;
+  }
+
+  bool _isPinnedMessage(ChatMessage message) {
+    return _pinnedMessageData?['messageId']?.toString() == message.id;
+  }
+
+  String _messageTypeKey(MessageType type) {
+    switch (type) {
+      case MessageType.image:
+        return 'image';
+      case MessageType.system:
+        return 'system';
+      case MessageType.emoji:
+        return 'emoji';
+      case MessageType.deleted:
+        return 'deleted';
+      case MessageType.text:
+        return 'text';
+    }
+  }
+
+  String _buildMessagePreviewForPin(ChatMessage message) {
+    final l10n = context.l10n;
+    if (message.type == MessageType.image) return l10n.chatImagePlaceholder;
+    if (message.type == MessageType.deleted || message.isRecalledForEveryone) {
+      return l10n.chatMessageRecalled;
+    }
+    return message.text.trim();
+  }
+
+  String _pinnedMessageDisplayText(Map<String, dynamic> pinned) {
+    final l10n = context.l10n;
+    final messageType = pinned['messageType']?.toString() ?? 'text';
+    if (messageType == 'image') return l10n.chatImagePlaceholder;
+    if (messageType == 'deleted') return l10n.chatMessageRecalled;
+
+    final previewText = pinned['previewText']?.toString().trim() ?? '';
+    if (previewText.isEmpty) return l10n.chatListTapToStart;
+    return previewText;
+  }
+
+  Future<void> _pinMessage(ChatMessage message) async {
+    final l10n = context.l10n;
+    final anchor = _captureScrollAnchor();
+    final fallbackSender = message.senderId == currentUserId
+        ? (_currentUserName.trim().isNotEmpty
+            ? _currentUserName.trim()
+            : l10n.profileFallbackUser)
+        : widget.userName;
+    final senderName = (message.senderName?.trim().isNotEmpty ?? false)
+        ? message.senderName!.trim()
+        : fallbackSender;
+
+    try {
+      if (widget.isGroup) {
+        await _groupService.setPinnedMessage(
+          widget.receiverId,
+          messageId: message.id,
+          previewText: _buildMessagePreviewForPin(message),
+          messageType: _messageTypeKey(message.type),
+          senderId: message.senderId,
+          senderName: senderName,
+        );
+      } else {
+        await _chatService.setPinnedMessage(
+          widget.receiverId,
+          messageId: message.id,
+          previewText: _buildMessagePreviewForPin(message),
+          messageType: _messageTypeKey(message.type),
+          senderId: message.senderId,
+          senderName: senderName,
+        );
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.chatMessagePinnedSuccess)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.chatPinnedActionFailed(AppErrorText.forChat(context, e)))),
+      );
+    } finally {
+      _queueScrollRestore(anchor);
+      _restorePendingScrollAnchor();
+    }
+  }
+
+  Future<void> _unpinMessage() async {
+    final l10n = context.l10n;
+    final anchor = _captureScrollAnchor();
+    try {
+      if (widget.isGroup) {
+        await _groupService.clearPinnedMessage(widget.receiverId);
+      } else {
+        await _chatService.clearPinnedMessage(widget.receiverId);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.chatMessageUnpinnedSuccess)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.chatPinnedActionFailed(AppErrorText.forChat(context, e)))),
+      );
+    } finally {
+      _queueScrollRestore(anchor);
+      _restorePendingScrollAnchor();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_rememberScrollMetrics);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _rememberScrollMetrics();
+    });
     _loadCurrentUserProfile();
     _setupTypingListener();
     _setupOtherTypingListener();
@@ -132,6 +397,46 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  Future<void> _startDirectCall(CallType type) async {
+    if (widget.isGroup || _isStartingCall) return;
+    setState(() => _isStartingCall = true);
+    try {
+      final callId = await _callService.startOutgoingCall(
+        calleeId: widget.receiverId,
+        calleeName: widget.userName,
+        calleeAvatar: widget.userAvatar,
+        type: type,
+      );
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => CallSessionScreen.outgoing(
+            callId: callId,
+            peerId: widget.receiverId,
+            peerName: widget.userName,
+            peerAvatar: widget.userAvatar,
+            callType: type,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.l10n.chatListActionFailed(AppErrorText.forChat(context, e)),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isStartingCall = false);
+      }
+    }
+  }
+
   void _setupTypingListener() {
     _messageController.addListener(() {
       if (_messageController.text.isNotEmpty && !_isMeTyping) {
@@ -165,11 +470,16 @@ class _ChatScreenState extends State<ChatScreen> {
         : _chatService.getChatRoomStream(widget.receiverId);
 
     _chatRoomSubscription = stream.listen((snapshot) {
+      bool isOtherTyping = false;
+      Map<String, dynamic>? pinnedMessage;
+
       if (snapshot.exists && snapshot.data() != null) {
         final data = snapshot.data() as Map<String, dynamic>;
-        if (data.containsKey('typing')) {
-          final typingData = data['typing'] as Map<String, dynamic>;
-          bool isOtherTyping = false;
+        final typingRaw = data['typing'];
+        if (typingRaw is Map) {
+          final typingData = typingRaw.map(
+            (key, value) => MapEntry(key.toString(), value),
+          );
           if (widget.isGroup) {
             isOtherTyping = typingData.entries.any(
               (entry) => entry.key != currentUserId && entry.value == true,
@@ -177,21 +487,34 @@ class _ChatScreenState extends State<ChatScreen> {
           } else {
             isOtherTyping = typingData[widget.receiverId] == true;
           }
-          if (mounted) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                setState(() {
-                  _isOtherTyping = isOtherTyping;
-                });
-              }
-            });
-          }
         }
+
+        pinnedMessage = _readPinnedMessage(data['pinnedMessage']);
       }
+
+      final shouldUpdateTyping = _isOtherTyping != isOtherTyping;
+      final shouldUpdatePinned =
+          !_isSamePinnedMessage(_pinnedMessageData, pinnedMessage);
+      if (!shouldUpdateTyping && !shouldUpdatePinned) {
+        return;
+      }
+
+      final anchor = _captureScrollAnchor();
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _isOtherTyping = isOtherTyping;
+          _pinnedMessageData = pinnedMessage;
+        });
+        _queueScrollRestore(anchor);
+        _restorePendingScrollAnchor();
+      });
     });
   }
 
   void _syncScrollToLatest(int messageCount) {
+    if (_pendingScrollAnchor != null) return;
     if (messageCount == _lastMessageCount) return;
     final shouldAnimate = _lastMessageCount >= 0;
     _lastMessageCount = messageCount;
@@ -211,6 +534,7 @@ class _ChatScreenState extends State<ChatScreen> {
       } else {
         _scrollController.jumpTo(target);
       }
+      _rememberScrollMetrics();
     });
   }
 
@@ -390,28 +714,18 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _setReplyingWithKeepPosition(ChatMessage message) {
-    final offset =
-        _scrollController.hasClients ? _scrollController.offset : null;
+    final anchor = _captureScrollAnchor();
     setState(() => _replyingTo = message);
-    if (offset == null) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      final max = _scrollController.position.maxScrollExtent;
-      _scrollController.jumpTo(offset.clamp(0, max));
-    });
+    _queueScrollRestore(anchor);
+    _restorePendingScrollAnchor();
   }
 
   void _clearReplyingWithKeepPosition() {
     if (_replyingTo == null) return;
-    final offset =
-        _scrollController.hasClients ? _scrollController.offset : null;
+    final anchor = _captureScrollAnchor();
     setState(() => _replyingTo = null);
-    if (offset == null) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      final max = _scrollController.position.maxScrollExtent;
-      _scrollController.jumpTo(offset.clamp(0, max));
-    });
+    _queueScrollRestore(anchor);
+    _restorePendingScrollAnchor();
   }
 
   Widget _buildUserAvatarById({
@@ -455,6 +769,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _setMeTyping(false);
+    _scrollController.removeListener(_rememberScrollMetrics);
     _typingTimer?.cancel();
     _messageSearchDebounce?.cancel();
     _readReceiptTimer?.cancel();
@@ -494,6 +809,7 @@ class _ChatScreenState extends State<ChatScreen> {
             children: [
               // App bar
               _buildAppBar(context),
+              if (_pinnedMessageData != null) _buildPinnedMessageBanner(),
               // Messages
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
@@ -553,6 +869,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       );
                     }
 
+                    _syncMessageItemKeys(visibleDocs);
+                    _restorePendingScrollAnchor();
+
                     return ListView.builder(
                       controller: _scrollController,
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -580,7 +899,10 @@ class _ChatScreenState extends State<ChatScreen> {
                           deletedFor: msgData.deletedFor,
                           isRecalledForEveryone: msgData.isRecalledForEveryone,
                         );
-                        return _buildMessage(msg);
+                        return KeyedSubtree(
+                          key: _messageItemKey(msg.id),
+                          child: _buildMessage(msg),
+                        );
                       },
                     );
                   },
@@ -751,8 +1073,18 @@ class _ChatScreenState extends State<ChatScreen> {
                   onTap: _openGroupInfo,
                 ),
               ] else ...[
-                _buildActionIcon(Icons.call_outlined),
-                _buildActionIcon(Icons.videocam_outlined),
+                _buildActionIcon(
+                  Icons.call_outlined,
+                  onTap: _isStartingCall
+                      ? null
+                      : () => _startDirectCall(CallType.voice),
+                ),
+                _buildActionIcon(
+                  Icons.videocam_outlined,
+                  onTap: _isStartingCall
+                      ? null
+                      : () => _startDirectCall(CallType.video),
+                ),
                 _buildActionIcon(
                   Icons.search_rounded,
                   onTap: _toggleMessageSearch,
@@ -774,6 +1106,76 @@ class _ChatScreenState extends State<ChatScreen> {
         width: 36,
         height: 36,
         child: Icon(icon, color: AppColors.textSecondary, size: 22),
+      ),
+    );
+  }
+
+  Widget _buildPinnedMessageBanner() {
+    final pinned = _pinnedMessageData;
+    if (pinned == null) return const SizedBox.shrink();
+
+    final l10n = context.l10n;
+    final senderName = pinned['senderName']?.toString().trim() ?? '';
+    final preview = _pinnedMessageDisplayText(pinned);
+    final subtitle = senderName.isEmpty ? preview : '$senderName: $preview';
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.glassBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.glassBorder, width: 0.6),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 2),
+            child: Icon(Icons.push_pin_rounded, size: 16, color: AppColors.primaryLight),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: GestureDetector(
+              onTap: _jumpToPinnedMessage,
+              behavior: HitTestBehavior.opaque,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.chatPinnedMessageTitle,
+                    style: const TextStyle(
+                      color: AppColors.primaryLight,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Inter',
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontFamily: 'Inter',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: _unpinMessage,
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.only(left: 8, top: 2),
+              child: Icon(Icons.close_rounded, size: 18, color: AppColors.textMuted),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -857,6 +1259,30 @@ class _ChatScreenState extends State<ChatScreen> {
                           ? CrossAxisAlignment.end
                           : CrossAxisAlignment.start,
                       children: [
+                        if (_isPinnedMessage(message))
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.push_pin_rounded,
+                                  size: 12,
+                                  color: AppColors.primaryLight,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  context.l10n.chatPinnedMessageTitle,
+                                  style: const TextStyle(
+                                    color: AppColors.primaryLight,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'Inter',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         if (message.replyTo != null)
                           _buildReplyPreview(message.replyTo!, isSent),
                         isDeletedMessage
@@ -1783,6 +2209,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final bool isMyMessage = message.senderId == currentUserId;
     final bool isDeletedMessage =
         message.type == MessageType.deleted || message.isRecalledForEveryone;
+    final bool isPinnedMessage = _isPinnedMessage(message);
 
     showModalBottomSheet(
       context: context,
@@ -1803,15 +2230,17 @@ class _ChatScreenState extends State<ChatScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: ['❤️', '😂', '😮', '😢', '👍', '👎'].map((emoji) {
                   return GestureDetector(
-                    onTap: () {
-                      if (widget.isGroup) {
-                        _groupService.toggleReaction(
-                            widget.receiverId, message.id, emoji);
-                      } else {
-                        _chatService.toggleReaction(
-                            widget.receiverId, message.id, emoji);
-                      }
+                    onTap: () async {
                       Navigator.pop(context);
+                      await _runWithScrollLock(() async {
+                        if (widget.isGroup) {
+                          await _groupService.toggleReaction(
+                              widget.receiverId, message.id, emoji);
+                        } else {
+                          await _chatService.toggleReaction(
+                              widget.receiverId, message.id, emoji);
+                        }
+                      });
                     },
                     child: Text(emoji, style: const TextStyle(fontSize: 28)),
                   );
@@ -1830,6 +2259,22 @@ class _ChatScreenState extends State<ChatScreen> {
                 ScaffoldMessenger.of(context)
                     .showSnackBar(SnackBar(content: Text(l10n.chatCopied)));
               }),
+              _buildContextMenuItem(
+                isPinnedMessage
+                    ? Icons.push_pin_outlined
+                    : Icons.push_pin_rounded,
+                isPinnedMessage
+                    ? l10n.chatContextUnpinMessage
+                    : l10n.chatContextPinMessage,
+                () async {
+                  Navigator.pop(context);
+                  if (isPinnedMessage) {
+                    await _unpinMessage();
+                  } else {
+                    await _pinMessage(message);
+                  }
+                },
+              ),
             ],
             if (isMyMessage && !isDeletedMessage) ...[
               _buildContextMenuItem(
@@ -1837,13 +2282,15 @@ class _ChatScreenState extends State<ChatScreen> {
                   () async {
                 final messenger = ScaffoldMessenger.of(context);
                 Navigator.pop(context);
-                if (widget.isGroup) {
-                  await _groupService.recallMessageForMe(
-                      widget.receiverId, message.id);
-                } else {
-                  await _chatService.recallMessageForMe(
-                      widget.receiverId, message.id);
-                }
+                await _runWithScrollLock(() async {
+                  if (widget.isGroup) {
+                    await _groupService.recallMessageForMe(
+                        widget.receiverId, message.id);
+                  } else {
+                    await _chatService.recallMessageForMe(
+                        widget.receiverId, message.id);
+                  }
+                });
                 messenger.showSnackBar(
                     SnackBar(content: Text(l10n.chatRecalledForMeSuccess)));
               }, color: AppColors.error),
@@ -1852,13 +2299,15 @@ class _ChatScreenState extends State<ChatScreen> {
                   () async {
                 final messenger = ScaffoldMessenger.of(context);
                 Navigator.pop(context);
-                if (widget.isGroup) {
-                  await _groupService.recallMessageForEveryone(
-                      widget.receiverId, message.id);
-                } else {
-                  await _chatService.recallMessageForEveryone(
-                      widget.receiverId, message.id);
-                }
+                await _runWithScrollLock(() async {
+                  if (widget.isGroup) {
+                    await _groupService.recallMessageForEveryone(
+                        widget.receiverId, message.id);
+                  } else {
+                    await _chatService.recallMessageForEveryone(
+                        widget.receiverId, message.id);
+                  }
+                });
                 messenger.showSnackBar(SnackBar(
                     content: Text(l10n.chatRecalledForEveryoneSuccess)));
               }, color: AppColors.error),

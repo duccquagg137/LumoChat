@@ -47,6 +47,8 @@ dependencies:
   cloudinary_public: ^0.23.1
   google_sign_in: ^6.2.2
   shared_preferences: ^2.2.3
+  flutter_riverpod: ^2.6.1
+  firebase_messaging: ^15.0.0
 
 dev_dependencies:
   flutter_test:

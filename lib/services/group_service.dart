@@ -336,6 +336,13 @@ class GroupService {
       'recalledAt': Timestamp.now(),
       'reactions': FieldValue.delete(),
     });
+
+    final groupSnapshot = await _firestore.collection('groups').doc(groupId).get();
+    final groupData = groupSnapshot.data();
+    final pinned = groupData?['pinnedMessage'];
+    if (pinned is Map && pinned['messageId']?.toString() == messageId) {
+      await clearPinnedMessage(groupId);
+    }
   }
 
   Future<void> deleteMessage(String groupId, String messageId) async {
@@ -346,6 +353,34 @@ class GroupService {
     await _updateGroupMeta(groupId, {
       'pinned': pinned,
     });
+  }
+
+  Future<void> setPinnedMessage(
+    String groupId, {
+    required String messageId,
+    required String previewText,
+    required String messageType,
+    String? senderId,
+    String? senderName,
+  }) async {
+    await _firestore.collection('groups').doc(groupId).set({
+      'pinnedMessage': {
+        'messageId': messageId,
+        'previewText': previewText,
+        'messageType': messageType,
+        'senderId': senderId ?? '',
+        'senderName': senderName ?? '',
+        'pinnedBy': _currentUserId,
+        'pinnedByName': _currentUserName,
+        'pinnedAt': Timestamp.now(),
+      },
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> clearPinnedMessage(String groupId) async {
+    await _firestore.collection('groups').doc(groupId).set({
+      'pinnedMessage': FieldValue.delete(),
+    }, SetOptions(merge: true));
   }
 
   Future<int> markGroupMessagesRead(String groupId) async {
