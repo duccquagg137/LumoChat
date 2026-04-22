@@ -159,7 +159,7 @@ class AppTheme {
           textStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w500),
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.bgCard,
         elevation: 0,
         shape: RoundedRectangleBorder(
