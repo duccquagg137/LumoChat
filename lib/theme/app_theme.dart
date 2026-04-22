@@ -1,6 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+extension ColorAlphaFractionX on Color {
+  Color withAlphaFraction(double opacity) {
+    final clampedOpacity = opacity.clamp(0.0, 1.0).toDouble();
+    return Color.fromARGB(
+      (clampedOpacity * 255).round(),
+      red,
+      green,
+      blue,
+    );
+  }
+}
+
 class AppColors {
   // Primary
   static const primary = Color(0xFF7C3AED);
@@ -157,14 +169,6 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primaryLight,
           textStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w500),
-        ),
-      ),
-      cardTheme: CardThemeData(
-        color: AppColors.bgCard,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: AppColors.glassBorder),
         ),
       ),
     );

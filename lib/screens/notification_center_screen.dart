@@ -77,7 +77,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
         title: Text(
           _txt(
             context,
-            vi: 'Trung tâm thông báo',
+            vi: 'Trung tÃ¢m thÃ´ng bÃ¡o',
             en: 'Notification Center',
           ),
           style: const TextStyle(
@@ -91,7 +91,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
           TextButton(
             onPressed: _isMarkingAllRead ? null : _markAllAsRead,
             child: Text(
-              _txt(context, vi: 'Đọc tất cả', en: 'Read all'),
+              _txt(context, vi: 'Äá»c táº¥t cáº£', en: 'Read all'),
               style: TextStyle(
                 color: _isMarkingAllRead
                     ? AppColors.textMuted
@@ -111,7 +111,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
               child: Text(
                 _txt(
                   context,
-                  vi: 'Không tải được thông báo',
+                  vi: 'KhÃ´ng táº£i Ä‘Æ°á»£c thÃ´ng bÃ¡o',
                   en: 'Unable to load notifications',
                 ),
                 style: const TextStyle(color: AppColors.textMuted),
@@ -134,7 +134,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
               child: Text(
                 _txt(
                   context,
-                  vi: 'Chưa có thông báo nào',
+                  vi: 'ChÆ°a cÃ³ thÃ´ng bÃ¡o nÃ o',
                   en: 'No notifications yet',
                 ),
                 style: const TextStyle(
@@ -156,8 +156,8 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
                 margin: const EdgeInsets.only(bottom: 8),
                 decoration: BoxDecoration(
                   color: item.isRead
-                      ? AppColors.bgSurface.withOpacity(0.65)
-                      : AppColors.primary.withOpacity(0.08),
+                      ? AppColors.bgSurface.withAlphaFraction(0.65)
+                      : AppColors.primary.withAlphaFraction(0.08),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: AppColors.glassBorder),
                 ),
@@ -171,7 +171,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: iconColor.withOpacity(0.12),
+                      color: iconColor.withAlphaFraction(0.12),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(icon, color: iconColor, size: 20),

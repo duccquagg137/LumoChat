@@ -798,7 +798,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    AppColors.primary.withOpacity(0.1),
+                    AppColors.primary.withAlphaFraction(0.1),
                     Colors.transparent
                   ],
                 ),
@@ -1371,7 +1371,7 @@ class _ChatScreenState extends State<ChatScreen> {
       margin: const EdgeInsets.only(top: 4),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: AppColors.bgSurface.withOpacity(0.8),
+        color: AppColors.bgSurface.withAlphaFraction(0.8),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.glassBorder, width: 0.5),
       ),
@@ -1444,7 +1444,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return const Color(0xFF60A5FA);
     }
     return onDarkBackground
-        ? Colors.white.withOpacity(0.72)
+        ? Colors.white.withAlphaFraction(0.72)
         : AppColors.textMuted;
   }
 
@@ -1498,7 +1498,7 @@ class _ChatScreenState extends State<ChatScreen> {
         boxShadow: isSent
             ? [
                 BoxShadow(
-                  color: AppColors.primary.withOpacity(0.2),
+                  color: AppColors.primary.withAlphaFraction(0.2),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -1525,7 +1525,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 message.time,
                 style: TextStyle(
                   color: isSent
-                      ? Colors.white.withOpacity(0.7)
+                      ? Colors.white.withAlphaFraction(0.7)
                       : AppColors.textMuted,
                   fontSize: 11,
                   fontFamily: 'Inter',
@@ -1637,7 +1637,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.black.withAlphaFraction(0.5),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -1777,7 +1777,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primary.withOpacity(0.4),
+                          color: AppColors.primary.withAlphaFraction(0.4),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
@@ -2216,7 +2216,7 @@ class _ChatScreenState extends State<ChatScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         decoration: BoxDecoration(
-          color: AppColors.bgSurface.withOpacity(0.95),
+          color: AppColors.bgSurface.withAlphaFraction(0.95),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           border: Border.all(color: AppColors.glassBorder),
         ),
@@ -2228,7 +2228,7 @@ class _ChatScreenState extends State<ChatScreen> {
             if (!isDeletedMessage) ...[
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: ['❤️', '😂', '😮', '😢', '👍', '👎'].map((emoji) {
+                children: ['â¤ï¸', 'ðŸ˜‚', 'ðŸ˜®', 'ðŸ˜¢', 'ðŸ‘', 'ðŸ‘Ž'].map((emoji) {
                   return GestureDetector(
                     onTap: () async {
                       Navigator.pop(context);

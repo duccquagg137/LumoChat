@@ -32,7 +32,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String _gender = '';
   DateTime? _birthDate;
 
-  static const List<String> _genderOptions = ['Nam', 'Nữ', 'Khác', 'Không muốn chia sẻ'];
+  static const List<String> _genderOptions = ['Nam', 'Ná»¯', 'KhÃ¡c', 'KhÃ´ng muá»‘n chia sáº»'];
 
   @override
   void initState() {
@@ -73,7 +73,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi chọn ảnh: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lá»—i chá»n áº£nh: $e')));
     }
   }
 
@@ -92,7 +92,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   String _formatBirthDate() {
-    if (_birthDate == null) return 'Chọn ngày sinh';
+    if (_birthDate == null) return 'Chá»n ngÃ y sinh';
     final dd = _birthDate!.day.toString().padLeft(2, '0');
     final mm = _birthDate!.month.toString().padLeft(2, '0');
     final yyyy = _birthDate!.year.toString();
@@ -102,7 +102,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _saveProfile() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tên không được để trống')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('TÃªn khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng')));
       return;
     }
 
@@ -142,10 +142,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       if (!mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cập nhật hồ sơ thành công')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cáº­p nháº­t há»“ sÆ¡ thÃ nh cÃ´ng')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi cập nhật: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lá»—i cáº­p nháº­t: $e')));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -170,7 +170,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [AppColors.primary.withOpacity(0.15), Colors.transparent],
+                  colors: [AppColors.primary.withAlphaFraction(0.15), Colors.transparent],
                 ),
               ),
             ),
@@ -188,7 +188,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       ),
                       const Expanded(
                         child: Text(
-                          'Chỉnh sửa hồ sơ',
+                          'Chá»‰nh sá»­a há»“ sÆ¡',
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
@@ -250,25 +250,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               ),
                             ),
                           const SizedBox(height: 24),
-                          _buildInput(Icons.person_outline_rounded, 'Tên hiển thị', _nameController),
+                          _buildInput(Icons.person_outline_rounded, 'TÃªn hiá»ƒn thá»‹', _nameController),
                           const SizedBox(height: 12),
                           _buildInput(
                             Icons.info_outline_rounded,
-                            'Giới thiệu bản thân',
+                            'Giá»›i thiá»‡u báº£n thÃ¢n',
                             _bioController,
                             maxLines: 3,
                           ),
                           const SizedBox(height: 12),
                           _buildInput(
                             Icons.phone_outlined,
-                            'Số điện thoại',
+                            'Sá»‘ Ä‘iá»‡n thoáº¡i',
                             _phoneController,
                             keyboardType: TextInputType.phone,
                           ),
                           const SizedBox(height: 12),
-                          _buildInput(Icons.location_on_outlined, 'Địa chỉ', _addressController),
+                          _buildInput(Icons.location_on_outlined, 'Äá»‹a chá»‰', _addressController),
                           const SizedBox(height: 12),
-                          _buildInput(Icons.location_city_outlined, 'Thành phố', _cityController),
+                          _buildInput(Icons.location_city_outlined, 'ThÃ nh phá»‘', _cityController),
                           const SizedBox(height: 12),
                           _buildGenderField(),
                           const SizedBox(height: 12),
@@ -276,7 +276,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           const SizedBox(height: 12),
                           _buildInput(
                             Icons.work_outline_rounded,
-                            'Nghề nghiệp',
+                            'Nghá» nghiá»‡p',
                             _occupationController,
                           ),
                           const SizedBox(height: 12),
@@ -290,7 +290,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           _isLoading
                               ? const CircularProgressIndicator(color: AppColors.primary)
                               : GradientButton(
-                                  text: 'Lưu thay đổi',
+                                  text: 'LÆ°u thay Ä‘á»•i',
                                   width: double.infinity,
                                   onPressed: _saveProfile,
                                 ),
@@ -310,7 +310,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget _buildGenderField() {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.bgCard.withOpacity(0.5),
+        color: AppColors.bgCard.withAlphaFraction(0.5),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.glassBorder),
       ),
@@ -318,7 +318,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: _gender.isEmpty ? null : _gender,
-          hint: const Text('Giới tính', style: TextStyle(color: AppColors.textMuted)),
+          hint: const Text('Giá»›i tÃ­nh', style: TextStyle(color: AppColors.textMuted)),
           isExpanded: true,
           dropdownColor: AppColors.bgSurface,
           style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
@@ -341,7 +341,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         decoration: BoxDecoration(
-          color: AppColors.bgCard.withOpacity(0.5),
+          color: AppColors.bgCard.withAlphaFraction(0.5),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.glassBorder),
         ),
@@ -374,7 +374,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.bgCard.withOpacity(0.5),
+        color: AppColors.bgCard.withAlphaFraction(0.5),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.glassBorder),
       ),

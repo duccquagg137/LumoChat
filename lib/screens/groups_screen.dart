@@ -318,17 +318,17 @@ class _GroupsScreenState extends State<GroupsScreen> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
-                              color: AppColors.glassBorder.withOpacity(0.5)),
+                              color: AppColors.glassBorder.withAlphaFraction(0.5)),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
-                              color: AppColors.glassBorder.withOpacity(0.5)),
+                              color: AppColors.glassBorder.withAlphaFraction(0.5)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
-                              color: AppColors.primary.withOpacity(0.7)),
+                              color: AppColors.primary.withAlphaFraction(0.7)),
                         ),
                       ),
                     ),
@@ -510,7 +510,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
       builder: (sheetContext) {
         return Container(
           decoration: BoxDecoration(
-            color: AppColors.bgSurface.withOpacity(0.95),
+            color: AppColors.bgSurface.withAlphaFraction(0.95),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             border: Border.all(color: AppColors.glassBorder),
           ),
@@ -591,7 +591,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    AppColors.primary.withOpacity(0.12),
+                    AppColors.primary.withAlphaFraction(0.12),
                     Colors.transparent
                   ],
                 ),
@@ -641,7 +641,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: AppColors.bgCard.withOpacity(0.5),
+                      color: AppColors.bgCard.withAlphaFraction(0.5),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: AppColors.glassBorder),
                     ),
@@ -826,7 +826,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                                       horizontal: 20),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(16),
-                                    color: AppColors.primary.withOpacity(0.2),
+                                    color: AppColors.primary.withAlphaFraction(0.2),
                                   ),
                                   alignment: Alignment.centerLeft,
                                   child: Row(
@@ -855,7 +855,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                                       horizontal: 20),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(16),
-                                    color: AppColors.error.withOpacity(0.18),
+                                    color: AppColors.error.withAlphaFraction(0.18),
                                   ),
                                   alignment: Alignment.centerRight,
                                   child: Row(
@@ -913,7 +913,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                        color: AppColors.primary.withOpacity(0.4),
+                        color: AppColors.primary.withAlphaFraction(0.4),
                         blurRadius: 20,
                         offset: const Offset(0, 8)),
                   ],
@@ -941,12 +941,12 @@ class _GroupsScreenState extends State<GroupsScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: selected
-                ? AppColors.primary.withOpacity(0.2)
+                ? AppColors.primary.withAlphaFraction(0.2)
                 : AppColors.glassBg,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: selected
-                  ? AppColors.primary.withOpacity(0.4)
+                  ? AppColors.primary.withAlphaFraction(0.4)
                   : AppColors.glassBorder,
             ),
           ),
@@ -977,7 +977,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
     required bool isPinned,
   }) {
     final l10n = context.l10n;
-    final subtitle = '${l10n.groupsMemberCount(memberCount)} • $lastMessage';
+    final subtitle = '${l10n.groupsMemberCount(memberCount)} â€¢ $lastMessage';
     final hasUnread = unreadCount > 0;
 
     return GestureDetector(
@@ -1001,7 +1001,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           color: hasUnread
-              ? AppColors.primary.withOpacity(0.06)
+              ? AppColors.primary.withAlphaFraction(0.06)
               : Colors.transparent,
         ),
         child: Row(

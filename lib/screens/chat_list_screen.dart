@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -144,7 +144,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
       builder: (sheetContext) {
         return Container(
           decoration: BoxDecoration(
-            color: AppColors.bgSurface.withOpacity(0.95),
+            color: AppColors.bgSurface.withAlphaFraction(0.95),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             border: Border.all(color: AppColors.glassBorder),
           ),
@@ -218,7 +218,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [AppColors.primary.withOpacity(0.12), Colors.transparent],
+                  colors: [AppColors.primary.withAlphaFraction(0.12), Colors.transparent],
                 ),
               ),
             ),
@@ -252,7 +252,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: AppColors.bgCard.withOpacity(0.5),
+                      color: AppColors.bgCard.withAlphaFraction(0.5),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: AppColors.glassBorder),
                     ),
@@ -455,7 +455,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                                           padding: const EdgeInsets.symmetric(horizontal: 20),
                                           decoration: BoxDecoration(
                                             borderRadius: BorderRadius.circular(16),
-                                            color: AppColors.primary.withOpacity(0.2),
+                                            color: AppColors.primary.withAlphaFraction(0.2),
                                           ),
                                           alignment: Alignment.centerLeft,
                                           child: Row(
@@ -477,7 +477,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                                           padding: const EdgeInsets.symmetric(horizontal: 20),
                                           decoration: BoxDecoration(
                                             borderRadius: BorderRadius.circular(16),
-                                            color: AppColors.error.withOpacity(0.18),
+                                            color: AppColors.error.withAlphaFraction(0.18),
                                           ),
                                           alignment: Alignment.centerRight,
                                           child: Row(
@@ -551,7 +551,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: hasUnread ? AppColors.primary.withOpacity(0.06) : Colors.transparent,
+          color: hasUnread ? AppColors.primary.withAlphaFraction(0.06) : Colors.transparent,
         ),
         child: Row(
           children: [

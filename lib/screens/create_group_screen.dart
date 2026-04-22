@@ -206,7 +206,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    AppColors.primary.withOpacity(0.15),
+                    AppColors.primary.withAlphaFraction(0.15),
                     Colors.transparent
                   ],
                 ),
@@ -246,7 +246,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                               ? AppGradients.primary
                               : null,
                           color: _selectedIds.isEmpty
-                              ? AppColors.textMuted.withOpacity(0.3)
+                              ? AppColors.textMuted.withAlphaFraction(0.3)
                               : null,
                           borderRadius: BorderRadius.circular(20),
                         ),
@@ -354,7 +354,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
                                             color: AppColors.primary
-                                                .withOpacity(0.15),
+                                                .withAlphaFraction(0.15),
                                             border: Border.all(
                                                 color: AppColors.glassBorder,
                                                 width: 1.5),
@@ -382,7 +382,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                                   height: 80,
                                                   decoration: BoxDecoration(
                                                     color: Colors.black
-                                                        .withOpacity(0.35),
+                                                        .withAlphaFraction(0.35),
                                                     shape: BoxShape.circle,
                                                   ),
                                                   child: const Center(
@@ -469,12 +469,12 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                             horizontal: 12, vertical: 8),
                                         decoration: BoxDecoration(
                                           color: AppColors.primary
-                                              .withOpacity(0.15),
+                                              .withAlphaFraction(0.15),
                                           borderRadius:
                                               BorderRadius.circular(20),
                                           border: Border.all(
                                               color: AppColors.primary
-                                                  .withOpacity(0.3)),
+                                                  .withAlphaFraction(0.3)),
                                         ),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
@@ -512,7 +512,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                 ],
                                 Container(
                                   decoration: BoxDecoration(
-                                    color: AppColors.bgCard.withOpacity(0.5),
+                                    color: AppColors.bgCard.withAlphaFraction(0.5),
                                     borderRadius: BorderRadius.circular(16),
                                     border: Border.all(
                                         color: AppColors.glassBorder),
@@ -584,7 +584,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                         borderRadius: BorderRadius.circular(12),
                                         color: isSelected
                                             ? AppColors.primary
-                                                .withOpacity(0.08)
+                                                .withAlphaFraction(0.08)
                                             : Colors.transparent,
                                       ),
                                       child: Row(
@@ -710,7 +710,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.bgCard.withOpacity(0.5),
+        color: AppColors.bgCard.withAlphaFraction(0.5),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.glassBorder),
       ),

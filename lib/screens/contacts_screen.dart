@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -214,7 +214,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
-                          colors: [AppColors.primary.withOpacity(0.12), Colors.transparent],
+                          colors: [AppColors.primary.withAlphaFraction(0.12), Colors.transparent],
                         ),
                       ),
                     ),
@@ -253,7 +253,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                           child: Container(
                             decoration: BoxDecoration(
-                              color: AppColors.bgCard.withOpacity(0.5),
+                              color: AppColors.bgCard.withAlphaFraction(0.5),
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(color: AppColors.glassBorder),
                             ),
@@ -641,8 +641,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
         child: GlassCard(
           padding: const EdgeInsets.symmetric(vertical: 14),
           borderRadius: 16,
-          backgroundColor: isActive ? AppColors.primary.withOpacity(0.2) : null,
-          border: isActive ? Border.all(color: AppColors.primary.withOpacity(0.45), width: 0.8) : null,
+          backgroundColor: isActive ? AppColors.primary.withAlphaFraction(0.2) : null,
+          border: isActive ? Border.all(color: AppColors.primary.withAlphaFraction(0.45), width: 0.8) : null,
           child: Stack(
             alignment: Alignment.center,
             children: [
@@ -682,10 +682,10 @@ class _ContactsScreenState extends State<ContactsScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: selected ? AppColors.primary.withOpacity(0.2) : AppColors.glassBg,
+            color: selected ? AppColors.primary.withAlphaFraction(0.2) : AppColors.glassBg,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: selected ? AppColors.primary.withOpacity(0.4) : AppColors.glassBorder,
+              color: selected ? AppColors.primary.withAlphaFraction(0.4) : AppColors.glassBorder,
             ),
           ),
           child: Text(
@@ -744,9 +744,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(0.15),
+          color: AppColors.primary.withAlphaFraction(0.15),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.primary.withOpacity(0.35)),
+          border: Border.all(color: AppColors.primary.withAlphaFraction(0.35)),
         ),
         child: Text(
           label,

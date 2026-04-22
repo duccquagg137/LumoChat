@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -137,33 +137,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            RadioListTile<String>(
+            _buildLanguageOption(
+              dialogContext: dialogContext,
               value: 'vi',
-              groupValue: currentCode,
-              onChanged: (value) {
-                if (value == null) return;
-                Navigator.pop(dialogContext);
-                _setLanguage(value);
-              },
-              activeColor: AppColors.primary,
-              title: Text(
-                l10n.profileLanguageVietnamese,
-                style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
-              ),
+              currentValue: currentCode,
+              title: l10n.profileLanguageVietnamese,
             ),
-            RadioListTile<String>(
+            _buildLanguageOption(
+              dialogContext: dialogContext,
               value: 'en',
-              groupValue: currentCode,
-              onChanged: (value) {
-                if (value == null) return;
-                Navigator.pop(dialogContext);
-                _setLanguage(value);
-              },
-              activeColor: AppColors.primary,
-              title: Text(
-                l10n.profileLanguageEnglish,
-                style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
-              ),
+              currentValue: currentCode,
+              title: l10n.profileLanguageEnglish,
             ),
           ],
         ),
@@ -184,6 +168,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         : l10n.profileLanguageVietnamese;
   }
 
+  Widget _buildLanguageOption({
+    required BuildContext dialogContext,
+    required String value,
+    required String currentValue,
+    required String title,
+  }) {
+    final selected = currentValue == value;
+    return ListTile(
+      onTap: () {
+        Navigator.pop(dialogContext);
+        _setLanguage(value);
+      },
+      contentPadding: EdgeInsets.zero,
+      minLeadingWidth: 24,
+      leading: Icon(
+        selected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+        color: selected ? AppColors.primary : AppColors.textMuted,
+        size: 22,
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -201,7 +211,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [AppColors.primary.withOpacity(0.15), Colors.transparent],
+                  colors: [AppColors.primary.withAlphaFraction(0.15), Colors.transparent],
                 ),
               ),
             ),
@@ -457,7 +467,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       _buildSection(
                         _txt(
                           context,
-                          vi: 'Lịch sử cuộc gọi',
+                          vi: 'L?ch s? cu?c g?i',
                           en: 'Call history',
                         ),
                         [
@@ -473,7 +483,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           Icons.notifications_active_outlined,
                           _txt(
                             context,
-                            vi: 'Trung tâm thông báo',
+                            vi: 'Trung tÃ¢m thÃ´ng bÃ¡o',
                             en: 'Notification Center',
                           ),
                           onTap: () {
@@ -577,7 +587,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             child: Text(
               _txt(
                 context,
-                vi: 'Không tải được lịch sử cuộc gọi',
+                vi: 'KhÃ´ng t?i du?c l?ch s? cu?c g?i',
                 en: 'Unable to load call history',
               ),
               style: const TextStyle(
@@ -617,7 +627,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             child: Text(
               _txt(
                 context,
-                vi: 'Chưa có cuộc gọi nào',
+                vi: 'Chua cÃ³ cu?c g?i nÃ o',
                 en: 'No calls yet',
               ),
               style: const TextStyle(
@@ -658,7 +668,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         call.status == CallStatus.declined ||
         call.status == CallStatus.cancelled;
     final iconColor = isFailed ? AppColors.error : AppColors.primaryLight;
-    final subtitle = '${_callHistoryStatus(call, isIncoming)} • ${_formatCallTime(call.createdAt)}';
+    final subtitle = '${_callHistoryStatus(call, isIncoming)} â€¢ ${_formatCallTime(call.createdAt)}';
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
@@ -667,7 +677,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: iconColor.withOpacity(0.12),
+          color: iconColor.withAlphaFraction(0.12),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: iconColor, size: 20),
@@ -696,25 +706,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     switch (call.status) {
       case CallStatus.missed:
         return isIncoming
-            ? _txt(context, vi: 'Cuộc gọi nhỡ', en: 'Missed call')
-            : _txt(context, vi: 'Không trả lời', en: 'No answer');
+            ? _txt(context, vi: 'Cu?c g?i nh?', en: 'Missed call')
+            : _txt(context, vi: 'KhÃ´ng tr? l?i', en: 'No answer');
       case CallStatus.declined:
         return isIncoming
-            ? _txt(context, vi: 'Bạn đã từ chối', en: 'You declined')
-            : _txt(context, vi: 'Đã bị từ chối', en: 'Declined');
+            ? _txt(context, vi: 'B?n dÃ£ t? ch?i', en: 'You declined')
+            : _txt(context, vi: 'ÃÃ£ b? t? ch?i', en: 'Declined');
       case CallStatus.cancelled:
         return isIncoming
-            ? _txt(context, vi: 'Đã bị hủy', en: 'Canceled')
-            : _txt(context, vi: 'Bạn đã hủy', en: 'You canceled');
+            ? _txt(context, vi: 'ÃÃ£ b? h?y', en: 'Canceled')
+            : _txt(context, vi: 'B?n dÃ£ h?y', en: 'You canceled');
       case CallStatus.accepted:
       case CallStatus.ended:
         return isIncoming
-            ? _txt(context, vi: 'Cuộc gọi đến', en: 'Incoming')
-            : _txt(context, vi: 'Cuộc gọi đi', en: 'Outgoing');
+            ? _txt(context, vi: 'Cu?c g?i d?n', en: 'Incoming')
+            : _txt(context, vi: 'Cu?c g?i di', en: 'Outgoing');
       case CallStatus.ringing:
-        return _txt(context, vi: 'Đang đổ chuông', en: 'Ringing');
+        return _txt(context, vi: 'Ãang d? chuÃ´ng', en: 'Ringing');
       case CallStatus.unknown:
-        return _txt(context, vi: 'Không xác định', en: 'Unknown');
+        return _txt(context, vi: 'KhÃ´ng xÃ¡c d?nh', en: 'Unknown');
     }
   }
 
@@ -777,7 +787,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(0.1),
+          color: AppColors.primary.withAlphaFraction(0.1),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: AppColors.primaryLight, size: 20),
@@ -811,7 +821,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(0.1),
+          color: AppColors.primary.withAlphaFraction(0.1),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: AppColors.primaryLight, size: 20),
@@ -841,7 +851,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(0.1),
+          color: AppColors.primary.withAlphaFraction(0.1),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: AppColors.primaryLight, size: 20),
@@ -853,8 +863,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       trailing: Switch(
         value: value,
         onChanged: onChanged,
-        activeColor: AppColors.primary,
-        inactiveTrackColor: AppColors.textMuted.withOpacity(0.3),
+        inactiveTrackColor: AppColors.textMuted.withAlphaFraction(0.3),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       dense: true,

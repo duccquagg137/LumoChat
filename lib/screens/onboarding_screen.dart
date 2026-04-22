@@ -35,12 +35,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         icon: Icons.chat_bubble_rounded,
         title: _txt(
           context,
-          vi: 'Nhắn tin siêu nhanh',
+          vi: 'Nháº¯n tin siÃªu nhanh',
           en: 'Lightning-fast messaging',
         ),
         subtitle: _txt(
           context,
-          vi: 'Gửi và nhận tin nhắn tức thì\nvới trải nghiệm mượt mà.',
+          vi: 'Gá»­i vÃ  nháº­n tin nháº¯n tá»©c thÃ¬\nvá»›i tráº£i nghiá»‡m mÆ°á»£t mÃ .',
           en: 'Send and receive messages instantly\nwith a smooth experience.',
         ),
         gradient: const [Color(0xFF7C3AED), Color(0xFF9333EA)],
@@ -49,12 +49,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         icon: Icons.group_rounded,
         title: _txt(
           context,
-          vi: 'Nhóm trò chuyện linh hoạt',
+          vi: 'NhÃ³m trÃ² chuyá»‡n linh hoáº¡t',
           en: 'Flexible group conversations',
         ),
         subtitle: _txt(
           context,
-          vi: 'Tạo nhóm, quản lý thành viên\nvà đồng bộ theo thời gian thực.',
+          vi: 'Táº¡o nhÃ³m, quáº£n lÃ½ thÃ nh viÃªn\nvÃ  Ä‘á»“ng bá»™ theo thá»i gian thá»±c.',
           en: 'Create groups, manage members,\nand stay synced in real time.',
         ),
         gradient: const [Color(0xFF3B82F6), Color(0xFF6366F1)],
@@ -63,12 +63,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         icon: Icons.shield_rounded,
         title: _txt(
           context,
-          vi: 'Bảo mật dữ liệu',
+          vi: 'Báº£o máº­t dá»¯ liá»‡u',
           en: 'Data security first',
         ),
         subtitle: _txt(
           context,
-          vi: 'Kiểm soát quyền truy cập rõ ràng\nvà giảm rủi ro truy cập chéo.',
+          vi: 'Kiá»ƒm soÃ¡t quyá»n truy cáº­p rÃµ rÃ ng\nvÃ  giáº£m rá»§i ro truy cáº­p chÃ©o.',
           en: 'Clear access control\nwith reduced cross-user risk.',
         ),
         gradient: const [Color(0xFF10B981), Color(0xFF059669)],
@@ -112,7 +112,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    AppColors.primary.withOpacity(0.2),
+                    AppColors.primary.withAlphaFraction(0.2),
                     Colors.transparent
                   ],
                 ),
@@ -129,7 +129,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    AppColors.primaryLight.withOpacity(0.15),
+                    AppColors.primaryLight.withAlphaFraction(0.15),
                     Colors.transparent
                   ],
                 ),
@@ -144,7 +144,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: TextButton(
                     onPressed: _isNavigating ? null : _finishOnboarding,
                     child: Text(
-                      _txt(context, vi: 'Bỏ qua', en: 'Skip'),
+                      _txt(context, vi: 'Bá» qua', en: 'Skip'),
                       style: const TextStyle(color: AppColors.textSecondary),
                     ),
                   ),
@@ -170,7 +170,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 borderRadius: BorderRadius.circular(36),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: page.gradient.first.withOpacity(0.4),
+                                    color: page.gradient.first.withAlphaFraction(0.4),
                                     blurRadius: 36,
                                     offset: const Offset(0, 14),
                                   ),
@@ -228,7 +228,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 borderRadius: BorderRadius.circular(8),
                                 color: active
                                     ? AppColors.primary
-                                    : AppColors.textMuted.withOpacity(0.28),
+                                    : AppColors.textMuted.withAlphaFraction(0.28),
                               ),
                             );
                           }),
@@ -237,8 +237,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         GradientButton(
                           text: isLastPage
                               ? _txt(context,
-                                  vi: 'Bắt đầu ngay', en: 'Get started')
-                              : _txt(context, vi: 'Tiếp theo', en: 'Continue'),
+                                  vi: 'Báº¯t Ä‘áº§u ngay', en: 'Get started')
+                              : _txt(context, vi: 'Tiáº¿p theo', en: 'Continue'),
                           icon: isLastPage
                               ? Icons.rocket_launch_rounded
                               : Icons.arrow_forward_rounded,

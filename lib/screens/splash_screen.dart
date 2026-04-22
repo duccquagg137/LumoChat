@@ -110,7 +110,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withOpacity(0.35),
+                      color: AppColors.primary.withAlphaFraction(0.35),
                       blurRadius: 24,
                       offset: const Offset(0, 10),
                     ),
@@ -139,7 +139,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 child: CircularProgressIndicator(
                   strokeWidth: 2.2,
                   valueColor: AlwaysStoppedAnimation(
-                    AppColors.primaryLight.withOpacity(0.85),
+                    AppColors.primaryLight.withAlphaFraction(0.85),
                   ),
                 ),
               ),

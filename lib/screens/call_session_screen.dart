@@ -681,7 +681,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          AppColors.primary.withOpacity(0.25),
+                          AppColors.primary.withAlphaFraction(0.25),
                           Colors.transparent,
                         ],
                       ),
@@ -698,7 +698,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          AppColors.accent.withOpacity(0.18),
+                          AppColors.accent.withAlphaFraction(0.18),
                           Colors.transparent,
                         ],
                       ),
@@ -833,7 +833,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            AppColors.primary.withOpacity(0.25),
+                            AppColors.primary.withAlphaFraction(0.25),
                             AppColors.bgCard,
                           ],
                           begin: Alignment.topLeft,
@@ -883,7 +883,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
             if (!_rtcReady)
               Positioned.fill(
                 child: Container(
-                  color: Colors.black.withOpacity(0.35),
+                  color: Colors.black.withAlphaFraction(0.35),
                   child: const Center(
                     child: CircularProgressIndicator(
                         color: AppColors.primaryLight),
@@ -1049,7 +1049,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: color.withOpacity(0.45),
+                  color: color.withAlphaFraction(0.45),
                   blurRadius: 20,
                   offset: const Offset(0, 10),
                 ),

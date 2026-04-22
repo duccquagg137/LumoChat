@@ -229,7 +229,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [AppColors.primary.withOpacity(0.25), Colors.transparent],
+                  colors: [AppColors.primary.withAlphaFraction(0.25), Colors.transparent],
                 ),
               ),
             ),
@@ -241,7 +241,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [AppColors.primaryLight.withOpacity(0.15), Colors.transparent],
+                  colors: [AppColors.primaryLight.withAlphaFraction(0.15), Colors.transparent],
                 ),
               ),
             ),
@@ -261,7 +261,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primary.withOpacity(0.4),
+                          color: AppColors.primary.withAlphaFraction(0.4),
                           blurRadius: 30, offset: const Offset(0, 10),
                         ),
                       ],
@@ -285,7 +285,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     child: Row(
                       children: [
                         _buildModeTab('Email', AuthMode.email),
-                        _buildModeTab('Số điện thoại', AuthMode.phone),
+                        _buildModeTab('Sá»‘ Ä‘iá»‡n thoáº¡i', AuthMode.phone),
                       ],
                     ),
                   ),
@@ -298,12 +298,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   // Divider
                   Row(
                     children: [
-                      Expanded(child: Divider(color: AppColors.textMuted.withOpacity(0.3))),
+                      Expanded(child: Divider(color: AppColors.textMuted.withAlphaFraction(0.3))),
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Text('hoặc', style: TextStyle(color: AppColors.textMuted, fontSize: 13, fontFamily: 'Inter')),
+                        child: Text('hoáº·c', style: TextStyle(color: AppColors.textMuted, fontSize: 13, fontFamily: 'Inter')),
                       ),
-                      Expanded(child: Divider(color: AppColors.textMuted.withOpacity(0.3))),
+                      Expanded(child: Divider(color: AppColors.textMuted.withAlphaFraction(0.3))),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -370,23 +370,23 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             labelColor: AppColors.primaryLight,
             unselectedLabelColor: AppColors.textSecondary,
             labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontFamily: 'Inter'),
-            tabs: const [Tab(text: 'Đăng nhập'), Tab(text: 'Đăng ký')],
+            tabs: const [Tab(text: 'ÄÄƒng nháº­p'), Tab(text: 'ÄÄƒng kÃ½')],
           ),
           const SizedBox(height: 20),
           if (!_isLogin) ...[
-            _buildInput(Icons.person_outline_rounded, 'Họ và tên', controller: _nameController),
+            _buildInput(Icons.person_outline_rounded, 'Há» vÃ  tÃªn', controller: _nameController),
             const SizedBox(height: 16),
           ],
           _buildInput(Icons.email_outlined, 'Email', controller: _emailController, keyboardType: TextInputType.emailAddress),
           const SizedBox(height: 16),
           _buildInput(
-            Icons.lock_outline_rounded, 'Mật khẩu',
+            Icons.lock_outline_rounded, 'Máº­t kháº©u',
             isPassword: true, controller: _passwordController,
           ),
           if (!_isLogin) ...[
             const SizedBox(height: 16),
             _buildInput(
-              Icons.lock_outline_rounded, 'Xác nhận mật khẩu',
+              Icons.lock_outline_rounded, 'XÃ¡c nháº­n máº­t kháº©u',
               isPassword: true, controller: _confirmPasswordController,
             ),
           ],
@@ -396,7 +396,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: () {},
-                child: const Text('Quên mật khẩu?', style: TextStyle(color: AppColors.primaryLight, fontSize: 13, fontFamily: 'Inter')),
+                child: const Text('QuÃªn máº­t kháº©u?', style: TextStyle(color: AppColors.primaryLight, fontSize: 13, fontFamily: 'Inter')),
               ),
             ),
           ],
@@ -404,7 +404,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           _isLoading 
               ? const CircularProgressIndicator(color: AppColors.primary)
               : GradientButton(
-                  text: _isLogin ? 'Đăng nhập' : 'Đăng ký',
+                  text: _isLogin ? 'ÄÄƒng nháº­p' : 'ÄÄƒng kÃ½',
                   width: double.infinity,
                   onPressed: _submitEmailAuth,
                 ),
@@ -419,14 +419,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       child: Column(
         children: [
           Text(
-            _isCodeSent ? 'Nhập mã xác nhận' : 'Đăng nhập bằng số điện thoại',
+            _isCodeSent ? 'Nháº­p mÃ£ xÃ¡c nháº­n' : 'ÄÄƒng nháº­p báº±ng sá»‘ Ä‘iá»‡n thoáº¡i',
             style: const TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700, fontFamily: 'Inter'),
           ),
           const SizedBox(height: 8),
           Text(
             _isCodeSent 
-              ? 'Mã OTP đã được gửi đến số điện thoại của bạn'
-              : 'Chúng tôi sẽ gửi mã OTP để xác minh',
+              ? 'MÃ£ OTP Ä‘Ã£ Ä‘Æ°á»£c gá»­i Ä‘áº¿n sá»‘ Ä‘iá»‡n thoáº¡i cá»§a báº¡n'
+              : 'ChÃºng tÃ´i sáº½ gá»­i mÃ£ OTP Ä‘á»ƒ xÃ¡c minh',
             style: const TextStyle(color: AppColors.textMuted, fontSize: 13, fontFamily: 'Inter'),
             textAlign: TextAlign.center,
           ),
@@ -434,13 +434,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           
           if (!_isCodeSent)
             _buildInput(
-              Icons.phone_outlined, 'Số điện thoại', 
+              Icons.phone_outlined, 'Sá»‘ Ä‘iá»‡n thoáº¡i', 
               controller: _phoneController, 
               keyboardType: TextInputType.phone,
             )
           else
             _buildInput(
-              Icons.password_rounded, 'Mã OTP 6 chữ số', 
+              Icons.password_rounded, 'MÃ£ OTP 6 chá»¯ sá»‘', 
               controller: _otpController, 
               keyboardType: TextInputType.number,
             ),
@@ -450,7 +450,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           _isLoading 
               ? const CircularProgressIndicator(color: AppColors.primary)
               : GradientButton(
-                  text: _isCodeSent ? 'Xác nhận' : 'Gửi mã OTP',
+                  text: _isCodeSent ? 'XÃ¡c nháº­n' : 'Gá»­i mÃ£ OTP',
                   width: double.infinity,
                   onPressed: _isCodeSent ? _verifyOTP : _sendPhoneCode,
                 ),
@@ -459,7 +459,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             const SizedBox(height: 16),
             TextButton(
               onPressed: () => setState(() => _isCodeSent = false),
-              child: const Text('Thay đổi số điện thoại', style: TextStyle(color: AppColors.textSecondary)),
+              child: const Text('Thay Ä‘á»•i sá»‘ Ä‘iá»‡n thoáº¡i', style: TextStyle(color: AppColors.textSecondary)),
             ),
           ]
         ],
@@ -474,7 +474,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.bgCard.withOpacity(0.5),
+        color: AppColors.bgCard.withAlphaFraction(0.5),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.glassBorder),
       ),

@@ -73,7 +73,7 @@ class GlowOrb extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: RadialGradient(
-            colors: [color.withOpacity(0.3), color.withOpacity(0)],
+            colors: [color.withAlphaFraction(0.3), color.withAlphaFraction(0)],
           ),
         ),
       ),
@@ -113,7 +113,7 @@ class GradientButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(50),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.4),
+            color: AppColors.primary.withAlphaFraction(0.4),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -244,7 +244,7 @@ class AvatarWidget extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: LinearGradient(
-              colors: [colors[colorIndex], colors[colorIndex].withOpacity(0.7)],
+              colors: [colors[colorIndex], colors[colorIndex].withAlphaFraction(0.7)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),

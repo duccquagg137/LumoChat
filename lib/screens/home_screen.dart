@@ -186,7 +186,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     color: isActive
-                        ? AppColors.primary.withOpacity(0.15)
+                        ? AppColors.primary.withAlphaFraction(0.15)
                         : Colors.transparent,
                   ),
                   child: Icon(
