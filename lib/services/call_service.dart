@@ -46,6 +46,10 @@ class CallService {
           'updatedAt': now,
           'acceptedAt': null,
           'endedAt': null,
+          'offer': null,
+          'answer': null,
+          'callerCandidates': const <Map<String, dynamic>>[],
+          'calleeCandidates': const <Map<String, dynamic>>[],
         });
       },
     );
@@ -80,6 +84,10 @@ class CallService {
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> watchCall(String callId) {
     return _calls.doc(callId).snapshots();
+  }
+
+  Future<AppCall?> getCallById(String callId) {
+    return _readCall(callId);
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> watchCallHistory() {
@@ -143,6 +151,41 @@ class CallService {
 
   Future<void> endCall(String callId) {
     return _completeCall(callId: callId, status: CallStatus.ended);
+  }
+
+  Future<void> setOffer({
+    required String callId,
+    required Map<String, dynamic> offer,
+  }) async {
+    if (callId.isEmpty || currentUserId.isEmpty) return;
+    await _calls.doc(callId).set({
+      'offer': offer,
+      'updatedAt': Timestamp.now(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> setAnswer({
+    required String callId,
+    required Map<String, dynamic> answer,
+  }) async {
+    if (callId.isEmpty || currentUserId.isEmpty) return;
+    await _calls.doc(callId).set({
+      'answer': answer,
+      'updatedAt': Timestamp.now(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> addIceCandidate({
+    required String callId,
+    required bool isCallerSide,
+    required Map<String, dynamic> candidate,
+  }) async {
+    if (callId.isEmpty || currentUserId.isEmpty) return;
+    final key = isCallerSide ? 'callerCandidates' : 'calleeCandidates';
+    await _calls.doc(callId).set({
+      key: FieldValue.arrayUnion([candidate]),
+      'updatedAt': Timestamp.now(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> _completeCall({

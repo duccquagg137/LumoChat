@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'firebase_options.dart';
 import 'screens/splash_screen.dart';
 import 'services/app_locale_controller.dart';
+import 'services/app_navigator.dart';
 import 'services/app_providers.dart';
 import 'theme/app_theme.dart';
 
@@ -60,6 +61,7 @@ class LumoChatApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final locale = ref.watch(appLocaleProvider);
     return MaterialApp(
+      navigatorKey: appNavigatorKey,
       locale: locale,
       onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
       debugShowCheckedModeBanner: false,

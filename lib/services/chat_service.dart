@@ -4,11 +4,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'notification_service.dart';
 import '../utils/retry_policy.dart';
 
 class ChatService {
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
   FirebaseAuth get _auth => FirebaseAuth.instance;
+  final NotificationService _notificationService = NotificationService();
 
   static const int _batchSize = 400;
 
@@ -78,6 +80,12 @@ class ChatService {
         await markConversationVisible(receiverId);
       },
     );
+
+    await _notifyDirectMessage(
+      receiverId: receiverId,
+      messageId: messageRef.id,
+      bodyText: text.trim(),
+    );
   }
 
   Future<void> sendImageMessage(String receiverId, File imageFile, {String? replyTo}) async {
@@ -124,6 +132,50 @@ class ChatService {
         await markConversationVisible(receiverId);
       },
     );
+
+    await _notifyDirectMessage(
+      receiverId: receiverId,
+      messageId: messageRef.id,
+      bodyText: '📷 Image',
+    );
+  }
+
+  Future<void> _notifyDirectMessage({
+    required String receiverId,
+    required String messageId,
+    required String bodyText,
+  }) async {
+    if (receiverId.isEmpty || receiverId == _currentUserId) return;
+    final senderName = _resolveSenderName();
+    final roomId = buildChatRoomId(receiverId);
+    final bucket = DateTime.now().millisecondsSinceEpoch ~/ 15000;
+    final dedupeId = 'dm_${roomId}_${_currentUserId}_$bucket';
+
+    await _notificationService.createNotification(
+      recipientId: receiverId,
+      senderId: _currentUserId,
+      type: 'new_message',
+      title: senderName,
+      body: bodyText.isEmpty ? 'New message' : bodyText,
+      entityId: messageId,
+      dedupeId: dedupeId,
+      data: {
+        'chatType': 'direct',
+        'roomId': roomId,
+        'senderId': _currentUserId,
+        'receiverId': receiverId,
+      },
+    );
+  }
+
+  String _resolveSenderName() {
+    final display = _auth.currentUser?.displayName?.trim();
+    if (display != null && display.isNotEmpty) return display;
+    final phone = _auth.currentUser?.phoneNumber?.trim();
+    if (phone != null && phone.isNotEmpty) return phone;
+    final email = _auth.currentUser?.email?.trim();
+    if (email != null && email.isNotEmpty) return email;
+    return 'LumoChat';
   }
 
   Future<void> updateTypingStatus(String receiverId, bool isTyping) async {

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/call_models.dart';
 import '../services/app_providers.dart';
+import '../services/incoming_call_coordinator.dart';
 import '../services/push_notification_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/l10n.dart';
@@ -25,7 +26,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
       _incomingCallSubscription;
-  final Set<String> _presentedIncomingCallIds = <String>{};
 
   @override
   void initState() {
@@ -44,11 +44,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (!mounted) return;
       for (final doc in snapshot.docs) {
         final call = AppCall.fromDocument(doc);
-        if (_presentedIncomingCallIds.contains(call.id)) continue;
-        _presentedIncomingCallIds.add(call.id);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          Navigator.of(context, rootNavigator: true).push(
+        _presentIncomingCall(call);
+        break;
+      }
+    });
+  }
+
+  void _presentIncomingCall(AppCall call) {
+    if (!IncomingCallCoordinator.tryAcquire(call.id)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        IncomingCallCoordinator.release(call.id);
+        return;
+      }
+      Navigator.of(context, rootNavigator: true)
+          .push(
             MaterialPageRoute(
               fullscreenDialog: true,
               builder: (_) => CallSessionScreen.incoming(
@@ -59,10 +69,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 callType: call.type,
               ),
             ),
-          );
-        });
-        break;
-      }
+          )
+          .whenComplete(() => IncomingCallCoordinator.release(call.id));
     });
   }
 

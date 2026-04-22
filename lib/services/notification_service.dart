@@ -28,6 +28,7 @@ class NotificationService {
     required String body,
     String? senderId,
     String? entityId,
+    String? dedupeId,
     Map<String, dynamic>? data,
   }) async {
     if (recipientId.isEmpty) return;
@@ -35,21 +36,50 @@ class NotificationService {
     final resolvedSenderId = (senderId ?? currentUserId).trim();
     if (resolvedSenderId.isEmpty) return;
 
+    final payload = <String, dynamic>{
+      'recipientId': recipientId,
+      'senderId': resolvedSenderId,
+      'type': type,
+      'title': title,
+      'body': body,
+      'entityId': entityId ?? '',
+      'data': data ?? const <String, dynamic>{},
+      'isRead': false,
+      'createdAt': now,
+      'updatedAt': now,
+      'readAt': null,
+      'pushedAt': null,
+    };
+
+    if (dedupeId != null && dedupeId.trim().isNotEmpty) {
+      final docRef = _notifications.doc(dedupeId.trim());
+      await RetryPolicy.run(
+        operation: 'notifications.upsert_dedupe',
+        task: () async {
+          final existing = await docRef.get();
+          if (!existing.exists) {
+            await docRef.set(payload, SetOptions(merge: true));
+            return;
+          }
+
+          await docRef.set({
+            'title': title,
+            'body': body,
+            'entityId': entityId ?? '',
+            'data': data ?? const <String, dynamic>{},
+            'isRead': false,
+            'updatedAt': now,
+            'readAt': null,
+          }, SetOptions(merge: true));
+        },
+      );
+      return;
+    }
+
     await RetryPolicy.run(
       operation: 'notifications.create',
       task: () async {
-        await _notifications.add({
-          'recipientId': recipientId,
-          'senderId': resolvedSenderId,
-          'type': type,
-          'title': title,
-          'body': body,
-          'entityId': entityId ?? '',
-          'data': data ?? const <String, dynamic>{},
-          'isRead': false,
-          'createdAt': now,
-          'readAt': null,
-        });
+        await _notifications.add(payload);
       },
     );
   }

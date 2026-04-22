@@ -131,7 +131,11 @@ service cloud.firestore {
           'status',
           'updatedAt',
           'acceptedAt',
-          'endedAt'
+          'endedAt',
+          'offer',
+          'answer',
+          'callerCandidates',
+          'calleeCandidates'
         ]);
 
       allow delete: if false;

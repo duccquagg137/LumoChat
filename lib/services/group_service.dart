@@ -4,11 +4,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'notification_service.dart';
 import '../utils/retry_policy.dart';
 
 class GroupService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final NotificationService _notificationService = NotificationService();
   static const int _batchSize = 400;
 
   String get _currentUserId => _auth.currentUser!.uid;
@@ -224,6 +226,15 @@ class GroupService {
           groupId: groupId,
           memberIds: memberIds.isEmpty ? <String>[_currentUserId] : memberIds,
         );
+
+        await _notifyGroupMembers(
+          groupId: groupId,
+          groupName: (groupData['name'] ?? '').toString(),
+          senderName: senderName,
+          memberIds: memberIds,
+          messageId: messageRef.id,
+          bodyText: text.trim(),
+        );
       },
     );
   }
@@ -277,7 +288,57 @@ class GroupService {
           groupId: groupId,
           memberIds: memberIds.isEmpty ? <String>[_currentUserId] : memberIds,
         );
+
+        await _notifyGroupMembers(
+          groupId: groupId,
+          groupName: (groupData['name'] ?? '').toString(),
+          senderName: senderName,
+          memberIds: memberIds,
+          messageId: messageRef.id,
+          bodyText: '📷 Image',
+        );
       },
+    );
+  }
+
+  Future<void> _notifyGroupMembers({
+    required String groupId,
+    required String groupName,
+    required String senderName,
+    required List<String> memberIds,
+    required String messageId,
+    required String bodyText,
+  }) async {
+    final targets = memberIds
+        .where((id) => id.isNotEmpty && id != _currentUserId)
+        .toSet()
+        .toList();
+    if (targets.isEmpty) return;
+
+    final bucket = DateTime.now().millisecondsSinceEpoch ~/ 15000;
+    final safeGroup = groupName.trim().isEmpty ? 'Group' : groupName.trim();
+    final safeSender = senderName.trim().isEmpty ? _currentUserName : senderName.trim();
+    final messageBody = bodyText.isEmpty ? 'New message' : bodyText;
+
+    await Future.wait(
+      targets.map((recipientId) {
+        final dedupeId = 'gm_${groupId}_${recipientId}_${_currentUserId}_$bucket';
+        return _notificationService.createNotification(
+          recipientId: recipientId,
+          senderId: _currentUserId,
+          type: 'new_group_message',
+          title: safeGroup,
+          body: '$safeSender: $messageBody',
+          entityId: messageId,
+          dedupeId: dedupeId,
+          data: {
+            'chatType': 'group',
+            'groupId': groupId,
+            'senderId': _currentUserId,
+            'recipientId': recipientId,
+          },
+        );
+      }),
     );
   }
 

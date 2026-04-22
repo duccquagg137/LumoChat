@@ -6,7 +6,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import '../services/app_permission_service.dart';
 import '../services/onboarding_service.dart';
+import '../services/push_notification_service.dart';
 import '../theme/app_theme.dart';
 import 'chat_screen.dart';
 import 'home_screen.dart';
@@ -28,6 +30,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
+    unawaited(AppPermissionService.requestStartupPermissionsOnce());
     _nextScreenFuture = _resolveNextScreen();
   }
 
@@ -55,6 +58,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
     // Presence update should never block startup navigation.
     unawaited(AuthService().updateUserPresence(true));
+    unawaited(PushNotificationService().initForCurrentUser());
 
     try {
       final userDoc = await FirebaseFirestore.instance
