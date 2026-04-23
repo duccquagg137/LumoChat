@@ -44,6 +44,9 @@ dependencies:
   firebase_auth: ^5.0.0
   cloud_firestore: ^5.0.0
   image_picker: 1.0.7
+  # Avoid old transitive lifecycle plugin versions that still reference
+  # removed v1 embedding APIs (PluginRegistry.Registrar).
+  flutter_plugin_android_lifecycle: ^2.0.23
   cloudinary_public: ^0.23.1
   google_sign_in: ^6.2.2
   shared_preferences: ^2.2.3
