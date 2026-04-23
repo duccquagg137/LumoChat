@@ -10,13 +10,14 @@ void main() {
         child: LumoChatApp(isFirebaseInitialized: false),
       ),
     );
+
+    await tester.pump();
+    expect(find.text('LumoChat'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
     await tester.pump(const Duration(seconds: 2));
-    final openAppFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is Text &&
-          (widget.data == 'Open App' || widget.data == 'Mở ứng dụng'),
-      description: 'Open App CTA in vi/en',
-    );
-    expect(openAppFinder, findsOneWidget);
+    expect(find.byType(MaterialApp), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

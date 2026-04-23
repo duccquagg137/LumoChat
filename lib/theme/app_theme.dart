@@ -4,13 +4,7 @@ import 'package:flutter/services.dart';
 extension ColorAlphaFractionX on Color {
   Color withAlphaFraction(double opacity) {
     final clampedOpacity = opacity.clamp(0.0, 1.0).toDouble();
-    final argb = value;
-    return Color.fromARGB(
-      (clampedOpacity * 255).round(),
-      (argb >> 16) & 0xFF,
-      (argb >> 8) & 0xFF,
-      argb & 0xFF,
-    );
+    return withAlpha((clampedOpacity * 255).round().clamp(0, 255));
   }
 }
 
