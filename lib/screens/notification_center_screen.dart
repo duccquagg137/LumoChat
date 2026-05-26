@@ -77,7 +77,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
         title: Text(
           _txt(
             context,
-            vi: 'Trung tÃ¢m thÃ´ng bÃ¡o',
+            vi: 'Trung tâm thông báo',
             en: 'Notification Center',
           ),
           style: const TextStyle(
@@ -91,7 +91,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
           TextButton(
             onPressed: _isMarkingAllRead ? null : _markAllAsRead,
             child: Text(
-              _txt(context, vi: 'Äá»c táº¥t cáº£', en: 'Read all'),
+              _txt(context, vi: 'Đọc tất cả', en: 'Read all'),
               style: TextStyle(
                 color: _isMarkingAllRead
                     ? AppColors.textMuted
@@ -111,7 +111,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
               child: Text(
                 _txt(
                   context,
-                  vi: 'KhÃ´ng táº£i Ä‘Æ°á»£c thÃ´ng bÃ¡o',
+                  vi: 'Không tải được thông báo',
                   en: 'Unable to load notifications',
                 ),
                 style: const TextStyle(color: AppColors.textMuted),
@@ -134,7 +134,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
               child: Text(
                 _txt(
                   context,
-                  vi: 'ChÆ°a cÃ³ thÃ´ng bÃ¡o nÃ o',
+                  vi: 'Chưa có thông báo nào',
                   en: 'No notifications yet',
                 ),
                 style: const TextStyle(

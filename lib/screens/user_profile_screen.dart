@@ -39,17 +39,17 @@ class UserProfileScreen extends StatelessWidget {
               stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return const Center(child: Text('KhÃ´ng táº£i Ä‘Æ°á»£c há»“ sÆ¡', style: TextStyle(color: AppColors.textMuted)));
+                  return const Center(child: Text('Không tải được hồ sơ', style: TextStyle(color: AppColors.textMuted)));
                 }
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator(color: AppColors.primary));
                 }
                 final data = snapshot.data?.data() as Map<String, dynamic>?;
                 if (data == null) {
-                  return const Center(child: Text('KhÃ´ng tÃ¬m tháº¥y ngÆ°á»i dÃ¹ng', style: TextStyle(color: AppColors.textMuted)));
+                  return const Center(child: Text('Không tìm thấy người dùng', style: TextStyle(color: AppColors.textMuted)));
                 }
 
-                final name = (data['name'] ?? 'NgÆ°á»i dÃ¹ng').toString();
+                final name = (data['name'] ?? 'Người dùng').toString();
                 final email = (data['email'] ?? '').toString();
                 final bio = (data['bio'] ?? '').toString();
                 final avatar = (data['avatar'] ?? '').toString();
@@ -63,7 +63,7 @@ class UserProfileScreen extends StatelessWidget {
                 final dobRaw = (data['dateOfBirth'] ?? '').toString().trim();
                 final dob = DateTime.tryParse(dobRaw);
                 final birthday = dob == null
-                    ? (dobRaw.isEmpty ? 'ChÆ°a cáº­p nháº­t' : dobRaw)
+                    ? (dobRaw.isEmpty ? 'Chưa cập nhật' : dobRaw)
                     : '${dob.day.toString().padLeft(2, '0')}/${dob.month.toString().padLeft(2, '0')}/${dob.year}';
 
                 return SingleChildScrollView(
@@ -79,7 +79,7 @@ class UserProfileScreen extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           const Text(
-                            'Há»“ sÆ¡',
+                            'Hồ sơ',
                             style: TextStyle(
                               color: AppColors.textPrimary,
                               fontSize: 20,
@@ -121,7 +121,7 @@ class UserProfileScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 10),
                             Text(
-                              bio.isNotEmpty ? bio : 'Äang sá»­ dá»¥ng LumoChat',
+                              bio.isNotEmpty ? bio : 'Đang sử dụng LumoChat',
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 color: AppColors.textSecondary,
@@ -134,7 +134,7 @@ class UserProfileScreen extends StatelessWidget {
                               children: [
                                 Expanded(
                                   child: GradientButton(
-                                    text: 'Nháº¯n tin',
+                                    text: 'Nhắn tin',
                                     icon: Icons.chat_bubble_rounded,
                                     height: 44,
                                     onPressed: currentUserId == userId
@@ -164,13 +164,13 @@ class UserProfileScreen extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Column(
                           children: [
-                            _buildInfoRow(Icons.phone_outlined, 'Sá»‘ Ä‘iá»‡n thoáº¡i', phone.isEmpty ? 'ChÆ°a cáº­p nháº­t' : phone),
-                            _buildInfoRow(Icons.location_on_outlined, 'Äá»‹a chá»‰', address.isEmpty ? 'ChÆ°a cáº­p nháº­t' : address),
-                            _buildInfoRow(Icons.location_city_outlined, 'ThÃ nh phá»‘', city.isEmpty ? 'ChÆ°a cáº­p nháº­t' : city),
-                            _buildInfoRow(Icons.wc_outlined, 'Giá»›i tÃ­nh', gender.isEmpty ? 'ChÆ°a cáº­p nháº­t' : gender),
-                            _buildInfoRow(Icons.cake_outlined, 'NgÃ y sinh', birthday),
-                            _buildInfoRow(Icons.work_outline_rounded, 'Nghá» nghiá»‡p', occupation.isEmpty ? 'ChÆ°a cáº­p nháº­t' : occupation),
-                            _buildInfoRow(Icons.language_rounded, 'Website', website.isEmpty ? 'ChÆ°a cáº­p nháº­t' : website),
+                            _buildInfoRow(Icons.phone_outlined, 'Số điện thoại', phone.isEmpty ? 'Chưa cập nhật' : phone),
+                            _buildInfoRow(Icons.location_on_outlined, 'Địa chỉ', address.isEmpty ? 'Chưa cập nhật' : address),
+                            _buildInfoRow(Icons.location_city_outlined, 'Thành phố', city.isEmpty ? 'Chưa cập nhật' : city),
+                            _buildInfoRow(Icons.wc_outlined, 'Giới tính', gender.isEmpty ? 'Chưa cập nhật' : gender),
+                            _buildInfoRow(Icons.cake_outlined, 'Ngày sinh', birthday),
+                            _buildInfoRow(Icons.work_outline_rounded, 'Nghề nghiệp', occupation.isEmpty ? 'Chưa cập nhật' : occupation),
+                            _buildInfoRow(Icons.language_rounded, 'Website', website.isEmpty ? 'Chưa cập nhật' : website),
                           ],
                         ),
                       ),

@@ -80,10 +80,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
     return groupData[key] == true;
   }
 
-  int _groupUnreadCount(Map<String, dynamic> groupMeta, String groupId) {
-    final groupData = groupMeta[groupId];
-    if (groupData is! Map) return 0;
-    final value = groupData['unreadCount'];
+  int _groupUnreadCount(Map<String, dynamic> groupData, String currentUserId) {
+    final rawUnread = groupData['unreadCountByUser'];
+    if (rawUnread is! Map) return 0;
+    final value = rawUnread[currentUserId];
     if (value is int) return value;
     if (value is num) return value.toInt();
     return 0;
@@ -318,12 +318,14 @@ class _GroupsScreenState extends State<GroupsScreen> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
-                              color: AppColors.glassBorder.withAlphaFraction(0.5)),
+                              color:
+                                  AppColors.glassBorder.withAlphaFraction(0.5)),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
-                              color: AppColors.glassBorder.withAlphaFraction(0.5)),
+                              color:
+                                  AppColors.glassBorder.withAlphaFraction(0.5)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -774,7 +776,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                               final isPinned =
                                   _groupFlag(groupMeta, groupId, 'pinned');
                               final unreadCount =
-                                  _groupUnreadCount(groupMeta, groupId);
+                                  _groupUnreadCount(data, _currentUserId);
                               final name = (data['name'] ?? l10n.groupsUnnamed)
                                   .toString();
                               final avatarUrl =
@@ -826,7 +828,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
                                       horizontal: 20),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(16),
-                                    color: AppColors.primary.withAlphaFraction(0.2),
+                                    color: AppColors.primary
+                                        .withAlphaFraction(0.2),
                                   ),
                                   alignment: Alignment.centerLeft,
                                   child: Row(
@@ -855,7 +858,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
                                       horizontal: 20),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(16),
-                                    color: AppColors.error.withAlphaFraction(0.18),
+                                    color:
+                                        AppColors.error.withAlphaFraction(0.18),
                                   ),
                                   alignment: Alignment.centerRight,
                                   child: Row(
@@ -977,7 +981,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
     required bool isPinned,
   }) {
     final l10n = context.l10n;
-    final subtitle = '${l10n.groupsMemberCount(memberCount)} â€¢ $lastMessage';
+    final subtitle = '${l10n.groupsMemberCount(memberCount)} • $lastMessage';
     final hasUnread = unreadCount > 0;
 
     return GestureDetector(

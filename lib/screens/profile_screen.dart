@@ -467,7 +467,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       _buildSection(
                         _txt(
                           context,
-                          vi: 'L?ch s? cu?c g?i',
+                          vi: 'Lịch sử cuộc gọi',
                           en: 'Call history',
                         ),
                         [
@@ -483,7 +483,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           Icons.notifications_active_outlined,
                           _txt(
                             context,
-                            vi: 'Trung tÃ¢m thÃ´ng bÃ¡o',
+                            vi: 'Trung tâm thông báo',
                             en: 'Notification Center',
                           ),
                           onTap: () {
@@ -587,7 +587,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             child: Text(
               _txt(
                 context,
-                vi: 'KhÃ´ng t?i du?c l?ch s? cu?c g?i',
+                vi: 'Không tải được lịch sử cuộc gọi',
                 en: 'Unable to load call history',
               ),
               style: const TextStyle(
@@ -627,7 +627,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             child: Text(
               _txt(
                 context,
-                vi: 'Chua cÃ³ cu?c g?i nÃ o',
+                vi: 'Chưa có cuộc gọi nào',
                 en: 'No calls yet',
               ),
               style: const TextStyle(
@@ -668,7 +668,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         call.status == CallStatus.declined ||
         call.status == CallStatus.cancelled;
     final iconColor = isFailed ? AppColors.error : AppColors.primaryLight;
-    final subtitle = '${_callHistoryStatus(call, isIncoming)} â€¢ ${_formatCallTime(call.createdAt)}';
+    final subtitle = '${_callHistoryStatus(call, isIncoming)} • ${_formatCallTime(call.createdAt)}';
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
@@ -706,25 +706,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     switch (call.status) {
       case CallStatus.missed:
         return isIncoming
-            ? _txt(context, vi: 'Cu?c g?i nh?', en: 'Missed call')
-            : _txt(context, vi: 'KhÃ´ng tr? l?i', en: 'No answer');
+            ? _txt(context, vi: 'Cuộc gọi nhỡ', en: 'Missed call')
+            : _txt(context, vi: 'Không trả lời', en: 'No answer');
       case CallStatus.declined:
         return isIncoming
-            ? _txt(context, vi: 'B?n dÃ£ t? ch?i', en: 'You declined')
-            : _txt(context, vi: 'ÃÃ£ b? t? ch?i', en: 'Declined');
+            ? _txt(context, vi: 'Bạn đã từ chối', en: 'You declined')
+            : _txt(context, vi: 'Đã bị từ chối', en: 'Declined');
       case CallStatus.cancelled:
         return isIncoming
-            ? _txt(context, vi: 'ÃÃ£ b? h?y', en: 'Canceled')
-            : _txt(context, vi: 'B?n dÃ£ h?y', en: 'You canceled');
+            ? _txt(context, vi: 'Đã bị hủy', en: 'Canceled')
+            : _txt(context, vi: 'Bạn đã hủy', en: 'You canceled');
       case CallStatus.accepted:
       case CallStatus.ended:
         return isIncoming
-            ? _txt(context, vi: 'Cu?c g?i d?n', en: 'Incoming')
-            : _txt(context, vi: 'Cu?c g?i di', en: 'Outgoing');
+            ? _txt(context, vi: 'Cuộc gọi đến', en: 'Incoming')
+            : _txt(context, vi: 'Cuộc gọi đi', en: 'Outgoing');
       case CallStatus.ringing:
-        return _txt(context, vi: 'Ãang d? chuÃ´ng', en: 'Ringing');
+        return _txt(context, vi: 'Đang đổ chuông', en: 'Ringing');
       case CallStatus.unknown:
-        return _txt(context, vi: 'KhÃ´ng xÃ¡c d?nh', en: 'Unknown');
+        return _txt(context, vi: 'Không xác định', en: 'Unknown');
     }
   }
 
@@ -870,4 +870,3 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 }
-

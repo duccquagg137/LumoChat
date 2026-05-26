@@ -1,5 +1,7 @@
-import 'dart:io';
 import 'dart:async';
+import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -81,6 +83,8 @@ class _ChatScreenState extends State<ChatScreen> {
   File? _failedImageUpload;
   String? _failedImageReplyId;
   final Map<String, int> _imageReloadAttempts = {};
+  final Map<String, double> _networkImageAspectRatios = {};
+  final Set<String> _resolvingImageAspectRatioKeys = {};
   final Map<String, GlobalKey> _messageItemKeys = {};
   Map<String, dynamic>? _pinnedMessageData;
   _ScrollAnchor? _pendingScrollAnchor;
@@ -101,7 +105,95 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       _imageReloadAttempts[messageId] =
           (_imageReloadAttempts[messageId] ?? 0) + 1;
+      _networkImageAspectRatios.remove(messageId);
     });
+  }
+
+  void _resolveNetworkImageAspectRatio(ChatMessage message, String imageUrl) {
+    if (message.imageAspectRatio != null ||
+        _networkImageAspectRatios.containsKey(message.id) ||
+        imageUrl.trim().isEmpty) {
+      return;
+    }
+
+    final resolveKey = '${message.id}|$imageUrl';
+    if (_resolvingImageAspectRatioKeys.contains(resolveKey)) return;
+    _resolvingImageAspectRatioKeys.add(resolveKey);
+
+    final stream = NetworkImage(imageUrl).resolve(ImageConfiguration.empty);
+    late final ImageStreamListener listener;
+    listener = ImageStreamListener(
+      (info, _) {
+        final width = info.image.width;
+        final height = info.image.height;
+        stream.removeListener(listener);
+        _resolvingImageAspectRatioKeys.remove(resolveKey);
+        if (width <= 0 || height <= 0 || !mounted) return;
+        setState(() {
+          _networkImageAspectRatios[message.id] = width / height;
+        });
+      },
+      onError: (_, __) {
+        stream.removeListener(listener);
+        _resolvingImageAspectRatioKeys.remove(resolveKey);
+      },
+    );
+    stream.addListener(listener);
+  }
+
+  Size _imageMessageDisplaySize(ChatMessage message) {
+    final mediaSize = MediaQuery.sizeOf(context);
+    final maxWidth = math.min(mediaSize.width * 0.68, 280.0);
+    final maxHeight = math.min(mediaSize.height * 0.42, 380.0);
+    const minWidth = 112.0;
+    const minHeight = 86.0;
+    final rawRatio =
+        message.imageAspectRatio ?? _networkImageAspectRatios[message.id];
+    final ratio = (rawRatio == null || rawRatio <= 0)
+        ? 4 / 3
+        : rawRatio.clamp(0.25, 4.0).toDouble();
+
+    var width = maxWidth;
+    var height = width / ratio;
+
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = height * ratio;
+    }
+    if (width < minWidth && minWidth / ratio <= maxHeight) {
+      width = minWidth;
+      height = width / ratio;
+    }
+    if (height < minHeight && minHeight * ratio <= maxWidth) {
+      height = minHeight;
+      width = height * ratio;
+    }
+
+    return Size(width, height);
+  }
+
+  Future<Size?> _readLocalImageSize(File imageFile) async {
+    try {
+      final codec =
+          await ui.instantiateImageCodec(await imageFile.readAsBytes());
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      final size = Size(image.width.toDouble(), image.height.toDouble());
+      image.dispose();
+      codec.dispose();
+      return size;
+    } catch (e, stackTrace) {
+      AppLogger.warning(
+        'Failed to read local image size',
+        tag: 'chat',
+        context: {
+          'operation': 'chat.read_image_size',
+          'error': e.toString(),
+          'stack': stackTrace.toString(),
+        },
+      );
+      return null;
+    }
   }
 
   void _rememberScrollMetrics() {
@@ -124,8 +216,8 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     return _ScrollAnchor(
-      distanceFromBottom:
-          (_lastKnownMaxScrollExtent - _lastKnownOffset).clamp(0.0, double.infinity),
+      distanceFromBottom: (_lastKnownMaxScrollExtent - _lastKnownOffset)
+          .clamp(0.0, double.infinity),
     );
   }
 
@@ -143,7 +235,8 @@ class _ChatScreenState extends State<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
       final max = _scrollController.position.maxScrollExtent;
-      final target = (max - anchor.distanceFromBottom).clamp(0.0, max).toDouble();
+      final target =
+          (max - anchor.distanceFromBottom).clamp(0.0, max).toDouble();
       _scrollController.jumpTo(target);
       _rememberScrollMetrics();
     });
@@ -181,7 +274,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _syncMessageItemKeys(List<DocumentSnapshot> visibleDocs) {
     final visibleIds = visibleDocs.map((doc) => doc.id).toSet();
-    _messageItemKeys.removeWhere((messageId, _) => !visibleIds.contains(messageId));
+    _messageItemKeys
+        .removeWhere((messageId, _) => !visibleIds.contains(messageId));
     for (final messageId in visibleIds) {
       _messageItemKey(messageId);
     }
@@ -315,7 +409,9 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.chatPinnedActionFailed(AppErrorText.forChat(context, e)))),
+        SnackBar(
+            content: Text(
+                l10n.chatPinnedActionFailed(AppErrorText.forChat(context, e)))),
       );
     } finally {
       _queueScrollRestore(anchor);
@@ -339,7 +435,9 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.chatPinnedActionFailed(AppErrorText.forChat(context, e)))),
+        SnackBar(
+            content: Text(
+                l10n.chatPinnedActionFailed(AppErrorText.forChat(context, e)))),
       );
     } finally {
       _queueScrollRestore(anchor);
@@ -898,6 +996,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           reactions: msgData.reactions,
                           deletedFor: msgData.deletedFor,
                           isRecalledForEveryone: msgData.isRecalledForEveryone,
+                          imageWidth: msgData.imageWidth,
+                          imageHeight: msgData.imageHeight,
                         );
                         return KeyedSubtree(
                           key: _messageItemKey(msg.id),
@@ -1133,7 +1233,8 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           const Padding(
             padding: EdgeInsets.only(top: 2),
-            child: Icon(Icons.push_pin_rounded, size: 16, color: AppColors.primaryLight),
+            child: Icon(Icons.push_pin_rounded,
+                size: 16, color: AppColors.primaryLight),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -1172,7 +1273,8 @@ class _ChatScreenState extends State<ChatScreen> {
             behavior: HitTestBehavior.opaque,
             child: const Padding(
               padding: EdgeInsets.only(left: 8, top: 2),
-              child: Icon(Icons.close_rounded, size: 18, color: AppColors.textMuted),
+              child: Icon(Icons.close_rounded,
+                  size: 18, color: AppColors.textMuted),
             ),
           ),
         ],
@@ -1549,18 +1651,22 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildImageMessage(bool isSent, ChatMessage message) {
     final l10n = context.l10n;
     final pixelRatio = MediaQuery.of(context).devicePixelRatio;
-    final cacheWidth = (220 * pixelRatio).round();
-    final cacheHeight = (160 * pixelRatio).round();
     final imageUrl = _resolvedMessageImageUrl(message);
+    _resolveNetworkImageAspectRatio(message, imageUrl);
+    final displaySize = _imageMessageDisplaySize(message);
+    final cacheWidth = (displaySize.width * pixelRatio).round();
+    final cacheHeight = (displaySize.height * pixelRatio).round();
     final retryVersion = _imageReloadAttempts[message.id] ?? 0;
+    final hasKnownImageSize = message.imageAspectRatio != null ||
+        _networkImageAspectRatios.containsKey(message.id);
 
     return Column(
       crossAxisAlignment:
           isSent ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         Container(
-          width: 220,
-          height: 160,
+          width: displaySize.width,
+          height: displaySize.height,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             gradient: const LinearGradient(
@@ -1575,11 +1681,10 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // Render image from Firebase Storage
                 Image.network(
                   imageUrl,
                   key: ValueKey('message-image-${message.id}-$retryVersion'),
-                  fit: BoxFit.cover,
+                  fit: hasKnownImageSize ? BoxFit.cover : BoxFit.contain,
                   cacheWidth: cacheWidth,
                   cacheHeight: cacheHeight,
                   filterQuality: FilterQuality.medium,
@@ -1629,7 +1734,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                 ),
-                // Time overlay
                 Positioned(
                   right: 8,
                   bottom: 8,
@@ -1982,18 +2086,26 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     try {
+      final localImageSize = await _readLocalImageSize(imageFile);
+      final imageWidth = localImageSize?.width.round();
+      final imageHeight = localImageSize?.height.round();
+
       if (widget.isGroup) {
         await _groupService.sendImageMessage(
           widget.receiverId,
           senderName,
           imageFile,
           replyTo: replyTo,
+          imageWidth: imageWidth,
+          imageHeight: imageHeight,
         );
       } else {
         await _chatService.sendImageMessage(
           widget.receiverId,
           imageFile,
           replyTo: replyTo,
+          imageWidth: imageWidth,
+          imageHeight: imageHeight,
         );
       }
 
@@ -2228,7 +2340,7 @@ class _ChatScreenState extends State<ChatScreen> {
             if (!isDeletedMessage) ...[
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: ['â¤ï¸', 'ðŸ˜‚', 'ðŸ˜®', 'ðŸ˜¢', 'ðŸ‘', 'ðŸ‘Ž'].map((emoji) {
+                children: ['❤️', '😂', '😮', '😢', '👍', '👎'].map((emoji) {
                   return GestureDetector(
                     onTap: () async {
                       Navigator.pop(context);

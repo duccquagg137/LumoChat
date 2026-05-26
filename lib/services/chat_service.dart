@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
@@ -29,7 +29,8 @@ class ChatService {
     return _firestore.collection('users').doc(_currentUserId);
   }
 
-  Future<void> _updateChatMeta(String receiverId, Map<String, dynamic> fields) async {
+  Future<void> _updateChatMeta(
+      String receiverId, Map<String, dynamic> fields) async {
     final chatRoomId = buildChatRoomId(receiverId);
     final userRef = _currentUserRef();
 
@@ -50,7 +51,8 @@ class ChatService {
         .snapshots();
   }
 
-  Future<void> sendMessage(String receiverId, String text, {String? replyTo}) async {
+  Future<void> sendMessage(String receiverId, String text,
+      {String? replyTo}) async {
     final timestamp = Timestamp.now();
     final chatRoomRef = _chatRoomRef(receiverId);
     final messageRef = chatRoomRef.collection('messages').doc();
@@ -71,12 +73,16 @@ class ChatService {
     await RetryPolicy.run(
       operation: 'chat.send_message',
       task: () async {
-        await messageRef.set(newMessage, SetOptions(merge: true));
         await chatRoomRef.set({
           'lastMessage': text,
           'lastTimestamp': timestamp,
           'participants': [_currentUserId, receiverId],
+          'unreadCountByUser': {
+            receiverId: FieldValue.increment(1),
+            _currentUserId: 0,
+          },
         }, SetOptions(merge: true));
+        await messageRef.set(newMessage, SetOptions(merge: true));
         await markConversationVisible(receiverId);
       },
     );
@@ -88,12 +94,19 @@ class ChatService {
     );
   }
 
-  Future<void> sendImageMessage(String receiverId, File imageFile, {String? replyTo}) async {
+  Future<void> sendImageMessage(
+    String receiverId,
+    File imageFile, {
+    String? replyTo,
+    int? imageWidth,
+    int? imageHeight,
+  }) async {
     final timestamp = Timestamp.now();
     final chatRoomRef = _chatRoomRef(receiverId);
     final messageRef = chatRoomRef.collection('messages').doc();
 
-    final cloudinary = CloudinaryPublic('dds49mcmb', 'lumo_preset', cache: false);
+    final cloudinary =
+        CloudinaryPublic('dds49mcmb', 'lumo_preset', cache: false);
     final imageUrl = await RetryPolicy.run<String>(
       operation: 'chat.upload_image',
       task: () async {
@@ -118,17 +131,25 @@ class ChatService {
       'status': 'sent',
       'type': 'image',
       if (replyTo != null) 'replyTo': replyTo,
+      if (imageWidth != null && imageHeight != null) ...{
+        'imageWidth': imageWidth,
+        'imageHeight': imageHeight,
+      },
     };
 
     await RetryPolicy.run(
       operation: 'chat.send_image_message',
       task: () async {
-        await messageRef.set(newMessage, SetOptions(merge: true));
         await chatRoomRef.set({
           'lastMessage': '📷 [image]',
           'lastTimestamp': timestamp,
           'participants': [_currentUserId, receiverId],
+          'unreadCountByUser': {
+            receiverId: FieldValue.increment(1),
+            _currentUserId: 0,
+          },
         }, SetOptions(merge: true));
+        await messageRef.set(newMessage, SetOptions(merge: true));
         await markConversationVisible(receiverId);
       },
     );
@@ -190,8 +211,10 @@ class ChatService {
     return _chatRoomRef(receiverId).snapshots();
   }
 
-  Future<void> toggleReaction(String receiverId, String messageId, String emoji) async {
-    final docRef = _chatRoomRef(receiverId).collection('messages').doc(messageId);
+  Future<void> toggleReaction(
+      String receiverId, String messageId, String emoji) async {
+    final docRef =
+        _chatRoomRef(receiverId).collection('messages').doc(messageId);
 
     final doc = await docRef.get();
     if (!doc.exists) return;
@@ -214,7 +237,8 @@ class ChatService {
     await docRef.update({'reactions': reactions});
   }
 
-  DocumentReference<Map<String, dynamic>> _messageRef(String receiverId, String messageId) {
+  DocumentReference<Map<String, dynamic>> _messageRef(
+      String receiverId, String messageId) {
     return _chatRoomRef(receiverId).collection('messages').doc(messageId);
   }
 
@@ -225,11 +249,12 @@ class ChatService {
     });
   }
 
-  Future<void> recallMessageForEveryone(String receiverId, String messageId) async {
+  Future<void> recallMessageForEveryone(
+      String receiverId, String messageId) async {
     final ref = _messageRef(receiverId, messageId);
     await ref.update({
       'type': 'deleted',
-      'text': 'Tin nh?n dã thu h?i',
+      'text': 'Tin nhắn đã thu hồi',
       'recalledForEveryone': true,
       'recalledAt': Timestamp.now(),
       'reactions': FieldValue.delete(),
@@ -346,7 +371,8 @@ class ChatService {
       final receiver = data['receiverId']?.toString();
       final status = data['status']?.toString() ?? 'sent';
 
-      final isIncoming = senderId != _currentUserId && receiver == _currentUserId;
+      final isIncoming =
+          senderId != _currentUserId && receiver == _currentUserId;
       if (!isIncoming || status == 'delivered' || status == 'read') {
         continue;
       }
@@ -374,6 +400,11 @@ class ChatService {
         .get();
 
     if (snapshot.docs.isEmpty) {
+      await _chatRoomRef(receiverId).set({
+        'unreadCountByUser': {
+          _currentUserId: 0,
+        },
+      }, SetOptions(merge: true));
       return 0;
     }
 
@@ -385,7 +416,8 @@ class ChatService {
       final senderId = data['senderId']?.toString();
       final receiver = data['receiverId']?.toString();
 
-      final isIncoming = senderId != _currentUserId && receiver == _currentUserId;
+      final isIncoming =
+          senderId != _currentUserId && receiver == _currentUserId;
       if (!isIncoming) {
         continue;
       }
@@ -407,7 +439,12 @@ class ChatService {
       await batch.commit();
     }
 
+    await _chatRoomRef(receiverId).set({
+      'unreadCountByUser': {
+        _currentUserId: 0,
+      },
+    }, SetOptions(merge: true));
+
     return updated;
   }
 }
-

@@ -52,46 +52,23 @@ class GroupService {
     await userRef.update(updates);
   }
 
-  Future<void> _updateUnreadMetaForMembers({
-    required String groupId,
+  Map<String, dynamic> _unreadStateUpdatesForMembers({
     required List<String> memberIds,
-  }) async {
-    final now = Timestamp.now();
+    required Timestamp timestamp,
+  }) {
     final uniqueMemberIds =
         memberIds.where((id) => id.isNotEmpty).toSet().toList();
-    if (uniqueMemberIds.isEmpty) return;
-
-    final batch = _firestore.batch();
+    final updates = <String, dynamic>{
+      'lastReadAtByUser.$_currentUserId': timestamp,
+    };
     for (final memberId in uniqueMemberIds) {
-      final userRef = _firestore.collection('users').doc(memberId);
       if (memberId == _currentUserId) {
-        batch.set(
-          userRef,
-          {
-            'groupMeta': {
-              groupId: {
-                'unreadCount': 0,
-                'lastReadAt': now,
-              },
-            },
-          },
-          SetOptions(merge: true),
-        );
+        updates['unreadCountByUser.$memberId'] = 0;
       } else {
-        batch.set(
-          userRef,
-          {
-            'groupMeta': {
-              groupId: {
-                'unreadCount': FieldValue.increment(1),
-              },
-            },
-          },
-          SetOptions(merge: true),
-        );
+        updates['unreadCountByUser.$memberId'] = FieldValue.increment(1);
       }
     }
-    await batch.commit();
+    return updates;
   }
 
   bool canDeleteGroupFromData(Map<String, dynamic> groupData) {
@@ -111,6 +88,12 @@ class GroupService {
     final timestamp = Timestamp.now();
     final groupRef = _firestore.collection('groups').doc();
     final systemMessageRef = groupRef.collection('messages').doc();
+    final unreadCountByUser = <String, int>{
+      for (final memberId in members) memberId: 0,
+    };
+    final lastReadAtByUser = <String, Timestamp>{
+      _currentUserId: timestamp,
+    };
     var avatarUrl = '';
 
     if (avatarFile != null) {
@@ -143,6 +126,8 @@ class GroupService {
           'createdAt': timestamp,
           'lastMessage': 'Nhóm vừa được tạo',
           'lastTimestamp': timestamp,
+          'unreadCountByUser': unreadCountByUser,
+          'lastReadAtByUser': lastReadAtByUser,
         }, SetOptions(merge: true));
 
         await systemMessageRef.set({
@@ -217,15 +202,14 @@ class GroupService {
         final memberIds = _readIdList(groupData['members']);
 
         await messageRef.set(messageData, SetOptions(merge: true));
-        await groupRef.set({
+        await groupRef.update({
           'lastMessage': '$senderName: $text',
           'lastTimestamp': timestamp,
-        }, SetOptions(merge: true));
-
-        await _updateUnreadMetaForMembers(
-          groupId: groupId,
-          memberIds: memberIds.isEmpty ? <String>[_currentUserId] : memberIds,
-        );
+          ..._unreadStateUpdatesForMembers(
+            memberIds: memberIds.isEmpty ? <String>[_currentUserId] : memberIds,
+            timestamp: timestamp,
+          ),
+        });
 
         await _notifyGroupMembers(
           groupId: groupId,
@@ -240,8 +224,13 @@ class GroupService {
   }
 
   Future<void> sendImageMessage(
-      String groupId, String senderName, File imageFile,
-      {String? replyTo}) async {
+    String groupId,
+    String senderName,
+    File imageFile, {
+    String? replyTo,
+    int? imageWidth,
+    int? imageHeight,
+  }) async {
     final timestamp = Timestamp.now();
     final groupRef = _firestore.collection('groups').doc(groupId);
     final messageRef = groupRef.collection('messages').doc();
@@ -277,17 +266,20 @@ class GroupService {
           'timestamp': timestamp,
           'readBy': [_currentUserId],
           if (replyTo != null) 'replyTo': replyTo,
+          if (imageWidth != null && imageHeight != null) ...{
+            'imageWidth': imageWidth,
+            'imageHeight': imageHeight,
+          },
         }, SetOptions(merge: true));
 
-        await groupRef.set({
+        await groupRef.update({
           'lastMessage': '$senderName: 📷 [image]',
           'lastTimestamp': timestamp,
-        }, SetOptions(merge: true));
-
-        await _updateUnreadMetaForMembers(
-          groupId: groupId,
-          memberIds: memberIds.isEmpty ? <String>[_currentUserId] : memberIds,
-        );
+          ..._unreadStateUpdatesForMembers(
+            memberIds: memberIds.isEmpty ? <String>[_currentUserId] : memberIds,
+            timestamp: timestamp,
+          ),
+        });
 
         await _notifyGroupMembers(
           groupId: groupId,
@@ -317,12 +309,14 @@ class GroupService {
 
     final bucket = DateTime.now().millisecondsSinceEpoch ~/ 15000;
     final safeGroup = groupName.trim().isEmpty ? 'Group' : groupName.trim();
-    final safeSender = senderName.trim().isEmpty ? _currentUserName : senderName.trim();
+    final safeSender =
+        senderName.trim().isEmpty ? _currentUserName : senderName.trim();
     final messageBody = bodyText.isEmpty ? 'New message' : bodyText;
 
     await Future.wait(
       targets.map((recipientId) {
-        final dedupeId = 'gm_${groupId}_${recipientId}_${_currentUserId}_$bucket';
+        final dedupeId =
+            'gm_${groupId}_${recipientId}_${_currentUserId}_$bucket';
         return _notificationService.createNotification(
           recipientId: recipientId,
           senderId: _currentUserId,
@@ -398,7 +392,8 @@ class GroupService {
       'reactions': FieldValue.delete(),
     });
 
-    final groupSnapshot = await _firestore.collection('groups').doc(groupId).get();
+    final groupSnapshot =
+        await _firestore.collection('groups').doc(groupId).get();
     final groupData = groupSnapshot.data();
     final pinned = groupData?['pinnedMessage'];
     if (pinned is Map && pinned['messageId']?.toString() == messageId) {
@@ -446,12 +441,12 @@ class GroupService {
 
   Future<int> markGroupMessagesRead(String groupId) async {
     final groupRef = _firestore.collection('groups').doc(groupId);
-    final userSnapshot = await _currentUserRef().get();
-    final userData = userSnapshot.data() ?? const <String, dynamic>{};
-    final groupMeta = userData['groupMeta'];
+    final groupSnapshot = await groupRef.get();
+    final groupData = groupSnapshot.data() ?? const <String, dynamic>{};
+    final lastReadAtByUser = groupData['lastReadAtByUser'];
     Timestamp? lastReadAt;
-    if (groupMeta is Map && groupMeta[groupId] is Map) {
-      final rawLastRead = (groupMeta[groupId] as Map)['lastReadAt'];
+    if (lastReadAtByUser is Map) {
+      final rawLastRead = lastReadAtByUser[_currentUserId];
       if (rawLastRead is Timestamp) {
         lastReadAt = rawLastRead;
       }
@@ -507,9 +502,9 @@ class GroupService {
       }
     }
 
-    await _updateGroupMeta(groupId, {
-      'unreadCount': 0,
-      'lastReadAt': Timestamp.now(),
+    await groupRef.update({
+      'unreadCountByUser.$_currentUserId': 0,
+      'lastReadAtByUser.$_currentUserId': Timestamp.now(),
     });
     return updated;
   }
@@ -534,6 +529,7 @@ class GroupService {
       final data = snap.data() as Map<String, dynamic>;
       final members = _readIdList(data['members']);
       final original = members.toSet();
+      final before = Set<String>.from(original);
 
       for (final id in cleaned) {
         original.add(id);
@@ -545,10 +541,14 @@ class GroupService {
       }
 
       final now = Timestamp.now();
-      tx.update(groupRef, {
+      final updates = <String, dynamic>{
         'members': original.toList(),
         'lastTimestamp': now,
-      });
+      };
+      for (final id in original.difference(before)) {
+        updates['unreadCountByUser.$id'] = 0;
+      }
+      tx.update(groupRef, updates);
 
       final msgRef = groupRef.collection('messages').doc();
       tx.set(msgRef, {
@@ -591,6 +591,8 @@ class GroupService {
         'members': members,
         'admins': admins,
         'lastTimestamp': now,
+        'unreadCountByUser.$_currentUserId': FieldValue.delete(),
+        'lastReadAtByUser.$_currentUserId': FieldValue.delete(),
       };
 
       if (createdBy == _currentUserId) {

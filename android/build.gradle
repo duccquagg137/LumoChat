@@ -23,7 +23,7 @@ subprojects { project ->
     }
     
     project.ext.flutter = [
-        compileSdkVersion: 34,
+        compileSdkVersion: 35,
         targetSdkVersion: 34,
         minSdkVersion: 23
     ]
@@ -34,7 +34,7 @@ subprojects { project ->
                 if (namespace == null) {
                     namespace = project.group
                 }
-                compileSdk 34
+                compileSdk 35
                 defaultConfig {
                     minSdk 23
                     targetSdk 34

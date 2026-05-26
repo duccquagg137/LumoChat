@@ -1,10 +1,11 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
-import '../widgets/glass_card.dart';
+
 import '../services/auth_service.dart';
+import '../theme/app_theme.dart';
 import '../utils/error_mapper.dart';
 import '../utils/l10n.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../widgets/glass_card.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -16,25 +17,30 @@ class LoginScreen extends StatefulWidget {
 
 enum AuthMode { email, phone }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   bool _isLogin = true;
   bool _showPassword = false;
   bool _isLoading = false;
   AuthMode _authMode = AuthMode.email;
-  
-  // Phone auth state
+
   bool _isCodeSent = false;
   String _verificationId = '';
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
 
-  // Email auth state
   late TabController _tabController;
   final _authService = AuthService();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _nameController = TextEditingController();
+
+  bool get _isEnglish => Localizations.localeOf(context).languageCode == 'en';
+
+  String _txt({required String vi, required String en}) {
+    return _isEnglish ? en : vi;
+  }
 
   @override
   void initState() {
@@ -56,17 +62,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     _otpController.dispose();
     super.dispose();
   }
-  
+
   void _setLoading(bool value) {
     if (mounted) setState(() => _isLoading = value);
   }
 
   void _showError(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.error,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
@@ -76,19 +84,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         PageRouteBuilder(
           pageBuilder: (_, a, __) => const HomeScreen(),
           transitionDuration: const Duration(milliseconds: 600),
-          transitionsBuilder: (_, a, __, child) => FadeTransition(opacity: a, child: child),
+          transitionsBuilder: (_, a, __, child) =>
+              FadeTransition(opacity: a, child: child),
         ),
         (_) => false,
       );
     }
   }
 
-  // --- Email Auth ---
   void _submitEmailAuth() async {
     final l10n = context.l10n;
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    
+
     if (email.isEmpty || password.isEmpty) {
       _showError(l10n.authValidationRequiredFields);
       return;
@@ -101,7 +109,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       } else {
         final name = _nameController.text.trim();
         final confirmPassword = _confirmPasswordController.text.trim();
-        
+
         if (name.isEmpty) {
           _showError(l10n.authValidationNameRequired);
           _setLoading(false);
@@ -122,7 +130,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     }
   }
 
-  // --- Phone Auth ---
   void _sendPhoneCode() async {
     final l10n = context.l10n;
     final phone = _phoneController.text.trim();
@@ -132,28 +139,29 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     }
 
     _setLoading(true);
-    
-    // Clean input: remove spaces, hyphens, parentheses
-    String cleanPhone = phone.replaceAll(RegExp(r'[\s\-\(\)]'), '');
-    
-    // Format phone to standard format (add country code +84 if missing)
+
+    final cleanPhone = phone.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+
     String formattedPhone = cleanPhone;
     if (cleanPhone.startsWith('0')) {
       formattedPhone = '+84${cleanPhone.substring(1)}';
     } else if (!cleanPhone.startsWith('+')) {
       formattedPhone = '+84$cleanPhone';
     }
-    
+
     try {
       await _authService.verifyPhoneNumber(
         phoneNumber: formattedPhone,
         verificationCompleted: (PhoneAuthCredential credential) async {
-          // Auto-resolution on Android
           try {
-            await FirebaseAuth.instance.signInWithCredential(credential);
+            await _authService.signInWithPhoneCredential(credential);
             _navigateToHome();
           } catch (e) {
-            _showError(l10n.authErrorAutoVerificationFailed(AppErrorText.forAuthL10n(l10n, e)));
+            _showError(
+              l10n.authErrorAutoVerificationFailed(
+                AppErrorText.forAuthL10n(l10n, e),
+              ),
+            );
             _setLoading(false);
           }
         },
@@ -173,7 +181,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         },
       );
     } catch (e) {
-      _showError(l10n.authErrorSendOtpFailed(AppErrorText.forAuthL10n(l10n, e)));
+      _showError(
+        l10n.authErrorSendOtpFailed(AppErrorText.forAuthL10n(l10n, e)),
+      );
       _setLoading(false);
     }
   }
@@ -196,7 +206,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     }
   }
 
-  // --- Social Auth ---
   void _signInWithGoogle() async {
     final l10n = context.l10n;
     _setLoading(true);
@@ -205,15 +214,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       if (userOpt != null) {
         _navigateToHome();
       } else {
-        _setLoading(false); // Cancelled
+        _setLoading(false);
       }
     } catch (e) {
-      _showError(l10n.authErrorGoogleFailed(AppErrorText.forAuthL10n(l10n, e)));
+      _showError(
+        l10n.authErrorGoogleFailed(AppErrorText.forAuthL10n(l10n, e)),
+      );
       _setLoading(false);
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -221,101 +230,133 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       body: Stack(
         children: [
           Container(decoration: const BoxDecoration(gradient: AppGradients.hero)),
-          // Glow orbs
           Positioned(
-            top: -80, right: -60,
+            top: -80,
+            right: -60,
             child: Container(
-              width: 250, height: 250,
+              width: 250,
+              height: 250,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [AppColors.primary.withAlphaFraction(0.25), Colors.transparent],
+                  colors: [
+                    AppColors.primary.withAlphaFraction(0.25),
+                    Colors.transparent,
+                  ],
                 ),
               ),
             ),
           ),
           Positioned(
-            bottom: 150, left: -80,
+            bottom: 150,
+            left: -80,
             child: Container(
-              width: 200, height: 200,
+              width: 200,
+              height: 200,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [AppColors.primaryLight.withAlphaFraction(0.15), Colors.transparent],
+                  colors: [
+                    AppColors.primaryLight.withAlphaFraction(0.15),
+                    Colors.transparent,
+                  ],
                 ),
               ),
             ),
           ),
-          // Content
           SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 children: [
                   const SizedBox(height: 40),
-                  // Logo
                   Container(
-                    width: 80, height: 80,
+                    width: 80,
+                    height: 80,
                     decoration: BoxDecoration(
                       gradient: AppGradients.primary,
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
                           color: AppColors.primary.withAlphaFraction(0.4),
-                          blurRadius: 30, offset: const Offset(0, 10),
+                          blurRadius: 30,
+                          offset: const Offset(0, 10),
                         ),
                       ],
                     ),
-                    child: const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 40),
+                    child: const Icon(
+                      Icons.chat_bubble_rounded,
+                      color: Colors.white,
+                      size: 40,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   const Text(
                     'LumoChat',
                     style: TextStyle(
-                      fontSize: 28, fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary, fontFamily: 'Inter',
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                      fontFamily: 'Inter',
                     ),
                   ),
                   const SizedBox(height: 32),
-                  
-                  // Mode Switcher
                   GlassCard(
                     padding: const EdgeInsets.all(4),
                     borderRadius: 16,
                     child: Row(
                       children: [
                         _buildModeTab('Email', AuthMode.email),
-                        _buildModeTab('Sá»‘ Ä‘iá»‡n thoáº¡i', AuthMode.phone),
+                        _buildModeTab(
+                          _txt(vi: 'Số điện thoại', en: 'Phone'),
+                          AuthMode.phone,
+                        ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 28),
-                  
-                  // Form Area
-                  _authMode == AuthMode.email ? _buildEmailForm() : _buildPhoneForm(),
-                  
+                  _authMode == AuthMode.email
+                      ? _buildEmailForm()
+                      : _buildPhoneForm(),
                   const SizedBox(height: 24),
-                  // Divider
                   Row(
                     children: [
-                      Expanded(child: Divider(color: AppColors.textMuted.withAlphaFraction(0.3))),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Text('hoáº·c', style: TextStyle(color: AppColors.textMuted, fontSize: 13, fontFamily: 'Inter')),
+                      Expanded(
+                        child: Divider(
+                          color: AppColors.textMuted.withAlphaFraction(0.3),
+                        ),
                       ),
-                      Expanded(child: Divider(color: AppColors.textMuted.withAlphaFraction(0.3))),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          _txt(vi: 'hoặc', en: 'or'),
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 13,
+                            fontFamily: 'Inter',
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Divider(
+                          color: AppColors.textMuted.withAlphaFraction(0.3),
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),
-                  
-                  // Social login
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildSocialButton(Icons.g_mobiledata_rounded, 'Google', _signInWithGoogle),
+                      _buildSocialButton(
+                        Icons.g_mobiledata_rounded,
+                        _signInWithGoogle,
+                      ),
                       const SizedBox(width: 16),
-                      // Mock apple button
-                      _buildSocialButton(Icons.apple_rounded, 'Apple', () => _showError(context.l10n.authAppleComingSoon)),
+                      _buildSocialButton(
+                        Icons.apple_rounded,
+                        () => _showError(context.l10n.authAppleComingSoon),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 40),
@@ -347,7 +388,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             textAlign: TextAlign.center,
             style: TextStyle(
               color: isActive ? Colors.white : AppColors.textSecondary,
-              fontWeight: FontWeight.w600, fontFamily: 'Inter',
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Inter',
             ),
           ),
         ),
@@ -363,31 +405,52 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           TabBar(
             controller: _tabController,
             indicator: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.primaryLight, width: 2)),
+              border: Border(
+                bottom: BorderSide(color: AppColors.primaryLight, width: 2),
+              ),
             ),
             indicatorSize: TabBarIndicatorSize.tab,
             dividerColor: Colors.transparent,
             labelColor: AppColors.primaryLight,
             unselectedLabelColor: AppColors.textSecondary,
-            labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontFamily: 'Inter'),
-            tabs: const [Tab(text: 'ÄÄƒng nháº­p'), Tab(text: 'ÄÄƒng kÃ½')],
+            labelStyle: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Inter',
+            ),
+            tabs: [
+              Tab(text: _txt(vi: 'Đăng nhập', en: 'Sign in')),
+              Tab(text: _txt(vi: 'Đăng ký', en: 'Sign up')),
+            ],
           ),
           const SizedBox(height: 20),
           if (!_isLogin) ...[
-            _buildInput(Icons.person_outline_rounded, 'Há» vÃ  tÃªn', controller: _nameController),
+            _buildInput(
+              Icons.person_outline_rounded,
+              _txt(vi: 'Họ và tên', en: 'Full name'),
+              controller: _nameController,
+            ),
             const SizedBox(height: 16),
           ],
-          _buildInput(Icons.email_outlined, 'Email', controller: _emailController, keyboardType: TextInputType.emailAddress),
+          _buildInput(
+            Icons.email_outlined,
+            'Email',
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+          ),
           const SizedBox(height: 16),
           _buildInput(
-            Icons.lock_outline_rounded, 'Máº­t kháº©u',
-            isPassword: true, controller: _passwordController,
+            Icons.lock_outline_rounded,
+            _txt(vi: 'Mật khẩu', en: 'Password'),
+            isPassword: true,
+            controller: _passwordController,
           ),
           if (!_isLogin) ...[
             const SizedBox(height: 16),
             _buildInput(
-              Icons.lock_outline_rounded, 'XÃ¡c nháº­n máº­t kháº©u',
-              isPassword: true, controller: _confirmPasswordController,
+              Icons.lock_outline_rounded,
+              _txt(vi: 'Xác nhận mật khẩu', en: 'Confirm password'),
+              isPassword: true,
+              controller: _confirmPasswordController,
             ),
           ],
           if (_isLogin) ...[
@@ -396,15 +459,24 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: () {},
-                child: const Text('QuÃªn máº­t kháº©u?', style: TextStyle(color: AppColors.primaryLight, fontSize: 13, fontFamily: 'Inter')),
+                child: Text(
+                  _txt(vi: 'Quên mật khẩu?', en: 'Forgot password?'),
+                  style: const TextStyle(
+                    color: AppColors.primaryLight,
+                    fontSize: 13,
+                    fontFamily: 'Inter',
+                  ),
+                ),
               ),
             ),
           ],
           const SizedBox(height: 20),
-          _isLoading 
+          _isLoading
               ? const CircularProgressIndicator(color: AppColors.primary)
               : GradientButton(
-                  text: _isLogin ? 'ÄÄƒng nháº­p' : 'ÄÄƒng kÃ½',
+                  text: _isLogin
+                      ? _txt(vi: 'Đăng nhập', en: 'Sign in')
+                      : _txt(vi: 'Đăng ký', en: 'Sign up'),
                   width: double.infinity,
                   onPressed: _submitEmailAuth,
                 ),
@@ -419,56 +491,81 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       child: Column(
         children: [
           Text(
-            _isCodeSent ? 'Nháº­p mÃ£ xÃ¡c nháº­n' : 'ÄÄƒng nháº­p báº±ng sá»‘ Ä‘iá»‡n thoáº¡i',
-            style: const TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700, fontFamily: 'Inter'),
+            _isCodeSent
+                ? _txt(vi: 'Nhập mã xác nhận', en: 'Enter verification code')
+                : _txt(
+                    vi: 'Đăng nhập bằng số điện thoại',
+                    en: 'Sign in with phone',
+                  ),
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              fontFamily: 'Inter',
+            ),
           ),
           const SizedBox(height: 8),
           Text(
-            _isCodeSent 
-              ? 'MÃ£ OTP Ä‘Ã£ Ä‘Æ°á»£c gá»­i Ä‘áº¿n sá»‘ Ä‘iá»‡n thoáº¡i cá»§a báº¡n'
-              : 'ChÃºng tÃ´i sáº½ gá»­i mÃ£ OTP Ä‘á»ƒ xÃ¡c minh',
-            style: const TextStyle(color: AppColors.textMuted, fontSize: 13, fontFamily: 'Inter'),
+            _isCodeSent
+                ? _txt(
+                    vi: 'Mã OTP đã được gửi đến số điện thoại của bạn',
+                    en: 'An OTP code was sent to your phone',
+                  )
+                : _txt(
+                    vi: 'Chúng tôi sẽ gửi mã OTP để xác minh',
+                    en: 'We will send an OTP code to verify your phone',
+                  ),
+            style: const TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 13,
+              fontFamily: 'Inter',
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
-          
           if (!_isCodeSent)
             _buildInput(
-              Icons.phone_outlined, 'Sá»‘ Ä‘iá»‡n thoáº¡i', 
-              controller: _phoneController, 
+              Icons.phone_outlined,
+              _txt(vi: 'Số điện thoại', en: 'Phone number'),
+              controller: _phoneController,
               keyboardType: TextInputType.phone,
             )
           else
             _buildInput(
-              Icons.password_rounded, 'MÃ£ OTP 6 chá»¯ sá»‘', 
-              controller: _otpController, 
+              Icons.password_rounded,
+              _txt(vi: 'Mã OTP 6 chữ số', en: '6-digit OTP code'),
+              controller: _otpController,
               keyboardType: TextInputType.number,
             ),
-            
           const SizedBox(height: 24),
-          
-          _isLoading 
+          _isLoading
               ? const CircularProgressIndicator(color: AppColors.primary)
               : GradientButton(
-                  text: _isCodeSent ? 'XÃ¡c nháº­n' : 'Gá»­i mÃ£ OTP',
+                  text: _isCodeSent
+                      ? _txt(vi: 'Xác nhận', en: 'Verify')
+                      : _txt(vi: 'Gửi mã OTP', en: 'Send OTP'),
                   width: double.infinity,
                   onPressed: _isCodeSent ? _verifyOTP : _sendPhoneCode,
                 ),
-                
           if (_isCodeSent) ...[
             const SizedBox(height: 16),
             TextButton(
               onPressed: () => setState(() => _isCodeSent = false),
-              child: const Text('Thay Ä‘á»•i sá»‘ Ä‘iá»‡n thoáº¡i', style: TextStyle(color: AppColors.textSecondary)),
+              child: Text(
+                _txt(vi: 'Thay đổi số điện thoại', en: 'Change phone number'),
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
             ),
-          ]
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildInput(IconData icon, String hint, {
-    bool isPassword = false, 
+  Widget _buildInput(
+    IconData icon,
+    String hint, {
+    bool isPassword = false,
     TextEditingController? controller,
     TextInputType? keyboardType,
   }) {
@@ -482,20 +579,30 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         controller: controller,
         obscureText: isPassword && !_showPassword,
         keyboardType: keyboardType,
-        style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontFamily: 'Inter',
+        ),
         decoration: InputDecoration(
           prefixIcon: Icon(icon, color: AppColors.textMuted, size: 22),
           hintText: hint,
           hintStyle: const TextStyle(color: AppColors.textMuted),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
           suffixIcon: isPassword
               ? IconButton(
                   icon: Icon(
-                    _showPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                    color: AppColors.textMuted, size: 22,
+                    _showPassword
+                        ? Icons.visibility_off_rounded
+                        : Icons.visibility_rounded,
+                    color: AppColors.textMuted,
+                    size: 22,
                   ),
-                  onPressed: () => setState(() => _showPassword = !_showPassword),
+                  onPressed: () =>
+                      setState(() => _showPassword = !_showPassword),
                 )
               : null,
         ),
@@ -503,7 +610,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildSocialButton(IconData icon, String label, VoidCallback onTap) {
+  Widget _buildSocialButton(IconData icon, VoidCallback onTap) {
     return GlassCard(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       borderRadius: 16,

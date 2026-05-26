@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatUser {
   final String id;
@@ -82,6 +82,8 @@ class ChatMessage {
   final Map<String, dynamic>? reactions;
   final List<String> deletedFor;
   final bool isRecalledForEveryone;
+  final int? imageWidth;
+  final int? imageHeight;
 
   const ChatMessage({
     required this.id,
@@ -97,7 +99,18 @@ class ChatMessage {
     this.reactions,
     this.deletedFor = const [],
     this.isRecalledForEveryone = false,
+    this.imageWidth,
+    this.imageHeight,
   });
+
+  double? get imageAspectRatio {
+    final width = imageWidth;
+    final height = imageHeight;
+    if (width == null || height == null || width <= 0 || height <= 0) {
+      return null;
+    }
+    return width / height;
+  }
 
   factory ChatMessage.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>?;
@@ -153,13 +166,26 @@ class ChatMessage {
       type: type,
       senderId: senderId,
       senderName: senderName,
-      isRead: deliveryStatus == MessageDeliveryStatus.read || data['isRead'] == true,
+      isRead: deliveryStatus == MessageDeliveryStatus.read ||
+          data['isRead'] == true,
       deliveryStatus: deliveryStatus,
       replyTo: data['replyTo']?.toString(),
       reactions: parsedReactions,
       deletedFor: deletedFor,
       isRecalledForEveryone: isRecalledForEveryone,
+      imageWidth: _readPositiveInt(data['imageWidth']),
+      imageHeight: _readPositiveInt(data['imageHeight']),
     );
+  }
+
+  static int? _readPositiveInt(dynamic raw) {
+    final value = raw is int
+        ? raw
+        : raw is num
+            ? raw.toInt()
+            : int.tryParse(raw?.toString() ?? '');
+    if (value == null || value <= 0) return null;
+    return value;
   }
 
   static String _formatTimestamp(dynamic timestamp) {
@@ -194,4 +220,3 @@ class ChatMessage {
 enum MessageType { text, image, system, emoji, deleted }
 
 enum MessageDeliveryStatus { sent, delivered, read }
-

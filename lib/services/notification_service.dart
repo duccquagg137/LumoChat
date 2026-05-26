@@ -55,23 +55,7 @@ class NotificationService {
       final docRef = _notifications.doc(dedupeId.trim());
       await RetryPolicy.run(
         operation: 'notifications.upsert_dedupe',
-        task: () async {
-          final existing = await docRef.get();
-          if (!existing.exists) {
-            await docRef.set(payload, SetOptions(merge: true));
-            return;
-          }
-
-          await docRef.set({
-            'title': title,
-            'body': body,
-            'entityId': entityId ?? '',
-            'data': data ?? const <String, dynamic>{},
-            'isRead': false,
-            'updatedAt': now,
-            'readAt': null,
-          }, SetOptions(merge: true));
-        },
+        task: () => docRef.set(payload, SetOptions(merge: true)),
       );
       return;
     }

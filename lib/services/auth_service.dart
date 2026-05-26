@@ -1,7 +1,9 @@
-import 'package:flutter/foundation.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+
+import '../utils/app_logger.dart';
 
 class AuthService {
   FirebaseAuth get _auth => FirebaseAuth.instance;
@@ -24,7 +26,7 @@ class AuthService {
       phoneNumber: phoneNumber,
       verificationCompleted: verificationCompleted,
       verificationFailed: (FirebaseAuthException e) {
-        verificationFailed("${e.code}: ${e.message}");
+        verificationFailed('${e.code}: ${e.message}');
       },
       codeSent: (String verificationId, int? resendToken) {
         codeSent(verificationId);
@@ -34,155 +36,208 @@ class AuthService {
   }
 
   // Sign In with OTP
-  Future<UserCredential?> signInWithOTP(String verificationId, String smsCode) async {
-    try {
-      PhoneAuthCredential credential = PhoneAuthProvider.credential(
-        verificationId: verificationId,
-        smsCode: smsCode,
-      );
-      UserCredential userCredential = await _auth.signInWithCredential(credential);
-      await _checkAndCreateUserDoc(userCredential.user);
-      return userCredential;
-    } on FirebaseAuthException catch (e) {
-      throw Exception(e.message);
-    }
+  Future<UserCredential?> signInWithOTP(
+    String verificationId,
+    String smsCode,
+  ) async {
+    final credential = PhoneAuthProvider.credential(
+      verificationId: verificationId,
+      smsCode: smsCode,
+    );
+    return signInWithPhoneCredential(credential);
+  }
+
+  Future<UserCredential?> signInWithPhoneCredential(
+    PhoneAuthCredential credential,
+  ) async {
+    final userCredential = await _auth.signInWithCredential(credential);
+    await _ensureUserDoc(userCredential.user);
+    return userCredential;
   }
 
   // Google Sign In
   Future<UserCredential?> signInWithGoogle() async {
-    try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) return null; // Cancelled
-      
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final AuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-      
-      UserCredential userCredential = await _auth.signInWithCredential(credential);
-      await _checkAndCreateUserDoc(userCredential.user);
-      return userCredential;
-    } on FirebaseAuthException catch (e) {
-      throw Exception(e.message);
-    }
-  }
+    final googleUser = await GoogleSignIn().signIn();
+    if (googleUser == null) return null; // Cancelled
 
+    final googleAuth = await googleUser.authentication;
+    final credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken,
+      idToken: googleAuth.idToken,
+    );
 
-
-  // Check and create user doc if not exists (for social & phone login)
-  Future<void> _checkAndCreateUserDoc(User? user) async {
-    if (user != null) {
-      final doc = await _firestore.collection('users').doc(user.uid).get();
-      if (!doc.exists) {
-        await _firestore.collection('users').doc(user.uid).set({
-          'uid': user.uid,
-          'email': user.email ?? '',
-          'name': user.displayName ?? user.phoneNumber ?? 'Người dùng',
-          'avatar': user.photoURL ?? '',
-          'bio': '',
-          'phoneNumber': user.phoneNumber ?? '',
-          'address': '',
-          'city': '',
-          'gender': '',
-          'dateOfBirth': '',
-          'website': '',
-          'occupation': '',
-          'settings': {
-            'darkMode': true,
-            'notifications': true,
-          },
-          'friends': [],
-          'friendRequestsSent': [],
-          'friendRequestsReceived': [],
-          'isOnline': true,
-          'lastActive': FieldValue.serverTimestamp(),
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      } else {
-        final data = doc.data() ?? <String, dynamic>{};
-        await updateUserPresence(true);
-        await _firestore.collection('users').doc(user.uid).set({
-          'friends': FieldValue.arrayUnion([]),
-          'friendRequestsSent': FieldValue.arrayUnion([]),
-          'friendRequestsReceived': FieldValue.arrayUnion([]),
-          'bio': (data['bio'] ?? '').toString(),
-          'phoneNumber': (data['phoneNumber'] ?? user.phoneNumber ?? '').toString(),
-          'address': (data['address'] ?? '').toString(),
-          'city': (data['city'] ?? '').toString(),
-          'gender': (data['gender'] ?? '').toString(),
-          'dateOfBirth': (data['dateOfBirth'] ?? '').toString(),
-          'website': (data['website'] ?? '').toString(),
-          'occupation': (data['occupation'] ?? '').toString(),
-          'settings': {
-            'darkMode': ((data['settings'] as Map<String, dynamic>?)?['darkMode'] != false),
-            'notifications': ((data['settings'] as Map<String, dynamic>?)?['notifications'] != false),
-          },
-        }, SetOptions(merge: true));
-      }
-    }
+    final userCredential = await _auth.signInWithCredential(credential);
+    await _ensureUserDoc(userCredential.user);
+    return userCredential;
   }
 
   // Default Email/Password Sign in
-  Future<UserCredential?> signInWithEmailPassword(String email, String password) async {
+  Future<UserCredential?> signInWithEmailPassword(
+    String email,
+    String password,
+  ) async {
+    final userCredential = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    await _ensureUserDoc(userCredential.user);
+    return userCredential;
+  }
+
+  Future<UserCredential?> signUpWithEmailPassword(
+    String email,
+    String password,
+    String name,
+  ) async {
+    final userCredential = await _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    await _ensureUserDoc(userCredential.user, nameOverride: name);
+    return userCredential;
+  }
+
+  Future<void> _ensureUserDoc(
+    User? user, {
+    String? nameOverride,
+    bool isOnline = true,
+  }) async {
+    if (user == null) return;
+
+    final userRef = _firestore.collection('users').doc(user.uid);
+    final defaults = _newUserData(
+      user,
+      nameOverride: nameOverride,
+      isOnline: isOnline,
+    );
+
     try {
-      UserCredential userCredential = await _auth.signInWithEmailAndPassword(email: email, password: password);
-      await updateUserPresence(true);
-      return userCredential;
-    } on FirebaseAuthException catch (e) {
-      throw Exception(e.message);
+      final doc = await userRef.get();
+      if (!doc.exists) {
+        await userRef.set(defaults);
+        return;
+      }
+
+      final data = doc.data() ?? <String, dynamic>{};
+      final updates = <String, dynamic>{
+        'uid': user.uid,
+        'isOnline': isOnline,
+        'lastActive': FieldValue.serverTimestamp(),
+      };
+
+      void putIfMissing(String key, Object? value) {
+        final current = data[key];
+        if (current == null || (current is String && current.trim().isEmpty)) {
+          updates[key] = value;
+        }
+      }
+
+      void putListIfMissing(String key) {
+        if (data[key] is! Iterable) {
+          updates[key] = <String>[];
+        }
+      }
+
+      putIfMissing('email', defaults['email']);
+      putIfMissing('name', defaults['name']);
+      putIfMissing('avatar', defaults['avatar']);
+      putIfMissing('bio', '');
+      putIfMissing('phoneNumber', defaults['phoneNumber']);
+      putIfMissing('address', '');
+      putIfMissing('city', '');
+      putIfMissing('gender', '');
+      putIfMissing('dateOfBirth', '');
+      putIfMissing('website', '');
+      putIfMissing('occupation', '');
+      putListIfMissing('friends');
+      putListIfMissing('friendRequestsSent');
+      putListIfMissing('friendRequestsReceived');
+      if (data['settings'] is! Map) {
+        updates['settings'] = defaults['settings'];
+      }
+      if (data['createdAt'] == null) {
+        updates['createdAt'] = FieldValue.serverTimestamp();
+      }
+
+      await userRef.set(updates, SetOptions(merge: true));
+    } on FirebaseException catch (e, stackTrace) {
+      AppLogger.error(
+        'User profile sync failed',
+        tag: 'auth',
+        error: e,
+        stackTrace: stackTrace,
+        context: {
+          'uid': user.uid,
+          'code': e.code,
+        },
+      );
+      rethrow;
     }
   }
 
-  Future<UserCredential?> signUpWithEmailPassword(String email, String password, String name) async {
-    try {
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(email: email, password: password);
-      if (userCredential.user != null) {
-        await _firestore.collection('users').doc(userCredential.user!.uid).set({
-          'uid': userCredential.user!.uid,
-          'email': email,
-          'name': name,
-          'avatar': '',
-          'bio': '',
-          'phoneNumber': '',
-          'address': '',
-          'city': '',
-          'gender': '',
-          'dateOfBirth': '',
-          'website': '',
-          'occupation': '',
-          'settings': {
-            'darkMode': true,
-            'notifications': true,
-          },
-          'friends': [],
-          'friendRequestsSent': [],
-          'friendRequestsReceived': [],
-          'isOnline': true,
-          'lastActive': FieldValue.serverTimestamp(),
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+  Map<String, dynamic> _newUserData(
+    User user, {
+    String? nameOverride,
+    required bool isOnline,
+  }) {
+    final resolvedName = _firstText([
+      nameOverride,
+      user.displayName,
+      user.phoneNumber,
+      'Người dùng',
+    ]);
+
+    return {
+      'uid': user.uid,
+      'email': user.email ?? '',
+      'name': resolvedName,
+      'avatar': user.photoURL ?? '',
+      'bio': '',
+      'phoneNumber': user.phoneNumber ?? '',
+      'address': '',
+      'city': '',
+      'gender': '',
+      'dateOfBirth': '',
+      'website': '',
+      'occupation': '',
+      'settings': {
+        'darkMode': true,
+        'notifications': true,
+      },
+      'friends': <String>[],
+      'friendRequestsSent': <String>[],
+      'friendRequestsReceived': <String>[],
+      'isOnline': isOnline,
+      'lastActive': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
+    };
+  }
+
+  String _firstText(Iterable<String?> values) {
+    for (final value in values) {
+      final text = value?.trim();
+      if (text != null && text.isNotEmpty) {
+        return text;
       }
-      return userCredential;
-    } on FirebaseAuthException catch (e) {
-      throw Exception(e.message);
     }
+    return '';
   }
 
   Future<void> updateUserPresence(bool isOnline) async {
     final user = _auth.currentUser;
-    if (user != null) {
-      try {
-        await _firestore.collection('users').doc(user.uid).update({
-          'isOnline': isOnline,
-          'lastActive': FieldValue.serverTimestamp(),
-        });
-      } catch (e) {
-        await _firestore.collection('users').doc(user.uid).set({
-          'isOnline': isOnline,
-          'lastActive': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+    if (user == null) return;
+
+    try {
+      await _firestore.collection('users').doc(user.uid).update({
+        'isOnline': isOnline,
+        'lastActive': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      if (e.code == 'not-found') {
+        await _ensureUserDoc(user, isOnline: isOnline);
+        return;
       }
+      rethrow;
     }
   }
 
@@ -194,7 +249,7 @@ class AuthService {
           'lastActiveScreen': screenData,
         });
       } catch (e) {
-        debugPrint("Lỗi cập nhật lastScreen: $e");
+        debugPrint('Failed to update lastScreen: $e');
       }
     }
   }
@@ -202,10 +257,12 @@ class AuthService {
   Future<void> signOut() async {
     await updateLastScreen(null);
     await updateUserPresence(false);
-    
+
     // Also sign out from Google to allow switching accounts later
-    try { await GoogleSignIn().signOut(); } catch (_) {}
-    
+    try {
+      await GoogleSignIn().signOut();
+    } catch (_) {}
+
     await _auth.signOut();
   }
 }

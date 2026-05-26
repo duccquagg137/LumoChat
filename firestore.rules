@@ -10,14 +10,88 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function userDoc(userId) {
-      return get(/databases/$(database)/documents/users/$(userId));
+    function contactFieldsOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'friends',
+        'friendRequestsSent',
+        'friendRequestsReceived'
+      ]);
     }
 
-    function isFriendWith(userId) {
-      return isSignedIn() &&
-        userDoc(userId).data.friends is list &&
-        request.auth.uid in userDoc(userId).data.friends;
+    function listValue(data, field) {
+      return data.get(field, []);
+    }
+
+    function fieldIsList(data, field) {
+      return listValue(data, field) is list;
+    }
+
+    function contactFieldUnchanged(field) {
+      return listValue(request.resource.data, field) == listValue(resource.data, field);
+    }
+
+    function addsCurrentUserTo(field) {
+      return fieldIsList(resource.data, field) &&
+        fieldIsList(request.resource.data, field) &&
+        !(request.auth.uid in listValue(resource.data, field)) &&
+        request.auth.uid in listValue(request.resource.data, field) &&
+        listValue(request.resource.data, field).hasAll(listValue(resource.data, field)) &&
+        listValue(request.resource.data, field).size() == listValue(resource.data, field).size() + 1;
+    }
+
+    function removesCurrentUserFrom(field) {
+      return fieldIsList(resource.data, field) &&
+        fieldIsList(request.resource.data, field) &&
+        request.auth.uid in listValue(resource.data, field) &&
+        !(request.auth.uid in listValue(request.resource.data, field)) &&
+        listValue(resource.data, field).hasAll(listValue(request.resource.data, field)) &&
+        listValue(request.resource.data, field).size() == listValue(resource.data, field).size() - 1;
+    }
+
+    function receivesFriendRequestFromCurrentUser() {
+      return contactFieldsOnly() &&
+        addsCurrentUserTo('friendRequestsReceived') &&
+        contactFieldUnchanged('friendRequestsSent') &&
+        contactFieldUnchanged('friends') &&
+        !(request.auth.uid in listValue(resource.data, 'friends'));
+    }
+
+    function cancelsFriendRequestFromCurrentUser() {
+      return contactFieldsOnly() &&
+        removesCurrentUserFrom('friendRequestsReceived') &&
+        contactFieldUnchanged('friendRequestsSent') &&
+        contactFieldUnchanged('friends');
+    }
+
+    function acceptsCurrentUsersFriendRequest() {
+      return contactFieldsOnly() &&
+        removesCurrentUserFrom('friendRequestsSent') &&
+        addsCurrentUserTo('friends') &&
+        contactFieldUnchanged('friendRequestsReceived');
+    }
+
+    function rejectsCurrentUsersFriendRequest() {
+      return contactFieldsOnly() &&
+        removesCurrentUserFrom('friendRequestsSent') &&
+        contactFieldUnchanged('friendRequestsReceived') &&
+        contactFieldUnchanged('friends');
+    }
+
+    function removesCurrentUserAsFriend() {
+      return contactFieldsOnly() &&
+        removesCurrentUserFrom('friends') &&
+        contactFieldUnchanged('friendRequestsSent') &&
+        contactFieldUnchanged('friendRequestsReceived');
+    }
+
+    function isValidContactRelationshipUpdate() {
+      return isSignedIn() && (
+        receivesFriendRequestFromCurrentUser() ||
+        cancelsFriendRequestFromCurrentUser() ||
+        acceptsCurrentUsersFriendRequest() ||
+        rejectsCurrentUsersFriendRequest() ||
+        removesCurrentUserAsFriend()
+      );
     }
 
     function isGroupMemberByData(groupData) {
@@ -34,19 +108,37 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).changedKeys().hasOnly(['readBy', 'reactions', 'deletedFor']);
     }
 
+    function callParticipantsIncludeCurrentUser(callData) {
+      return callData.participants is list && request.auth.uid in callData.participants;
+    }
+
+    function isCallParticipantByData(callData) {
+      return isSignedIn() && (
+        callParticipantsIncludeCurrentUser(callData) ||
+        request.auth.uid == callData.callerId ||
+        request.auth.uid == callData.calleeId
+      );
+    }
+
     function isSelfLeaveGroup() {
       return !(request.auth.uid in resource.data.admins) &&
         !(request.auth.uid in request.resource.data.members) &&
         resource.data.members.hasAll(request.resource.data.members) &&
         request.resource.data.members.size() == resource.data.members.size() - 1 &&
         request.resource.data.admins == resource.data.admins &&
-        request.resource.data.diff(resource.data).changedKeys().hasOnly(['members', 'lastTimestamp']);
+        request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'members',
+          'lastTimestamp',
+          'unreadCountByUser',
+          'lastReadAtByUser'
+        ]);
     }
 
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isSelf(userId);
-      allow update, delete: if isSelf(userId);
+      allow update: if isSelf(userId) || isValidContactRelationshipUpdate();
+      allow delete: if isSelf(userId);
     }
 
     match /chat_rooms/{roomId} {
@@ -88,7 +180,14 @@ service cloud.firestore {
       allow update: if isGroupMemberByData(resource.data) && (
           isGroupAdminByData(resource.data) ||
           isSelfLeaveGroup() ||
-          request.resource.data.diff(resource.data).changedKeys().hasOnly(['typing', 'lastMessage', 'lastTimestamp', 'pinnedMessage'])
+          request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'typing',
+            'lastMessage',
+            'lastTimestamp',
+            'pinnedMessage',
+            'unreadCountByUser',
+            'lastReadAtByUser'
+          ])
         );
 
       allow delete: if isGroupAdminByData(resource.data);
@@ -102,18 +201,24 @@ service cloud.firestore {
 
         allow create: if isSignedIn() &&
           request.auth.uid in groupDoc().data.members &&
-          request.auth.uid == request.resource.data.senderId;
+          (
+            request.auth.uid == request.resource.data.senderId ||
+            (
+              request.resource.data.senderId == 'system' &&
+              request.resource.data.type == 'system'
+            )
+          );
 
         allow update: if isSignedIn() &&
           request.auth.uid in groupDoc().data.members &&
           canUpdateGroupMessage(resource.data);
 
-        allow delete: if false;
+        allow delete: if isSignedIn() && isGroupAdminByData(groupDoc().data);
       }
     }
 
     match /calls/{callId} {
-      allow read: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow read: if isCallParticipantByData(resource.data);
 
       allow create: if isSignedIn() &&
         request.auth.uid == request.resource.data.callerId &&
@@ -123,7 +228,7 @@ service cloud.firestore {
         request.resource.data.calleeId in request.resource.data.participants;
 
       allow update: if isSignedIn() &&
-        request.auth.uid in resource.data.participants &&
+        isCallParticipantByData(resource.data) &&
         request.resource.data.callerId == resource.data.callerId &&
         request.resource.data.calleeId == resource.data.calleeId &&
         request.resource.data.participants == resource.data.participants &&
@@ -142,19 +247,43 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow read: if isSignedIn() && request.auth.uid == resource.data.recipientId;
+      function isNotificationSenderRefresh() {
+        return isSignedIn() &&
+          request.auth.uid == resource.data.senderId &&
+          request.resource.data.senderId == resource.data.senderId &&
+          request.resource.data.recipientId == resource.data.recipientId &&
+          request.resource.data.type == resource.data.type &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'title',
+            'body',
+            'entityId',
+            'data',
+            'isRead',
+            'createdAt',
+            'updatedAt',
+            'readAt',
+            'pushedAt'
+          ]);
+      }
+
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.recipientId ||
+        request.auth.uid == resource.data.senderId
+      );
 
       allow create: if isSignedIn() &&
         request.auth.uid == request.resource.data.senderId &&
         request.resource.data.recipientId is string &&
         request.resource.data.recipientId.size() > 0;
 
-      allow update: if isSignedIn() &&
+      allow update: if (
+        isSignedIn() &&
         request.auth.uid == resource.data.recipientId &&
         request.resource.data.diff(resource.data).changedKeys().hasOnly([
           'isRead',
           'readAt'
-        ]);
+        ])
+      ) || isNotificationSenderRefresh();
 
       allow delete: if isSignedIn() && request.auth.uid == resource.data.recipientId;
     }

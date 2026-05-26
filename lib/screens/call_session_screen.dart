@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -246,7 +247,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
           content: Text(
             _txt(
               context,
-              vi: 'Khong khoi tao duoc media cuoc goi',
+              vi: 'Không khởi tạo được media cuộc gọi',
               en: 'Cannot initialize call media',
             ),
           ),
@@ -569,21 +570,21 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
     switch (call.status) {
       case CallStatus.ringing:
         return widget.isIncoming
-            ? _txt(context, vi: 'Cuoc goi den', en: 'Incoming call')
-            : _txt(context, vi: 'Dang do chuong...', en: 'Ringing...');
+            ? _txt(context, vi: 'Cuộc gọi đến', en: 'Incoming call')
+            : _txt(context, vi: 'Đang đổ chuông...', en: 'Ringing...');
       case CallStatus.accepted:
-        return _txt(context, vi: 'Dang ket noi', en: 'Connected');
+        return _txt(context, vi: 'Đang kết nối', en: 'Connected');
       case CallStatus.declined:
-        return _txt(context, vi: 'Cuoc goi bi tu choi', en: 'Call declined');
+        return _txt(context, vi: 'Cuộc gọi bị từ chối', en: 'Call declined');
       case CallStatus.cancelled:
-        return _txt(context, vi: 'Cuoc goi da huy', en: 'Call canceled');
+        return _txt(context, vi: 'Cuộc gọi đã hủy', en: 'Call canceled');
       case CallStatus.missed:
-        return _txt(context, vi: 'Cuoc goi nho', en: 'Missed call');
+        return _txt(context, vi: 'Cuộc gọi nhỡ', en: 'Missed call');
       case CallStatus.ended:
-        return _txt(context, vi: 'Cuoc goi ket thuc', en: 'Call ended');
+        return _txt(context, vi: 'Cuộc gọi kết thúc', en: 'Call ended');
       case CallStatus.unknown:
         return _txt(context,
-            vi: 'Trang thai khong xac dinh', en: 'Unknown status');
+            vi: 'Trạng thái không xác định', en: 'Unknown status');
     }
   }
 
@@ -599,9 +600,9 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
 
   String _callTypeLabel() {
     if (widget.callType == CallType.video) {
-      return _txt(context, vi: 'Video call', en: 'Video call');
+      return _txt(context, vi: 'Cuộc gọi video', en: 'Video call');
     }
-    return _txt(context, vi: 'Voice call', en: 'Voice call');
+    return _txt(context, vi: 'Cuộc gọi thoại', en: 'Voice call');
   }
 
   void _applyTrackStates() {
@@ -649,12 +650,26 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: _callService.watchCall(widget.callId),
         builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return _buildLoading(context);
+          }
+          if (snapshot.hasError) {
+            return _buildFallback(
+              context,
+              _txt(
+                context,
+                vi: 'Không tải được cuộc gọi',
+                en: 'Unable to load call',
+              ),
+            );
+          }
           if (!snapshot.hasData || snapshot.data?.exists != true) {
             return _buildFallback(
               context,
               _txt(
                 context,
-                vi: 'Cuoc goi khong con ton tai',
+                vi: 'Cuộc gọi không còn tồn tại',
                 en: 'Call no longer exists',
               ),
             );
@@ -705,79 +720,65 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                     ),
                   ),
                 ),
-                Column(
-                  children: [
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.glassBg,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.glassBorder),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            widget.callType == CallType.video
-                                ? Icons.videocam_rounded
-                                : Icons.call_rounded,
-                            size: 16,
-                            color: AppColors.primaryLight,
+                Positioned.fill(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 10),
+                        _buildCallTypePill(),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _buildMediaStage(),
+                              const SizedBox(height: 18),
+                              Text(
+                                widget.peerName,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w700,
+                                  fontFamily: 'Inter',
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _statusText(call),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 14,
+                                  fontFamily: 'Inter',
+                                ),
+                              ),
+                              if (call.status == CallStatus.accepted) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  _formatDuration(_elapsed),
+                                  style: const TextStyle(
+                                    color: AppColors.primaryLight,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    fontFamily: 'Inter',
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _callTypeLabel(),
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              fontFamily: 'Inter',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    _buildMediaStage(),
-                    const SizedBox(height: 14),
-                    Text(
-                      widget.peerName,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Inter',
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _statusText(call),
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                        fontFamily: 'Inter',
-                      ),
-                    ),
-                    if (call.status == CallStatus.accepted) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        _formatDuration(_elapsed),
-                        style: const TextStyle(
-                          color: AppColors.primaryLight,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          fontFamily: 'Inter',
                         ),
-                      ),
-                    ],
-                    const Spacer(),
-                    _buildControls(call),
-                    const SizedBox(height: 28),
-                  ],
+                        _buildControls(call),
+                        SizedBox(
+                          height:
+                              MediaQuery.sizeOf(context).height < 700 ? 18 : 28,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -787,10 +788,68 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
     );
   }
 
+  Widget _buildLoading(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(color: AppColors.primaryLight),
+          const SizedBox(height: 14),
+          Text(
+            _txt(context, vi: 'Đang mở cuộc gọi...', en: 'Opening call...'),
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 14,
+              fontFamily: 'Inter',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCallTypePill() {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 6,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.glassBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.glassBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            widget.callType == CallType.video
+                ? Icons.videocam_rounded
+                : Icons.call_rounded,
+            size: 16,
+            color: AppColors.primaryLight,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            _callTypeLabel(),
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Inter',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMediaStage() {
+    final screenSize = MediaQuery.sizeOf(context);
+    final isCompact = screenSize.height < 700;
     if (widget.callType != CallType.video) {
       return CircleAvatar(
-        radius: 56,
+        radius: isCompact ? 48 : 56,
         backgroundColor: AppColors.glassBg,
         backgroundImage: widget.peerAvatar.trim().isEmpty
             ? null
@@ -810,9 +869,16 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
       );
     }
 
+    final stageHeight = math.min(
+      isCompact ? 220.0 : 280.0,
+      math.max(180.0, screenSize.height * 0.42),
+    );
+    final previewWidth = isCompact ? 86.0 : 102.0;
+    final previewHeight = isCompact ? 124.0 : 146.0;
+
     return Container(
-      height: 280,
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+      width: double.infinity,
+      height: stageHeight,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: AppColors.glassBorder),
@@ -844,7 +910,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                         child: Text(
                           _txt(
                             context,
-                            vi: 'Dang cho video tu doi phuong...',
+                            vi: 'Đang chờ video từ đối phương...',
                             en: 'Waiting for remote video...',
                           ),
                           textAlign: TextAlign.center,
@@ -862,8 +928,8 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                 right: 10,
                 bottom: 10,
                 child: Container(
-                  width: 102,
-                  height: 146,
+                  width: previewWidth,
+                  height: previewHeight,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: AppColors.glassBorder),
@@ -916,7 +982,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
               const SizedBox(height: 12),
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text(_txt(context, vi: 'Dong', en: 'Close')),
+                child: Text(_txt(context, vi: 'Đóng', en: 'Close')),
               ),
             ],
           ),
@@ -926,6 +992,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
   }
 
   Widget _buildControls(AppCall call) {
+    final isCompact = MediaQuery.sizeOf(context).height < 700;
     if (call.status == CallStatus.ringing) {
       if (widget.isIncoming && call.calleeId == _callService.currentUserId) {
         return Column(
@@ -935,18 +1002,18 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
               children: [
                 _buildControlWithLabel(
                   icon: Icons.call_end_rounded,
-                  label: _txt(context, vi: 'Tu choi', en: 'Decline'),
+                  label: _txt(context, vi: 'Từ chối', en: 'Decline'),
                   color: AppColors.error,
                   onTap: _declineCall,
-                  size: 78,
+                  size: isCompact ? 68 : 78,
                 ),
                 const SizedBox(width: 24),
                 _buildControlWithLabel(
                   icon: Icons.call_rounded,
-                  label: _txt(context, vi: 'Tra loi', en: 'Answer'),
+                  label: _txt(context, vi: 'Trả lời', en: 'Answer'),
                   color: AppColors.accentGreen,
                   onTap: _acceptCall,
-                  size: 78,
+                  size: isCompact ? 68 : 78,
                 ),
               ],
             ),
@@ -957,10 +1024,10 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
         children: [
           _buildControlWithLabel(
             icon: Icons.call_end_rounded,
-            label: _txt(context, vi: 'Huy cuoc goi', en: 'Cancel call'),
+            label: _txt(context, vi: 'Hủy cuộc gọi', en: 'Cancel call'),
             color: AppColors.error,
             onTap: _cancelCall,
-            size: 86,
+            size: isCompact ? 76 : 86,
           ),
         ],
       );
@@ -978,9 +1045,9 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                 color: _isMicMuted ? AppColors.error : AppColors.glassBg,
                 onTap: _toggleMic,
                 iconColor: _isMicMuted ? Colors.white : AppColors.textPrimary,
-                size: 72,
+                size: isCompact ? 62 : 72,
               ),
-              const SizedBox(width: 18),
+              SizedBox(width: isCompact ? 12 : 18),
               _buildControlWithLabel(
                 icon: _isSpeakerOn
                     ? Icons.volume_up_rounded
@@ -989,10 +1056,10 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                 color: _isSpeakerOn ? AppColors.glassBg : AppColors.error,
                 onTap: _toggleSpeaker,
                 iconColor: _isSpeakerOn ? AppColors.textPrimary : Colors.white,
-                size: 72,
+                size: isCompact ? 62 : 72,
               ),
               if (widget.callType == CallType.video) ...[
-                const SizedBox(width: 18),
+                SizedBox(width: isCompact ? 12 : 18),
                 _buildControlWithLabel(
                   icon: _isCameraOn
                       ? Icons.videocam_rounded
@@ -1001,18 +1068,18 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                   color: _isCameraOn ? AppColors.glassBg : AppColors.error,
                   onTap: _toggleCamera,
                   iconColor: _isCameraOn ? AppColors.textPrimary : Colors.white,
-                  size: 72,
+                  size: isCompact ? 62 : 72,
                 ),
               ],
             ],
           ),
-          const SizedBox(height: 22),
+          SizedBox(height: isCompact ? 14 : 22),
           _buildControlWithLabel(
             icon: Icons.call_end_rounded,
-            label: _txt(context, vi: 'Ket thuc', en: 'End call'),
+            label: _txt(context, vi: 'Kết thúc', en: 'End call'),
             color: AppColors.error,
             onTap: _endCall,
-            size: 92,
+            size: isCompact ? 78 : 92,
           ),
         ],
       );
@@ -1020,11 +1087,11 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
 
     return _buildControlWithLabel(
       icon: Icons.close_rounded,
-      label: _txt(context, vi: 'Dong', en: 'Close'),
+      label: _txt(context, vi: 'Đóng', en: 'Close'),
       color: AppColors.glassBg,
       iconColor: AppColors.textPrimary,
       onTap: () => Navigator.pop(context),
-      size: 72,
+      size: isCompact ? 62 : 72,
     );
   }
 
