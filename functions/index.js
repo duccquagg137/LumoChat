@@ -55,6 +55,9 @@ exports.sendPushOnNotificationCreated = onDocumentCreated(
       return;
     }
 
+    const isCall = type.startsWith("incoming_");
+    const androidChannelId = isCall ? "lumo_chat_calls" : "lumo_chat_messages";
+
     const payload = {
       notification: { title, body },
       data: {
@@ -64,7 +67,13 @@ exports.sendPushOnNotificationCreated = onDocumentCreated(
         ...toStringMap(metadata),
       },
       tokens,
-      android: { priority: "high" },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: androidChannelId,
+          sound: "default",
+        },
+      },
       apns: {
         headers: { "apns-priority": "10" },
         payload: { aps: { sound: "default" } },

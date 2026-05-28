@@ -307,7 +307,6 @@ class GroupService {
         .toList();
     if (targets.isEmpty) return;
 
-    final bucket = DateTime.now().millisecondsSinceEpoch ~/ 15000;
     final safeGroup = groupName.trim().isEmpty ? 'Group' : groupName.trim();
     final safeSender =
         senderName.trim().isEmpty ? _currentUserName : senderName.trim();
@@ -315,8 +314,7 @@ class GroupService {
 
     await Future.wait(
       targets.map((recipientId) {
-        final dedupeId =
-            'gm_${groupId}_${recipientId}_${_currentUserId}_$bucket';
+        final dedupeId = 'gm_${groupId}_${recipientId}_$messageId';
         return _notificationService.createNotification(
           recipientId: recipientId,
           senderId: _currentUserId,

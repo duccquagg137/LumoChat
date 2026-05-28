@@ -1,15 +1,16 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
-import '../models/call_models.dart';
 import '../services/app_providers.dart';
 import '../services/auth_service.dart';
-import '../services/call_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/l10n.dart';
+import '../utils/profile_visibility.dart';
 import '../widgets/glass_card.dart';
 import 'notification_center_screen.dart';
 import 'edit_profile_screen.dart';
@@ -26,7 +27,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _darkMode = true;
   bool _notifications = true;
   bool _settingsLoaded = false;
-  final CallService _callService = CallService();
 
   bool _isEnglish(BuildContext context) =>
       Localizations.localeOf(context).languageCode == 'en';
@@ -65,16 +65,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     });
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
 
     try {
+      if (key == 'darkMode') {
+        await ref.read(appThemeActionsProvider).setDarkMode(value);
+      }
+
+      if (uid == null) return;
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'settings': {key: value}
       }, SetOptions(merge: true));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.profileSaveSettingFailed(e.toString()))),
+        SnackBar(
+            content: Text(context.l10n.profileSaveSettingFailed(e.toString()))),
+      );
+    }
+  }
+
+  Future<void> _updateProfileVisibility(String key, bool value) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'settings.profileVisibility.$key': value,
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(context.l10n.profileSaveSettingFailed(e.toString()))),
       );
     }
   }
@@ -95,7 +117,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.profileLanguageSaveFailed(e.toString()))),
+        SnackBar(
+            content:
+                Text(context.l10n.profileLanguageSaveFailed(e.toString()))),
       );
     }
 
@@ -110,8 +134,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.bgSurface,
-        title: Text(title, style: const TextStyle(color: AppColors.textPrimary)),
-        content: Text(message, style: const TextStyle(color: AppColors.textSecondary)),
+        title: Text(title, style: TextStyle(color: AppColors.textPrimary)),
+        content:
+            Text(message, style: TextStyle(color: AppColors.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
@@ -132,7 +157,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         backgroundColor: AppColors.bgSurface,
         title: Text(
           l10n.profileLanguageDialogTitle,
-          style: const TextStyle(color: AppColors.textPrimary),
+          style: TextStyle(color: AppColors.textPrimary),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -183,13 +208,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       contentPadding: EdgeInsets.zero,
       minLeadingWidth: 24,
       leading: Icon(
-        selected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+        selected
+            ? Icons.radio_button_checked_rounded
+            : Icons.radio_button_unchecked_rounded,
         color: selected ? AppColors.primary : AppColors.textMuted,
         size: 22,
       ),
       title: Text(
         title,
-        style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
+        style: TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
       ),
     );
   }
@@ -211,25 +238,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [AppColors.primary.withAlphaFraction(0.15), Colors.transparent],
+                  colors: [
+                    AppColors.primary.withAlphaFraction(0.15),
+                    Colors.transparent
+                  ],
                 ),
               ),
             ),
           ),
           SafeArea(
             child: StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(uid)
+                  .snapshots(),
               builder: (profileContext, snapshot) {
                 if (snapshot.hasError) {
                   return Center(
                     child: Text(
                       l10n.profileLoadError,
-                      style: const TextStyle(color: AppColors.textMuted),
+                      style: TextStyle(color: AppColors.textMuted),
                     ),
                   );
                 }
                 if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                  return const Center(
+                      child:
+                          CircularProgressIndicator(color: AppColors.primary));
                 }
 
                 final userData = snapshot.data!.data() as Map<String, dynamic>?;
@@ -237,36 +272,61 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   return Center(
                     child: Text(
                       l10n.profileLoadError,
-                      style: const TextStyle(color: AppColors.textMuted),
+                      style: TextStyle(color: AppColors.textMuted),
                     ),
                   );
                 }
 
-                final settings = (userData['settings'] as Map<String, dynamic>?) ?? const {};
+                final settings =
+                    (userData['settings'] as Map<String, dynamic>?) ?? const {};
+                final profileVisibility =
+                    ProfileVisibility.fromUserData(userData);
                 if (!_settingsLoaded) {
                   _darkMode = settings['darkMode'] != false;
                   _notifications = settings['notifications'] != false;
-                  final savedLanguage = (settings['languageCode'] ?? '').toString();
+                  final savedDarkMode = _darkMode;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    unawaited(
+                      ref
+                          .read(appThemeActionsProvider)
+                          .setDarkMode(savedDarkMode),
+                    );
+                  });
+                  final savedLanguage =
+                      (settings['languageCode'] ?? '').toString();
                   if (savedLanguage == 'vi' || savedLanguage == 'en') {
                     ref.read(appLocaleActionsProvider).setLocale(savedLanguage);
                   }
                   _settingsLoaded = true;
                 }
 
-                final name = _displayOrFallback(userData['name'], fallback: l10n.profileFallbackUser);
-                final email = _displayOrFallback(userData['email'], fallback: l10n.profileNotUpdated);
-                final bio = _displayOrFallback(userData['bio'], fallback: l10n.profileFallbackBio);
+                final name = _displayOrFallback(userData['name'],
+                    fallback: l10n.profileFallbackUser);
+                final email = _displayOrFallback(userData['email'],
+                    fallback: l10n.profileNotUpdated);
+                final bio = _displayOrFallback(userData['bio'],
+                    fallback: l10n.profileFallbackBio);
                 final avatar = (userData['avatar'] ?? '').toString();
                 final isOnline = userData['isOnline'] == true;
-                final friendCount = (userData['friends'] is List) ? (userData['friends'] as List).length : 0;
+                final friendCount = (userData['friends'] is List)
+                    ? (userData['friends'] as List).length
+                    : 0;
 
-                final phone = _displayOrFallback(userData['phoneNumber'], fallback: l10n.profileNotUpdated);
-                final address = _displayOrFallback(userData['address'], fallback: l10n.profileNotUpdated);
-                final city = _displayOrFallback(userData['city'], fallback: l10n.profileNotUpdated);
-                final gender = _displayOrFallback(userData['gender'], fallback: l10n.profileNotUpdated);
-                final birthday = _formatDateField(userData['dateOfBirth'], fallback: l10n.profileNotUpdated);
-                final website = _displayOrFallback(userData['website'], fallback: l10n.profileNotUpdated);
-                final occupation = _displayOrFallback(userData['occupation'], fallback: l10n.profileNotUpdated);
+                final phone = _displayOrFallback(userData['phoneNumber'],
+                    fallback: l10n.profileNotUpdated);
+                final address = _displayOrFallback(userData['address'],
+                    fallback: l10n.profileNotUpdated);
+                final city = _displayOrFallback(userData['city'],
+                    fallback: l10n.profileNotUpdated);
+                final gender = _displayOrFallback(userData['gender'],
+                    fallback: l10n.profileNotUpdated);
+                final birthday = _formatDateField(userData['dateOfBirth'],
+                    fallback: l10n.profileNotUpdated);
+                final website = _displayOrFallback(userData['website'],
+                    fallback: l10n.profileNotUpdated);
+                final occupation = _displayOrFallback(userData['occupation'],
+                    fallback: l10n.profileNotUpdated);
 
                 final profileSummary = StringBuffer()
                   ..writeln(l10n.profileSummaryTitle)
@@ -289,7 +349,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         children: [
                           Text(
                             l10n.navProfile,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 28,
                               fontWeight: FontWeight.w800,
                               color: AppColors.textPrimary,
@@ -303,9 +363,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             decoration: BoxDecoration(
                               color: AppColors.glassBg,
                               shape: BoxShape.circle,
-                              border: Border.all(color: AppColors.glassBorder, width: 0.5),
+                              border: Border.all(
+                                  color: AppColors.glassBorder, width: 0.5),
                             ),
-                            child: const Icon(Icons.settings_outlined, color: AppColors.textPrimary, size: 20),
+                            child: Icon(Icons.settings_outlined,
+                                color: AppColors.textPrimary, size: 20),
                           ),
                         ],
                       ),
@@ -323,7 +385,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             const SizedBox(height: 16),
                             Text(
                               name,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: AppColors.textPrimary,
                                 fontSize: 22,
                                 fontWeight: FontWeight.w800,
@@ -333,13 +395,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             const SizedBox(height: 4),
                             Text(
                               email,
-                              style: const TextStyle(color: AppColors.primaryLight, fontSize: 14, fontFamily: 'Inter'),
+                              style: TextStyle(
+                                  color: AppColors.primaryLight,
+                                  fontSize: 14,
+                                  fontFamily: 'Inter'),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               bio,
                               textAlign: TextAlign.center,
-                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, fontFamily: 'Inter'),
+                              style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 14,
+                                  fontFamily: 'Inter'),
                             ),
                             const SizedBox(height: 20),
                             StreamBuilder<QuerySnapshot>(
@@ -348,15 +416,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   .where('members', arrayContains: uid)
                                   .snapshots(),
                               builder: (context, groupSnapshot) {
-                                final groupCount = groupSnapshot.data?.docs.length ?? 0;
+                                final groupCount =
+                                    groupSnapshot.data?.docs.length ?? 0;
                                 return Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
                                   children: [
-                                    _buildStat('$friendCount', l10n.profileStatFriends),
-                                    Container(width: 1, height: 30, color: AppColors.glassBorder),
-                                    _buildStat('$groupCount', l10n.profileStatGroups),
-                                    Container(width: 1, height: 30, color: AppColors.glassBorder),
-                                    _buildStat(isOnline ? l10n.commonOnline : l10n.commonOffline, l10n.profileStatStatus),
+                                    _buildStat('$friendCount',
+                                        l10n.profileStatFriends),
+                                    Container(
+                                        width: 1,
+                                        height: 30,
+                                        color: AppColors.glassBorder),
+                                    _buildStat(
+                                        '$groupCount', l10n.profileStatGroups),
+                                    Container(
+                                        width: 1,
+                                        height: 30,
+                                        color: AppColors.glassBorder),
+                                    _buildStat(
+                                        isOnline
+                                            ? l10n.commonOnline
+                                            : l10n.commonOffline,
+                                        l10n.profileStatStatus),
                                   ],
                                 );
                               },
@@ -373,7 +455,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       Navigator.push(
                                         profileContext,
                                         MaterialPageRoute(
-                                          builder: (_) => EditProfileScreen(userData: userData),
+                                          builder: (_) => EditProfileScreen(
+                                              userData: userData),
                                         ),
                                       );
                                     },
@@ -385,10 +468,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                     text: l10n.profileShare,
                                     icon: Icons.share_rounded,
                                     onPressed: () async {
-                                      await Clipboard.setData(ClipboardData(text: profileSummary.toString()));
+                                      await Clipboard.setData(ClipboardData(
+                                          text: profileSummary.toString()));
                                       if (!profileContext.mounted) return;
-                                      ScaffoldMessenger.of(profileContext).showSnackBar(
-                                        SnackBar(content: Text(l10n.profileCopySummarySuccess)),
+                                      ScaffoldMessenger.of(profileContext)
+                                          .showSnackBar(
+                                        SnackBar(
+                                            content: Text(l10n
+                                                .profileCopySummarySuccess)),
                                       );
                                     },
                                   ),
@@ -400,13 +487,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                       const SizedBox(height: 20),
                       _buildSection(l10n.profileSectionBasicInfo, [
-                        _buildInfoRow(Icons.phone_outlined, l10n.profileFieldPhone, phone),
-                        _buildInfoRow(Icons.location_on_outlined, l10n.profileFieldAddress, address),
-                        _buildInfoRow(Icons.location_city_outlined, l10n.profileFieldCity, city),
-                        _buildInfoRow(Icons.wc_outlined, l10n.profileFieldGender, gender),
-                        _buildInfoRow(Icons.cake_outlined, l10n.profileFieldBirthDate, birthday),
-                        _buildInfoRow(Icons.work_outline_rounded, l10n.profileFieldOccupation, occupation),
-                        _buildInfoRow(Icons.language_rounded, l10n.profileFieldWebsite, website),
+                        _buildInfoRow(Icons.phone_outlined,
+                            l10n.profileFieldPhone, phone),
+                        _buildInfoRow(Icons.location_on_outlined,
+                            l10n.profileFieldAddress, address),
+                        _buildInfoRow(Icons.location_city_outlined,
+                            l10n.profileFieldCity, city),
+                        _buildInfoRow(
+                            Icons.wc_outlined, l10n.profileFieldGender, gender),
+                        _buildInfoRow(Icons.cake_outlined,
+                            l10n.profileFieldBirthDate, birthday),
+                        _buildInfoRow(Icons.work_outline_rounded,
+                            l10n.profileFieldOccupation, occupation),
+                        _buildInfoRow(Icons.language_rounded,
+                            l10n.profileFieldWebsite, website),
                       ]),
                       const SizedBox(height: 16),
                       _buildSection(l10n.profileSectionAccount, [
@@ -417,7 +511,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             Navigator.push(
                               profileContext,
                               MaterialPageRoute(
-                                builder: (_) => EditProfileScreen(userData: userData),
+                                builder: (_) =>
+                                    EditProfileScreen(userData: userData),
                               ),
                             );
                           },
@@ -429,7 +524,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             await Clipboard.setData(ClipboardData(text: uid));
                             if (!profileContext.mounted) return;
                             ScaffoldMessenger.of(profileContext).showSnackBar(
-                              SnackBar(content: Text(l10n.profileCopyUserIdSuccess)),
+                              SnackBar(
+                                  content: Text(l10n.profileCopyUserIdSuccess)),
                             );
                           },
                         ),
@@ -467,13 +563,96 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       _buildSection(
                         _txt(
                           context,
-                          vi: 'Lịch sử cuộc gọi',
-                          en: 'Call history',
+                          vi: 'Quyền riêng tư hồ sơ',
+                          en: 'Profile privacy',
                         ),
                         [
-                          _buildCallHistoryList(
-                            currentUserId: uid,
-                            currentUserName: name,
+                          _buildToggleItem(
+                            Icons.email_outlined,
+                            l10n.profileSummaryEmail,
+                            profileVisibility[ProfileVisibility.email] != false,
+                            (value) => _updateProfileVisibility(
+                              ProfileVisibility.email,
+                              value,
+                            ),
+                          ),
+                          _buildToggleItem(
+                            Icons.info_outline_rounded,
+                            _txt(context, vi: 'Giới thiệu', en: 'Bio'),
+                            profileVisibility[ProfileVisibility.bio] != false,
+                            (value) => _updateProfileVisibility(
+                              ProfileVisibility.bio,
+                              value,
+                            ),
+                          ),
+                          _buildToggleItem(
+                            Icons.phone_outlined,
+                            l10n.profileFieldPhone,
+                            profileVisibility[ProfileVisibility.phoneNumber] !=
+                                false,
+                            (value) => _updateProfileVisibility(
+                              ProfileVisibility.phoneNumber,
+                              value,
+                            ),
+                          ),
+                          _buildToggleItem(
+                            Icons.location_on_outlined,
+                            l10n.profileFieldAddress,
+                            profileVisibility[ProfileVisibility.address] !=
+                                false,
+                            (value) => _updateProfileVisibility(
+                              ProfileVisibility.address,
+                              value,
+                            ),
+                          ),
+                          _buildToggleItem(
+                            Icons.location_city_outlined,
+                            l10n.profileFieldCity,
+                            profileVisibility[ProfileVisibility.city] != false,
+                            (value) => _updateProfileVisibility(
+                              ProfileVisibility.city,
+                              value,
+                            ),
+                          ),
+                          _buildToggleItem(
+                            Icons.wc_outlined,
+                            l10n.profileFieldGender,
+                            profileVisibility[ProfileVisibility.gender] !=
+                                false,
+                            (value) => _updateProfileVisibility(
+                              ProfileVisibility.gender,
+                              value,
+                            ),
+                          ),
+                          _buildToggleItem(
+                            Icons.cake_outlined,
+                            l10n.profileFieldBirthDate,
+                            profileVisibility[ProfileVisibility.dateOfBirth] !=
+                                false,
+                            (value) => _updateProfileVisibility(
+                              ProfileVisibility.dateOfBirth,
+                              value,
+                            ),
+                          ),
+                          _buildToggleItem(
+                            Icons.work_outline_rounded,
+                            l10n.profileFieldOccupation,
+                            profileVisibility[ProfileVisibility.occupation] !=
+                                false,
+                            (value) => _updateProfileVisibility(
+                              ProfileVisibility.occupation,
+                              value,
+                            ),
+                          ),
+                          _buildToggleItem(
+                            Icons.language_rounded,
+                            l10n.profileFieldWebsite,
+                            profileVisibility[ProfileVisibility.website] !=
+                                false,
+                            (value) => _updateProfileVisibility(
+                              ProfileVisibility.website,
+                              value,
+                            ),
                           ),
                         ],
                       ),
@@ -490,7 +669,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             Navigator.push(
                               profileContext,
                               MaterialPageRoute(
-                                builder: (_) => const NotificationCenterScreen(),
+                                builder: (_) =>
+                                    const NotificationCenterScreen(),
                               ),
                             );
                           },
@@ -529,21 +709,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             await AuthService().signOut();
                             if (profileContext.mounted) {
                               Navigator.of(profileContext).pushAndRemoveUntil(
-                                MaterialPageRoute(builder: (_) => const LandingScreen()),
+                                MaterialPageRoute(
+                                    builder: (_) => const LandingScreen()),
                                 (route) => false,
                               );
                             }
                           } catch (e) {
                             if (!profileContext.mounted) return;
                             ScaffoldMessenger.of(profileContext).showSnackBar(
-                              SnackBar(content: Text(l10n.profileLogoutError(e.toString()))),
+                              SnackBar(
+                                  content: Text(
+                                      l10n.profileLogoutError(e.toString()))),
                             );
                           }
                         },
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.logout_rounded, color: AppColors.error, size: 20),
+                            const Icon(Icons.logout_rounded,
+                                color: AppColors.error, size: 20),
                             const SizedBox(width: 8),
                             Text(
                               l10n.profileLogout,
@@ -560,7 +744,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       const SizedBox(height: 16),
                       Text(
                         l10n.profileVersion('1.0.0'),
-                        style: const TextStyle(color: AppColors.textMuted, fontSize: 12, fontFamily: 'Inter'),
+                        style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                            fontFamily: 'Inter'),
                       ),
                       const SizedBox(height: 40),
                     ],
@@ -574,174 +761,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildCallHistoryList({
-    required String currentUserId,
-    required String currentUserName,
-  }) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: _callService.watchCallHistory(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Text(
-              _txt(
-                context,
-                vi: 'Không tải được lịch sử cuộc gọi',
-                en: 'Unable to load call history',
-              ),
-              style: const TextStyle(
-                color: AppColors.textMuted,
-                fontFamily: 'Inter',
-                fontSize: 13,
-              ),
-            ),
-          );
-        }
-
-        if (!snapshot.hasData) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Center(
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  color: AppColors.primary,
-                ),
-              ),
-            ),
-          );
-        }
-
-        final calls = snapshot.data!.docs
-            .map(AppCall.fromDocument)
-            .where((call) => call.status != CallStatus.ringing)
-            .toList()
-          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-        if (calls.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Text(
-              _txt(
-                context,
-                vi: 'Chưa có cuộc gọi nào',
-                en: 'No calls yet',
-              ),
-              style: const TextStyle(
-                color: AppColors.textMuted,
-                fontFamily: 'Inter',
-                fontSize: 13,
-              ),
-            ),
-          );
-        }
-
-        return Column(
-          children: calls.take(8).map((call) {
-            return _buildCallHistoryTile(
-              call: call,
-              currentUserId: currentUserId,
-              currentUserName: currentUserName,
-            );
-          }).toList(),
-        );
-      },
-    );
-  }
-
-  Widget _buildCallHistoryTile({
-    required AppCall call,
-    required String currentUserId,
-    required String currentUserName,
-  }) {
-    final isIncoming = call.isIncomingFor(currentUserId);
-    final peerName = call.peerNameFor(currentUserId).trim().isEmpty
-        ? currentUserName
-        : call.peerNameFor(currentUserId);
-    final icon = call.type == CallType.video
-        ? (isIncoming ? Icons.video_call_rounded : Icons.videocam_outlined)
-        : (isIncoming ? Icons.call_received_rounded : Icons.call_made_rounded);
-    final isFailed = call.status == CallStatus.missed ||
-        call.status == CallStatus.declined ||
-        call.status == CallStatus.cancelled;
-    final iconColor = isFailed ? AppColors.error : AppColors.primaryLight;
-    final subtitle = '${_callHistoryStatus(call, isIncoming)} • ${_formatCallTime(call.createdAt)}';
-
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      dense: true,
-      leading: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: iconColor.withAlphaFraction(0.12),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, color: iconColor, size: 20),
-      ),
-      title: Text(
-        peerName,
-        style: const TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          fontFamily: 'Inter',
-        ),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(
-          color: AppColors.textMuted,
-          fontSize: 12,
-          fontFamily: 'Inter',
-        ),
-      ),
-    );
-  }
-
-  String _callHistoryStatus(AppCall call, bool isIncoming) {
-    switch (call.status) {
-      case CallStatus.missed:
-        return isIncoming
-            ? _txt(context, vi: 'Cuộc gọi nhỡ', en: 'Missed call')
-            : _txt(context, vi: 'Không trả lời', en: 'No answer');
-      case CallStatus.declined:
-        return isIncoming
-            ? _txt(context, vi: 'Bạn đã từ chối', en: 'You declined')
-            : _txt(context, vi: 'Đã bị từ chối', en: 'Declined');
-      case CallStatus.cancelled:
-        return isIncoming
-            ? _txt(context, vi: 'Đã bị hủy', en: 'Canceled')
-            : _txt(context, vi: 'Bạn đã hủy', en: 'You canceled');
-      case CallStatus.accepted:
-      case CallStatus.ended:
-        return isIncoming
-            ? _txt(context, vi: 'Cuộc gọi đến', en: 'Incoming')
-            : _txt(context, vi: 'Cuộc gọi đi', en: 'Outgoing');
-      case CallStatus.ringing:
-        return _txt(context, vi: 'Đang đổ chuông', en: 'Ringing');
-      case CallStatus.unknown:
-        return _txt(context, vi: 'Không xác định', en: 'Unknown');
-    }
-  }
-
-  String _formatCallTime(DateTime dateTime) {
-    final dd = dateTime.day.toString().padLeft(2, '0');
-    final mm = dateTime.month.toString().padLeft(2, '0');
-    final hh = dateTime.hour.toString().padLeft(2, '0');
-    final min = dateTime.minute.toString().padLeft(2, '0');
-    return '$dd/$mm $hh:$min';
-  }
-
   Widget _buildStat(String value, String label) {
     return Column(
       children: [
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: 18,
             fontWeight: FontWeight.w800,
@@ -751,7 +776,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(color: AppColors.textMuted, fontSize: 12, fontFamily: 'Inter'),
+          style: TextStyle(
+              color: AppColors.textMuted, fontSize: 12, fontFamily: 'Inter'),
         ),
       ],
     );
@@ -765,7 +791,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textSecondary,
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -794,7 +820,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
       title: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           color: AppColors.textPrimary,
           fontSize: 14,
           fontWeight: FontWeight.w500,
@@ -803,7 +829,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
       subtitle: Text(
         value,
-        style: const TextStyle(color: AppColors.textMuted, fontSize: 12, fontFamily: 'Inter'),
+        style: TextStyle(
+            color: AppColors.textMuted, fontSize: 12, fontFamily: 'Inter'),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       dense: true,
@@ -828,15 +855,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
       title: Text(
         title,
-        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w500, fontFamily: 'Inter'),
+        style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            fontFamily: 'Inter'),
       ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (trailing != null)
-            Text(trailing, style: const TextStyle(color: AppColors.textMuted, fontSize: 13, fontFamily: 'Inter')),
+            Text(trailing,
+                style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 13,
+                    fontFamily: 'Inter')),
           const SizedBox(width: 4),
-          const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 20),
+          Icon(Icons.chevron_right_rounded,
+              color: AppColors.textMuted, size: 20),
         ],
       ),
       onTap: onTap,
@@ -845,7 +881,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildToggleItem(IconData icon, String title, bool value, ValueChanged<bool> onChanged) {
+  Widget _buildToggleItem(
+      IconData icon, String title, bool value, ValueChanged<bool> onChanged) {
     return ListTile(
       leading: Container(
         width: 36,
@@ -858,7 +895,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
       title: Text(
         title,
-        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w500, fontFamily: 'Inter'),
+        style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            fontFamily: 'Inter'),
       ),
       trailing: Switch(
         value: value,

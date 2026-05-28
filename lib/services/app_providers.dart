@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_locale_controller.dart';
+import 'app_theme_controller.dart';
 import 'auth_service.dart';
 import 'call_service.dart';
 import 'chat_service.dart';
@@ -72,6 +73,25 @@ class AppLocaleActions {
 
 final appLocaleActionsProvider = Provider<AppLocaleActions>((ref) {
   return AppLocaleActions(ref);
+});
+
+final appThemeModeProvider = StateProvider<ThemeMode>((ref) {
+  return AppThemeController.defaultThemeMode;
+});
+
+class AppThemeActions {
+  AppThemeActions(this._ref);
+
+  final Ref _ref;
+
+  Future<void> setDarkMode(bool enabled) async {
+    final themeMode = await AppThemeController.setDarkMode(enabled);
+    _ref.read(appThemeModeProvider.notifier).state = themeMode;
+  }
+}
+
+final appThemeActionsProvider = Provider<AppThemeActions>((ref) {
+  return AppThemeActions(ref);
 });
 
 final homeTabIndexProvider = StateProvider<int>((ref) => 0);

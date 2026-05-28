@@ -11,6 +11,7 @@ import 'screens/splash_screen.dart';
 import 'services/app_locale_controller.dart';
 import 'services/app_navigator.dart';
 import 'services/app_providers.dart';
+import 'services/app_theme_controller.dart';
 import 'theme/app_theme.dart';
 import 'utils/gen_l10n/app_localizations.dart';
 
@@ -32,20 +33,18 @@ void main() async {
   }
 
   final initialLocale = await AppLocaleController.loadSavedLocale();
+  final initialThemeMode = await AppThemeController.loadSavedThemeMode();
+  AppColors.useLightMode(initialThemeMode == ThemeMode.light);
 
   SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: AppColors.bgSurface,
-      systemNavigationBarIconBrightness: Brightness.light,
-    ),
+    AppTheme.systemOverlayStyleFor(initialThemeMode),
   );
 
   runApp(
     ProviderScope(
       overrides: [
         appLocaleProvider.overrideWith((ref) => initialLocale),
+        appThemeModeProvider.overrideWith((ref) => initialThemeMode),
       ],
       child: LumoChatApp(isFirebaseInitialized: isFirebaseInitialized),
     ),
@@ -60,12 +59,20 @@ class LumoChatApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final locale = ref.watch(appLocaleProvider);
+    final themeMode = ref.watch(appThemeModeProvider);
+    AppColors.useLightMode(themeMode == ThemeMode.light);
+    SystemChrome.setSystemUIOverlayStyle(
+      AppTheme.systemOverlayStyleFor(themeMode),
+    );
+
     return MaterialApp(
       navigatorKey: appNavigatorKey,
       locale: locale,
       onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      themeMode: themeMode,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,

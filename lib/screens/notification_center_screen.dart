@@ -80,13 +80,13 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
             vi: 'Trung tâm thông báo',
             en: 'Notification Center',
           ),
-          style: const TextStyle(
+          style: TextStyle(
             color: AppColors.textPrimary,
             fontFamily: 'Inter',
             fontWeight: FontWeight.w700,
           ),
         ),
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        iconTheme: IconThemeData(color: AppColors.textPrimary),
         actions: [
           TextButton(
             onPressed: _isMarkingAllRead ? null : _markAllAsRead,
@@ -114,7 +114,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
                   vi: 'Không tải được thông báo',
                   en: 'Unable to load notifications',
                 ),
-                style: const TextStyle(color: AppColors.textMuted),
+                style: TextStyle(color: AppColors.textMuted),
               ),
             );
           }
@@ -137,7 +137,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
                   vi: 'Chưa có thông báo nào',
                   en: 'No notifications yet',
                 ),
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.textMuted,
                   fontFamily: 'Inter',
                 ),
@@ -189,7 +189,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
                       '${item.body}\n${_formatDateTime(item.createdAt)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.textMuted,
                         fontFamily: 'Inter',
                         height: 1.4,
@@ -201,7 +201,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
                       : Container(
                           width: 8,
                           height: 8,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.primaryLight,
                             shape: BoxShape.circle,
                           ),

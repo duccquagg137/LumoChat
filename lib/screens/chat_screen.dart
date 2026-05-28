@@ -61,6 +61,8 @@ class _ChatScreenState extends State<ChatScreen> {
   final ChatService _chatService = ChatService();
   final CallService _callService = CallService();
   final GroupService _groupService = GroupService();
+  late final Stream<QuerySnapshot> _messagesStream;
+  late final Stream<DocumentSnapshot> _roomStateStream;
   final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
   String _currentUserName =
       FirebaseAuth.instance.currentUser?.displayName ?? '';
@@ -205,9 +207,8 @@ class _ChatScreenState extends State<ChatScreen> {
   _ScrollAnchor? _captureScrollAnchor() {
     if (_scrollController.hasClients) {
       final offset = _scrollController.offset;
-      final max = _scrollController.position.maxScrollExtent;
       return _ScrollAnchor(
-        distanceFromBottom: (max - offset).clamp(0.0, double.infinity),
+        distanceFromBottom: offset.clamp(0.0, double.infinity),
       );
     }
 
@@ -216,8 +217,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     return _ScrollAnchor(
-      distanceFromBottom: (_lastKnownMaxScrollExtent - _lastKnownOffset)
-          .clamp(0.0, double.infinity),
+      distanceFromBottom: _lastKnownOffset.clamp(0.0, double.infinity),
     );
   }
 
@@ -235,8 +235,7 @@ class _ChatScreenState extends State<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
       final max = _scrollController.position.maxScrollExtent;
-      final target =
-          (max - anchor.distanceFromBottom).clamp(0.0, max).toDouble();
+      final target = anchor.distanceFromBottom.clamp(0.0, max).toDouble();
       _scrollController.jumpTo(target);
       _rememberScrollMetrics();
     });
@@ -448,6 +447,12 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _messagesStream = widget.isGroup
+        ? _groupService.getGroupMessagesStream(widget.receiverId)
+        : _chatService.getMessagesStream(widget.receiverId);
+    _roomStateStream = widget.isGroup
+        ? _groupService.getGroupStream(widget.receiverId)
+        : _chatService.getChatRoomStream(widget.receiverId);
     _scrollController.addListener(_rememberScrollMetrics);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _rememberScrollMetrics();
@@ -563,11 +568,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _setupOtherTypingListener() {
-    final stream = widget.isGroup
-        ? _groupService.getGroupStream(widget.receiverId)
-        : _chatService.getChatRoomStream(widget.receiverId);
-
-    _chatRoomSubscription = stream.listen((snapshot) {
+    _chatRoomSubscription = _roomStateStream.listen((snapshot) {
       bool isOtherTyping = false;
       Map<String, dynamic>? pinnedMessage;
 
@@ -621,10 +622,30 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _scrollToBottom({bool animated = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottomAfterLayout(animated: animated);
+    });
+  }
+
+  Future<void> _scrollToBottomAfterLayout({required bool animated}) async {
+    await _moveToBottom(animated: animated);
+
+    // Lazily built message bubbles can change maxScrollExtent after the first
+    // frame, especially when image/reply bubbles resolve their final height.
+    for (var attempt = 0; attempt < 3; attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 48));
       if (!mounted || !_scrollController.hasClients) return;
-      final target = _scrollController.position.maxScrollExtent;
+      final remaining = _scrollController.position.pixels;
+      if (remaining <= 1) continue;
+      await _moveToBottom(animated: false);
+    }
+  }
+
+  Future<void> _moveToBottom({required bool animated}) async {
+    if (!mounted || !_scrollController.hasClients) return;
+    const target = 0.0;
+    try {
       if (animated) {
-        _scrollController.animateTo(
+        await _scrollController.animateTo(
           target,
           duration: const Duration(milliseconds: 240),
           curve: Curves.easeOut,
@@ -633,7 +654,9 @@ class _ChatScreenState extends State<ChatScreen> {
         _scrollController.jumpTo(target);
       }
       _rememberScrollMetrics();
-    });
+    } catch (_) {
+      // The controller can be detached while a route transition is finishing.
+    }
   }
 
   DateTime _messageTimestamp(DocumentSnapshot doc) {
@@ -911,16 +934,14 @@ class _ChatScreenState extends State<ChatScreen> {
               // Messages
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: widget.isGroup
-                      ? _groupService.getGroupMessagesStream(widget.receiverId)
-                      : _chatService.getMessagesStream(widget.receiverId),
+                  stream: _messagesStream,
                   builder: (context, snapshot) {
                     final l10n = context.l10n;
                     if (snapshot.hasError) {
                       return Center(
                         child: Text(
                           l10n.commonUnexpectedError,
-                          style: const TextStyle(color: AppColors.textMuted),
+                          style: TextStyle(color: AppColors.textMuted),
                         ),
                       );
                     }
@@ -943,7 +964,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       return Center(
                         child: Text(
                           l10n.chatListNoConversations,
-                          style: const TextStyle(color: AppColors.textMuted),
+                          style: TextStyle(color: AppColors.textMuted),
                         ),
                       );
                     }
@@ -962,21 +983,24 @@ class _ChatScreenState extends State<ChatScreen> {
                       return Center(
                         child: Text(
                           l10n.chatSearchNoMatches,
-                          style: const TextStyle(color: AppColors.textMuted),
+                          style: TextStyle(color: AppColors.textMuted),
                         ),
                       );
                     }
 
                     _syncMessageItemKeys(visibleDocs);
                     _restorePendingScrollAnchor();
+                    final displayDocs =
+                        visibleDocs.reversed.toList(growable: false);
 
                     return ListView.builder(
                       controller: _scrollController,
+                      reverse: true,
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      itemCount: visibleDocs.length,
+                      itemCount: displayDocs.length,
                       itemBuilder: (context, i) {
                         final msgData =
-                            ChatMessage.fromDocument(visibleDocs[i]);
+                            ChatMessage.fromDocument(displayDocs[i]);
                         if (msgData.deletedFor.contains(currentUserId)) {
                           return const SizedBox.shrink();
                         }
@@ -1024,7 +1048,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       const SizedBox(width: 8),
                       Text(
                         '${widget.userName.split(' ').last} ${context.l10n.chatListTyping}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.textMuted,
                           fontSize: 12,
                           fontStyle: FontStyle.italic,
@@ -1049,7 +1073,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final l10n = context.l10n;
     return Container(
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.bgSurface,
         border: Border(
           bottom: BorderSide(color: AppColors.glassBorder, width: 0.5),
@@ -1060,7 +1084,7 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Row(
           children: [
             IconButton(
-              icon: const Icon(Icons.arrow_back_ios_rounded,
+              icon: Icon(Icons.arrow_back_ios_rounded,
                   color: AppColors.textPrimary, size: 20),
               onPressed: () {
                 if (_isSearchingMessages) {
@@ -1072,7 +1096,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             GestureDetector(
               onTap: widget.isGroup
-                  ? null
+                  ? _openGroupInfo
                   : () => _openUserProfile(widget.receiverId),
               child: _buildUserAvatarById(
                 userId: widget.isGroup ? null : widget.receiverId,
@@ -1098,14 +1122,14 @@ class _ChatScreenState extends State<ChatScreen> {
                         controller: _messageSearchController,
                         focusNode: _messageSearchFocusNode,
                         onChanged: _onMessageSearchChanged,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 14,
                           fontFamily: 'Inter',
                         ),
                         decoration: InputDecoration(
                           hintText: l10n.chatSearchHint,
-                          hintStyle: const TextStyle(
+                          hintStyle: TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 13,
                             fontFamily: 'Inter',
@@ -1113,7 +1137,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 8),
-                          prefixIcon: const Icon(Icons.search_rounded,
+                          prefixIcon: Icon(Icons.search_rounded,
                               color: AppColors.textMuted, size: 18),
                         ),
                       ),
@@ -1121,7 +1145,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   : GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: widget.isGroup
-                          ? null
+                          ? _openGroupInfo
                           : () => _openUserProfile(widget.receiverId),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1129,7 +1153,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         children: [
                           Text(
                             widget.userName,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: AppColors.textPrimary,
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
@@ -1231,8 +1255,8 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 2),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
             child: Icon(Icons.push_pin_rounded,
                 size: 16, color: AppColors.primaryLight),
           ),
@@ -1246,7 +1270,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   Text(
                     l10n.chatPinnedMessageTitle,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.primaryLight,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -1258,7 +1282,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 12,
                       fontFamily: 'Inter',
@@ -1271,8 +1295,8 @@ class _ChatScreenState extends State<ChatScreen> {
           GestureDetector(
             onTap: _unpinMessage,
             behavior: HitTestBehavior.opaque,
-            child: const Padding(
-              padding: EdgeInsets.only(left: 8, top: 2),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8, top: 2),
               child: Icon(Icons.close_rounded,
                   size: 18, color: AppColors.textMuted),
             ),
@@ -1293,7 +1317,7 @@ class _ChatScreenState extends State<ChatScreen> {
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(
             message.text,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textMuted,
               fontSize: 12,
               fontStyle: FontStyle.italic,
@@ -1338,13 +1362,17 @@ class _ChatScreenState extends State<ChatScreen> {
                 if (!isSent && widget.isGroup)
                   Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 4),
-                    child: Text(
-                      senderLabel,
-                      style: TextStyle(
-                        color: _getSenderColor(senderLabel),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'Inter',
+                    child: GestureDetector(
+                      onTap: () => _openUserProfile(message.senderId ?? ''),
+                      behavior: HitTestBehavior.opaque,
+                      child: Text(
+                        senderLabel,
+                        style: TextStyle(
+                          color: _getSenderColor(senderLabel),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Inter',
+                        ),
                       ),
                     ),
                   ),
@@ -1367,7 +1395,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.push_pin_rounded,
                                   size: 12,
                                   color: AppColors.primaryLight,
@@ -1375,7 +1403,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 const SizedBox(width: 4),
                                 Text(
                                   context.l10n.chatPinnedMessageTitle,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     color: AppColors.primaryLight,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
@@ -1700,7 +1728,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   },
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;
-                    return const Center(
+                    return Center(
                       child: SizedBox(
                         width: 24,
                         height: 24,
@@ -1717,12 +1745,12 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.broken_image_rounded,
+                          Icon(Icons.broken_image_rounded,
                               color: AppColors.textMuted, size: 38),
                           const SizedBox(height: 6),
                           Text(
                             l10n.commonRetry,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: AppColors.textMuted,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -1780,7 +1808,7 @@ class _ChatScreenState extends State<ChatScreen> {
           margin: const EdgeInsets.symmetric(horizontal: 1),
           width: 5,
           height: 5,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.textMuted,
             shape: BoxShape.circle,
           ),
@@ -1800,7 +1828,7 @@ class _ChatScreenState extends State<ChatScreen> {
         top: 12,
         bottom: MediaQuery.of(context).padding.bottom + 12,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.bgSurface,
         border: Border(
           top: BorderSide(color: AppColors.glassBorder, width: 0.5),
@@ -1833,15 +1861,14 @@ class _ChatScreenState extends State<ChatScreen> {
                       Expanded(
                         child: TextField(
                           controller: _messageController,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.textPrimary,
                             fontFamily: 'Inter',
                             fontSize: 14,
                           ),
                           decoration: InputDecoration(
                             hintText: l10n.chatInputHint,
-                            hintStyle:
-                                const TextStyle(color: AppColors.textMuted),
+                            hintStyle: TextStyle(color: AppColors.textMuted),
                             border: InputBorder.none,
                             contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 10),
@@ -1852,7 +1879,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         onTap: _isUploadingImage
                             ? null
                             : () => _sendImage(ImageSource.gallery),
-                        child: const Icon(Icons.add_photo_alternate_outlined,
+                        child: Icon(Icons.add_photo_alternate_outlined,
                             color: AppColors.textMuted, size: 22),
                       ),
                       const SizedBox(width: 8),
@@ -1860,7 +1887,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         onTap: _isUploadingImage
                             ? null
                             : () => _sendImage(ImageSource.camera),
-                        child: const Icon(Icons.camera_alt_outlined,
+                        child: Icon(Icons.camera_alt_outlined,
                             color: AppColors.textMuted, size: 22),
                       ),
                       const SizedBox(width: 12),
@@ -1928,7 +1955,7 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 Text(
                   l10n.chatReplyingTo,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: AppColors.primaryLight,
                       fontSize: 12,
                       fontWeight: FontWeight.bold),
@@ -1942,14 +1969,13 @@ class _ChatScreenState extends State<ChatScreen> {
                           : _replyingTo!.text,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style:
-                      const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                 ),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close, size: 18, color: AppColors.textMuted),
+            icon: Icon(Icons.close, size: 18, color: AppColors.textMuted),
             onPressed: _clearReplyingWithKeepPosition,
           ),
         ],
@@ -1966,8 +1992,7 @@ class _ChatScreenState extends State<ChatScreen> {
         shape: BoxShape.circle,
         border: Border.all(color: AppColors.glassBorder, width: 0.5),
       ),
-      child: const Icon(Icons.add_rounded,
-          color: AppColors.textSecondary, size: 22),
+      child: Icon(Icons.add_rounded, color: AppColors.textSecondary, size: 22),
     );
   }
 

@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -7,6 +8,7 @@ import '../utils/error_mapper.dart';
 import '../utils/l10n.dart';
 import '../widgets/glass_card.dart';
 import 'home_screen.dart';
+import 'profile_completion_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -78,11 +80,31 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  void _navigateToHome() {
+  Future<bool> _needsProfileCompletion() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get()
+          .timeout(const Duration(seconds: 2));
+      return snapshot.data()?['profileCompleted'] == false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _navigateAfterAuth({bool forceProfileCompletion = false}) async {
+    final shouldCompleteProfile =
+        forceProfileCompletion || await _needsProfileCompletion();
     if (mounted) {
       Navigator.of(context).pushAndRemoveUntil(
         PageRouteBuilder(
-          pageBuilder: (_, a, __) => const HomeScreen(),
+          pageBuilder: (_, a, __) => shouldCompleteProfile
+              ? const ProfileCompletionScreen()
+              : const HomeScreen(),
           transitionDuration: const Duration(milliseconds: 600),
           transitionsBuilder: (_, a, __, child) =>
               FadeTransition(opacity: a, child: child),
@@ -122,7 +144,7 @@ class _LoginScreenState extends State<LoginScreen>
         }
         await _authService.signUpWithEmailPassword(email, password, name);
       }
-      _navigateToHome();
+      await _navigateAfterAuth(forceProfileCompletion: !_isLogin);
     } catch (e) {
       _showError(AppErrorText.forAuthL10n(l10n, e));
     } finally {
@@ -154,8 +176,12 @@ class _LoginScreenState extends State<LoginScreen>
         phoneNumber: formattedPhone,
         verificationCompleted: (PhoneAuthCredential credential) async {
           try {
-            await _authService.signInWithPhoneCredential(credential);
-            _navigateToHome();
+            final userCredential =
+                await _authService.signInWithPhoneCredential(credential);
+            await _navigateAfterAuth(
+              forceProfileCompletion:
+                  userCredential?.additionalUserInfo?.isNewUser == true,
+            );
           } catch (e) {
             _showError(
               l10n.authErrorAutoVerificationFailed(
@@ -198,8 +224,12 @@ class _LoginScreenState extends State<LoginScreen>
 
     _setLoading(true);
     try {
-      await _authService.signInWithOTP(_verificationId, code);
-      _navigateToHome();
+      final userCredential =
+          await _authService.signInWithOTP(_verificationId, code);
+      await _navigateAfterAuth(
+        forceProfileCompletion:
+            userCredential?.additionalUserInfo?.isNewUser == true,
+      );
     } catch (e) {
       _showError(AppErrorText.forAuthL10n(l10n, e));
       _setLoading(false);
@@ -212,7 +242,9 @@ class _LoginScreenState extends State<LoginScreen>
     try {
       final userOpt = await _authService.signInWithGoogle();
       if (userOpt != null) {
-        _navigateToHome();
+        await _navigateAfterAuth(
+          forceProfileCompletion: userOpt.additionalUserInfo?.isNewUser == true,
+        );
       } else {
         _setLoading(false);
       }
@@ -229,7 +261,7 @@ class _LoginScreenState extends State<LoginScreen>
     return Scaffold(
       body: Stack(
         children: [
-          Container(decoration: const BoxDecoration(gradient: AppGradients.hero)),
+          Container(decoration: BoxDecoration(gradient: AppGradients.hero)),
           Positioned(
             top: -80,
             right: -60,
@@ -291,7 +323,7 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'LumoChat',
                     style: TextStyle(
                       fontSize: 28,
@@ -330,7 +362,7 @@ class _LoginScreenState extends State<LoginScreen>
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
                           _txt(vi: 'hoặc', en: 'or'),
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 13,
                             fontFamily: 'Inter',
@@ -404,7 +436,7 @@ class _LoginScreenState extends State<LoginScreen>
         children: [
           TabBar(
             controller: _tabController,
-            indicator: const BoxDecoration(
+            indicator: BoxDecoration(
               border: Border(
                 bottom: BorderSide(color: AppColors.primaryLight, width: 2),
               ),
@@ -461,7 +493,7 @@ class _LoginScreenState extends State<LoginScreen>
                 onPressed: () {},
                 child: Text(
                   _txt(vi: 'Quên mật khẩu?', en: 'Forgot password?'),
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.primaryLight,
                     fontSize: 13,
                     fontFamily: 'Inter',
@@ -497,7 +529,7 @@ class _LoginScreenState extends State<LoginScreen>
                     vi: 'Đăng nhập bằng số điện thoại',
                     en: 'Sign in with phone',
                   ),
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textPrimary,
               fontSize: 18,
               fontWeight: FontWeight.w700,
@@ -515,7 +547,7 @@ class _LoginScreenState extends State<LoginScreen>
                     vi: 'Chúng tôi sẽ gửi mã OTP để xác minh',
                     en: 'We will send an OTP code to verify your phone',
                   ),
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textMuted,
               fontSize: 13,
               fontFamily: 'Inter',
@@ -553,7 +585,7 @@ class _LoginScreenState extends State<LoginScreen>
               onPressed: () => setState(() => _isCodeSent = false),
               child: Text(
                 _txt(vi: 'Thay đổi số điện thoại', en: 'Change phone number'),
-                style: const TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: AppColors.textSecondary),
               ),
             ),
           ],
@@ -579,14 +611,14 @@ class _LoginScreenState extends State<LoginScreen>
         controller: controller,
         obscureText: isPassword && !_showPassword,
         keyboardType: keyboardType,
-        style: const TextStyle(
+        style: TextStyle(
           color: AppColors.textPrimary,
           fontFamily: 'Inter',
         ),
         decoration: InputDecoration(
           prefixIcon: Icon(icon, color: AppColors.textMuted, size: 22),
           hintText: hint,
-          hintStyle: const TextStyle(color: AppColors.textMuted),
+          hintStyle: TextStyle(color: AppColors.textMuted),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,

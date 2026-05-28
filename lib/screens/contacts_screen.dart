@@ -62,7 +62,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
     final name = _normalize(user.name);
     final bio = _normalize(user.bio ?? '');
     final username = _normalize(user.username ?? '');
-    return name.contains(_searchQuery) || bio.contains(_searchQuery) || username.contains(_searchQuery);
+    return name.contains(_searchQuery) ||
+        bio.contains(_searchQuery) ||
+        username.contains(_searchQuery);
   }
 
   bool _showSection(_ContactsFilter filter) {
@@ -82,13 +84,15 @@ class _ContactsScreenState extends State<ContactsScreen> {
     });
   }
 
-  Future<void> _runAction(String userId, Future<void> Function() action, String successText) async {
+  Future<void> _runAction(
+      String userId, Future<void> Function() action, String successText) async {
     if (_busyUserIds.contains(userId)) return;
     setState(() => _busyUserIds.add(userId));
     try {
       await action();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(successText)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(successText)));
     } catch (e, stackTrace) {
       final reason = AppErrorMapper.mapContacts(e);
       AppLogger.error(
@@ -106,7 +110,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
       final shouldOfferRetry = AppErrorMapper.isRetryableForContacts(e);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.l10n.contactsActionFailed(AppErrorText.forContacts(context, e))),
+          content: Text(context.l10n
+              .contactsActionFailed(AppErrorText.forContacts(context, e))),
           backgroundColor: AppColors.error,
           action: shouldOfferRetry
               ? SnackBarAction(
@@ -129,28 +134,39 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
     return Scaffold(
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(_currentUserId).snapshots(),
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(_currentUserId)
+            .snapshots(),
         builder: (context, mySnapshot) {
           if (mySnapshot.hasError) {
-            return Center(child: Text(l10n.contactsLoadProfileError, style: const TextStyle(color: AppColors.textMuted)));
+            return Center(
+                child: Text(l10n.contactsLoadProfileError,
+                    style: TextStyle(color: AppColors.textMuted)));
           }
           if (mySnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+            return const Center(
+                child: CircularProgressIndicator(color: AppColors.primary));
           }
 
-          final myData = mySnapshot.data?.data() as Map<String, dynamic>? ?? const {};
+          final myData =
+              mySnapshot.data?.data() as Map<String, dynamic>? ?? const {};
           final friendIds = _readIdSet(myData['friends']);
-          final receivedRequestIds = _readIdSet(myData['friendRequestsReceived']);
+          final receivedRequestIds =
+              _readIdSet(myData['friendRequestsReceived']);
           final sentRequestIds = _readIdSet(myData['friendRequestsSent']);
 
           return StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('users').snapshots(),
             builder: (context, usersSnapshot) {
               if (usersSnapshot.hasError) {
-                return Center(child: Text(l10n.contactsLoadContactsError, style: const TextStyle(color: AppColors.textMuted)));
+                return Center(
+                    child: Text(l10n.contactsLoadContactsError,
+                        style: TextStyle(color: AppColors.textMuted)));
               }
               if (usersSnapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                return const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary));
               }
               if (!usersSnapshot.hasData) {
                 return const SizedBox.shrink();
@@ -188,20 +204,25 @@ class _ContactsScreenState extends State<ContactsScreen> {
               final onlineFriends = friends.where((u) => u.isOnline).toList();
               final groupedFriends = <String, List<ChatUser>>{};
               for (final user in friends) {
-                final letter = user.name.isNotEmpty ? user.name[0].toUpperCase() : '#';
+                final letter =
+                    user.name.isNotEmpty ? user.name[0].toUpperCase() : '#';
                 groupedFriends.putIfAbsent(letter, () => []).add(user);
               }
               final sortedLetters = groupedFriends.keys.toList()..sort();
-              final showRequestsSection = _showSection(_ContactsFilter.requests);
+              final showRequestsSection =
+                  _showSection(_ContactsFilter.requests);
               final showFriendsSection = _showSection(_ContactsFilter.friends);
-              final showDiscoverSection = _showSection(_ContactsFilter.discover);
+              final showDiscoverSection =
+                  _showSection(_ContactsFilter.discover);
 
-              final hasVisibleData =
-                  (showRequestsSection && (receivedRequests.isNotEmpty || sentRequests.isNotEmpty)) ||
+              final hasVisibleData = (showRequestsSection &&
+                      (receivedRequests.isNotEmpty ||
+                          sentRequests.isNotEmpty)) ||
                   (showFriendsSection && friends.isNotEmpty) ||
                   (showDiscoverSection && suggestions.isNotEmpty);
 
-              final showOnlineStrip = showFriendsSection && onlineFriends.isNotEmpty;
+              final showOnlineStrip =
+                  showFriendsSection && onlineFriends.isNotEmpty;
 
               return Stack(
                 children: [
@@ -214,7 +235,10 @@ class _ContactsScreenState extends State<ContactsScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
-                          colors: [AppColors.primary.withAlphaFraction(0.12), Colors.transparent],
+                          colors: [
+                            AppColors.primary.withAlphaFraction(0.12),
+                            Colors.transparent
+                          ],
                         ),
                       ),
                     ),
@@ -228,7 +252,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                             children: [
                               Text(
                                 l10n.navContacts,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 28,
                                   fontWeight: FontWeight.w800,
                                   color: AppColors.textPrimary,
@@ -242,15 +266,18 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                 decoration: BoxDecoration(
                                   color: AppColors.glassBg,
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: AppColors.glassBorder, width: 0.5),
+                                  border: Border.all(
+                                      color: AppColors.glassBorder, width: 0.5),
                                 ),
-                                child: const Icon(Icons.people_alt_outlined, color: AppColors.textPrimary, size: 20),
+                                child: Icon(Icons.people_alt_outlined,
+                                    color: AppColors.textPrimary, size: 20),
                               ),
                             ],
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 8),
                           child: Container(
                             decoration: BoxDecoration(
                               color: AppColors.bgCard.withAlphaFraction(0.5),
@@ -260,72 +287,94 @@ class _ContactsScreenState extends State<ContactsScreen> {
                             child: TextField(
                               controller: _searchController,
                               onChanged: _onSearchChanged,
-                              style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
+                              style: TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontFamily: 'Inter'),
                               decoration: InputDecoration(
-                                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
+                                prefixIcon: Icon(Icons.search_rounded,
+                                    color: AppColors.textMuted, size: 20),
                                 hintText: l10n.contactsSearchHint,
-                                hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14, fontFamily: 'Inter'),
+                                hintStyle: TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 14,
+                                    fontFamily: 'Inter'),
                                 border: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 14),
                               ),
                             ),
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 8),
                           child: Row(
                             children: [
                               _buildQuickAction(
                                 Icons.mail_outline_rounded,
                                 l10n.contactsQuickInvites,
                                 badge: receivedRequests.length,
-                                isActive: _activeFilter == _ContactsFilter.requests,
-                                onTap: () => _setFilter(_ContactsFilter.requests),
+                                isActive:
+                                    _activeFilter == _ContactsFilter.requests,
+                                onTap: () =>
+                                    _setFilter(_ContactsFilter.requests),
                               ),
                               const SizedBox(width: 12),
                               _buildQuickAction(
                                 Icons.schedule_send_rounded,
                                 l10n.contactsQuickSent,
                                 badge: sentRequests.length,
-                                isActive: _activeFilter == _ContactsFilter.discover,
-                                onTap: () => _setFilter(_ContactsFilter.discover),
+                                isActive:
+                                    _activeFilter == _ContactsFilter.discover,
+                                onTap: () =>
+                                    _setFilter(_ContactsFilter.discover),
                               ),
                               const SizedBox(width: 12),
                               _buildQuickAction(
                                 Icons.people_outline_rounded,
                                 l10n.contactsQuickFriends,
                                 badge: friends.length,
-                                isActive: _activeFilter == _ContactsFilter.friends,
-                                onTap: () => _setFilter(_ContactsFilter.friends),
+                                isActive:
+                                    _activeFilter == _ContactsFilter.friends,
+                                onTap: () =>
+                                    _setFilter(_ContactsFilter.friends),
                               ),
                             ],
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 2),
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
                             child: Row(
                               children: [
                                 _buildFilterChip(
                                   label: l10n.contactsFilterAll,
-                                  selected: _activeFilter == _ContactsFilter.all,
+                                  selected:
+                                      _activeFilter == _ContactsFilter.all,
                                   onTap: () => _setFilter(_ContactsFilter.all),
                                 ),
                                 _buildFilterChip(
                                   label: l10n.contactsFilterRequests,
-                                  selected: _activeFilter == _ContactsFilter.requests,
-                                  onTap: () => _setFilter(_ContactsFilter.requests),
+                                  selected:
+                                      _activeFilter == _ContactsFilter.requests,
+                                  onTap: () =>
+                                      _setFilter(_ContactsFilter.requests),
                                 ),
                                 _buildFilterChip(
                                   label: l10n.contactsFilterFriends,
-                                  selected: _activeFilter == _ContactsFilter.friends,
-                                  onTap: () => _setFilter(_ContactsFilter.friends),
+                                  selected:
+                                      _activeFilter == _ContactsFilter.friends,
+                                  onTap: () =>
+                                      _setFilter(_ContactsFilter.friends),
                                 ),
                                 _buildFilterChip(
                                   label: l10n.contactsFilterDiscover,
-                                  selected: _activeFilter == _ContactsFilter.discover,
-                                  onTap: () => _setFilter(_ContactsFilter.discover),
+                                  selected:
+                                      _activeFilter == _ContactsFilter.discover,
+                                  onTap: () =>
+                                      _setFilter(_ContactsFilter.discover),
                                 ),
                               ],
                             ),
@@ -337,8 +386,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
                             child: Row(
                               children: [
                                 Text(
-                                  l10n.contactsOnlineFriends(onlineFriends.length),
-                                  style: const TextStyle(
+                                  l10n.contactsOnlineFriends(
+                                      onlineFriends.length),
+                                  style: TextStyle(
                                     color: AppColors.textSecondary,
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
@@ -353,22 +403,28 @@ class _ContactsScreenState extends State<ContactsScreen> {
                             height: 82,
                             child: ListView.builder(
                               scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
                               itemCount: onlineFriends.length,
                               itemBuilder: (_, index) {
                                 final user = onlineFriends[index];
                                 return Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 6),
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      AvatarWidget(name: user.name, imageUrl: user.avatar, size: 48, isOnline: true),
+                                      AvatarWidget(
+                                          name: user.name,
+                                          imageUrl: user.avatar,
+                                          size: 48,
+                                          isOnline: true),
                                       const SizedBox(height: 6),
                                       SizedBox(
                                         width: 56,
                                         child: Text(
                                           user.name.split(' ').last,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             color: AppColors.textSecondary,
                                             fontSize: 11,
                                             fontFamily: 'Inter',
@@ -389,9 +445,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
                           child: ListView(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             children: [
-                              if (showRequestsSection && receivedRequests.isNotEmpty) ...[
+                              if (showRequestsSection &&
+                                  receivedRequests.isNotEmpty) ...[
                                 const SizedBox(height: 8),
-                                _buildSectionTitle(l10n.contactsSectionFriendRequests),
+                                _buildSectionTitle(
+                                    l10n.contactsSectionFriendRequests),
                                 ...receivedRequests.map((user) {
                                   final isBusy = _busyUserIds.contains(user.id);
                                   return _buildUserItem(
@@ -406,7 +464,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                               ? null
                                               : () => _runAction(
                                                     user.id,
-                                                    () => _friendService.rejectFriendRequest(user.id),
+                                                    () => _friendService
+                                                        .rejectFriendRequest(
+                                                            user.id),
                                                     l10n.contactsRejectedInvite,
                                                   ),
                                         ),
@@ -418,7 +478,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                               ? null
                                               : () => _runAction(
                                                     user.id,
-                                                    () => _friendService.acceptFriendRequest(user.id),
+                                                    () => _friendService
+                                                        .acceptFriendRequest(
+                                                            user.id),
                                                     l10n.contactsAcceptedFriend,
                                                   ),
                                         ),
@@ -427,7 +489,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                   );
                                 }),
                               ],
-                              if (showRequestsSection && sentRequests.isNotEmpty) ...[
+                              if (showRequestsSection &&
+                                  sentRequests.isNotEmpty) ...[
                                 const SizedBox(height: 10),
                                 _buildSectionTitle(l10n.contactsSectionSent),
                                 ...sentRequests.map((user) {
@@ -436,12 +499,16 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                     user: user,
                                     subtitle: l10n.contactsPendingResponse,
                                     trailing: _buildActionText(
-                                      label: isBusy ? l10n.commonLoading : l10n.commonCancel,
+                                      label: isBusy
+                                          ? l10n.commonLoading
+                                          : l10n.commonCancel,
                                       onTap: isBusy
                                           ? null
                                           : () => _runAction(
                                                 user.id,
-                                                () => _friendService.cancelFriendRequest(user.id),
+                                                () => _friendService
+                                                    .cancelFriendRequest(
+                                                        user.id),
                                                 l10n.contactsCanceledInvite,
                                               ),
                                     ),
@@ -452,15 +519,18 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                 const SizedBox(height: 10),
                                 _buildSectionTitle(l10n.contactsSectionFriends),
                                 ...sortedLetters.map((letter) {
-                                  final usersInLetter = groupedFriends[letter] ?? [];
+                                  final usersInLetter =
+                                      groupedFriends[letter] ?? [];
                                   return Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Padding(
-                                        padding: const EdgeInsets.fromLTRB(12, 14, 0, 8),
+                                        padding: const EdgeInsets.fromLTRB(
+                                            12, 14, 0, 8),
                                         child: Text(
                                           letter,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             color: AppColors.primaryLight,
                                             fontSize: 14,
                                             fontWeight: FontWeight.w700,
@@ -469,7 +539,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                         ),
                                       ),
                                       ...usersInLetter.map((user) {
-                                        final isBusy = _busyUserIds.contains(user.id);
+                                        final isBusy =
+                                            _busyUserIds.contains(user.id);
                                         return _buildUserItem(
                                           user: user,
                                           trailing: Row(
@@ -480,7 +551,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                                   Navigator.push(
                                                     context,
                                                     MaterialPageRoute(
-                                                      builder: (_) => ChatScreen(
+                                                      builder: (_) =>
+                                                          ChatScreen(
                                                         userName: user.name,
                                                         receiverId: user.id,
                                                         userAvatar: user.avatar,
@@ -489,7 +561,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                                     ),
                                                   );
                                                 },
-                                                child: _buildCircleAction(Icons.chat_bubble_outline_rounded),
+                                                child: _buildCircleAction(Icons
+                                                    .chat_bubble_outline_rounded),
                                               ),
                                               const SizedBox(width: 8),
                                               GestureDetector(
@@ -497,7 +570,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                                     ? null
                                                     : () => _runAction(
                                                           user.id,
-                                                          () => _friendService.unfriend(user.id),
+                                                          () => _friendService
+                                                              .unfriend(
+                                                                  user.id),
                                                           l10n.contactsUnfriended,
                                                         ),
                                                 child: _buildCircleAction(
@@ -513,20 +588,25 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                   );
                                 }),
                               ],
-                              if (showDiscoverSection && suggestions.isNotEmpty) ...[
+                              if (showDiscoverSection &&
+                                  suggestions.isNotEmpty) ...[
                                 const SizedBox(height: 10),
-                                _buildSectionTitle(l10n.contactsSectionDiscover),
+                                _buildSectionTitle(
+                                    l10n.contactsSectionDiscover),
                                 ...suggestions.map((user) {
                                   final isBusy = _busyUserIds.contains(user.id);
                                   return _buildUserItem(
                                     user: user,
                                     trailing: _buildActionText(
-                                      label: isBusy ? l10n.commonLoading : l10n.commonAddFriend,
+                                      label: isBusy
+                                          ? l10n.commonLoading
+                                          : l10n.commonAddFriend,
                                       onTap: isBusy
                                           ? null
                                           : () => _runAction(
                                                 user.id,
-                                                () => _friendService.sendFriendRequest(user.id),
+                                                () => _friendService
+                                                    .sendFriendRequest(user.id),
                                                 l10n.contactsSentInvite,
                                               ),
                                     ),
@@ -541,12 +621,18 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                       _searchQuery.isNotEmpty
                                           ? l10n.commonNoSearchResults
                                           : switch (_activeFilter) {
-                                              _ContactsFilter.all => l10n.contactsEmptyNoUsers,
-                                              _ContactsFilter.requests => l10n.contactsEmptyRequests,
-                                              _ContactsFilter.friends => l10n.contactsEmptyFriends,
-                                              _ContactsFilter.discover => l10n.contactsEmptyDiscover,
+                                              _ContactsFilter.all =>
+                                                l10n.contactsEmptyNoUsers,
+                                              _ContactsFilter.requests =>
+                                                l10n.contactsEmptyRequests,
+                                              _ContactsFilter.friends =>
+                                                l10n.contactsEmptyFriends,
+                                              _ContactsFilter.discover =>
+                                                l10n.contactsEmptyDiscover,
                                             },
-                                      style: const TextStyle(color: AppColors.textMuted, fontFamily: 'Inter'),
+                                      style: TextStyle(
+                                          color: AppColors.textMuted,
+                                          fontFamily: 'Inter'),
                                     ),
                                   ),
                                 ),
@@ -571,7 +657,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
       padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
       child: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           color: AppColors.textSecondary,
           fontSize: 14,
           fontWeight: FontWeight.w600,
@@ -593,7 +679,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         children: [
-          AvatarWidget(name: user.name, imageUrl: user.avatar, size: 44, isOnline: user.isOnline),
+          AvatarWidget(
+              name: user.name,
+              imageUrl: user.avatar,
+              size: 44,
+              isOnline: user.isOnline),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -601,7 +691,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
               children: [
                 Text(
                   user.name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -610,8 +700,13 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  subtitle ?? (user.bio?.isNotEmpty == true ? user.bio! : (user.isOnline ? l10n.contactsStatusActive : l10n.contactsStatusOffline)),
-                  style: const TextStyle(
+                  subtitle ??
+                      (user.bio?.isNotEmpty == true
+                          ? user.bio!
+                          : (user.isOnline
+                              ? l10n.contactsStatusActive
+                              : l10n.contactsStatusOffline)),
+                  style: TextStyle(
                     color: AppColors.textMuted,
                     fontSize: 12,
                     fontFamily: 'Inter',
@@ -641,8 +736,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
         child: GlassCard(
           padding: const EdgeInsets.symmetric(vertical: 14),
           borderRadius: 16,
-          backgroundColor: isActive ? AppColors.primary.withAlphaFraction(0.2) : null,
-          border: isActive ? Border.all(color: AppColors.primary.withAlphaFraction(0.45), width: 0.8) : null,
+          backgroundColor:
+              isActive ? AppColors.primary.withAlphaFraction(0.2) : null,
+          border: isActive
+              ? Border.all(
+                  color: AppColors.primary.withAlphaFraction(0.45), width: 0.8)
+              : null,
           child: Stack(
             alignment: Alignment.center,
             children: [
@@ -653,7 +752,10 @@ class _ContactsScreenState extends State<ContactsScreen> {
                   const SizedBox(height: 6),
                   Text(
                     label,
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontFamily: 'Inter'),
+                    style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 11,
+                        fontFamily: 'Inter'),
                   ),
                 ],
               ),
@@ -682,16 +784,21 @@ class _ContactsScreenState extends State<ContactsScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: selected ? AppColors.primary.withAlphaFraction(0.2) : AppColors.glassBg,
+            color: selected
+                ? AppColors.primary.withAlphaFraction(0.2)
+                : AppColors.glassBg,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: selected ? AppColors.primary.withAlphaFraction(0.4) : AppColors.glassBorder,
+              color: selected
+                  ? AppColors.primary.withAlphaFraction(0.4)
+                  : AppColors.glassBorder,
             ),
           ),
           child: Text(
             label,
             style: TextStyle(
-              color: selected ? AppColors.primaryLight : AppColors.textSecondary,
+              color:
+                  selected ? AppColors.primaryLight : AppColors.textSecondary,
               fontSize: 12,
               fontWeight: FontWeight.w600,
               fontFamily: 'Inter',
@@ -750,7 +857,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
         ),
         child: Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             color: AppColors.primaryLight,
             fontSize: 12,
             fontWeight: FontWeight.w600,
@@ -761,4 +868,3 @@ class _ContactsScreenState extends State<ContactsScreen> {
     );
   }
 }
-

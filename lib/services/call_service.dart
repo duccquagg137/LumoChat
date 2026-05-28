@@ -191,11 +191,32 @@ class CallService {
   Future<void> _completeCall({
     required String callId,
     required CallStatus status,
-  }) {
-    return _updateCallStatus(
+  }) async {
+    final call = await _readCall(callId);
+    if (call == null) return;
+
+    if (_isTerminalStatus(call.status)) {
+      final endedAt = call.endedAt == null
+          ? Timestamp.now()
+          : Timestamp.fromDate(call.endedAt!);
+      await _writeCallChatMessage(
+        call: call,
+        status: call.status,
+        endedAt: endedAt,
+      );
+      return;
+    }
+
+    final endedAt = Timestamp.now();
+    await _updateCallStatus(
       callId: callId,
       status: status,
-      endedAt: Timestamp.now(),
+      endedAt: endedAt,
+    );
+    await _writeCallChatMessage(
+      call: call,
+      status: status,
+      endedAt: endedAt,
     );
   }
 
@@ -220,6 +241,115 @@ class CallService {
     final doc = await _calls.doc(callId).get();
     if (!doc.exists) return null;
     return AppCall.fromDocument(doc);
+  }
+
+  Future<void> _writeCallChatMessage({
+    required AppCall call,
+    required CallStatus status,
+    required Timestamp endedAt,
+  }) async {
+    if (call.callerId.isEmpty || call.calleeId.isEmpty) return;
+    final senderId = currentUserId;
+    if (!call.isParticipant(senderId)) return;
+    final receiverId = call.peerIdFor(senderId);
+
+    final roomId = _buildChatRoomId(call.callerId, call.calleeId);
+    final roomRef = _firestore.collection('chat_rooms').doc(roomId);
+    final messageRef = roomRef.collection('messages').doc('call_${call.id}');
+    final durationSeconds = _callDurationSeconds(call, endedAt);
+    final text = _callMessageText(
+      type: call.type,
+      status: status,
+      durationSeconds: durationSeconds,
+    );
+
+    await RetryPolicy.run(
+      operation: 'chat.write_call_message',
+      task: () async {
+        await roomRef.set({
+          'lastMessage': text,
+          'lastTimestamp': endedAt,
+          'participants': [call.callerId, call.calleeId],
+        }, SetOptions(merge: true));
+
+        await messageRef.set({
+          'id': messageRef.id,
+          'senderId': senderId,
+          'receiverId': receiverId,
+          'senderName': 'Hệ thống',
+          'text': text,
+          'type': 'system',
+          'timestamp': endedAt,
+          'sentAt': endedAt,
+          'isRead': true,
+          'status': 'read',
+          'systemGenerated': true,
+          'callId': call.id,
+          'callType': call.type.key,
+          'callStatus': status.key,
+          'callDurationSeconds': durationSeconds,
+          'callAcceptedAt': call.acceptedAt == null
+              ? null
+              : Timestamp.fromDate(call.acceptedAt!),
+          'callEndedAt': endedAt,
+        }, SetOptions(merge: true));
+      },
+    );
+  }
+
+  int _callDurationSeconds(AppCall call, Timestamp endedAt) {
+    final acceptedAt = call.acceptedAt;
+    if (acceptedAt == null) return 0;
+    final seconds = endedAt.toDate().difference(acceptedAt).inSeconds;
+    return seconds < 0 ? 0 : seconds;
+  }
+
+  String _callMessageText({
+    required CallType type,
+    required CallStatus status,
+    required int durationSeconds,
+  }) {
+    final kind = type == CallType.video ? 'Cuộc gọi video' : 'Cuộc gọi thoại';
+    switch (status) {
+      case CallStatus.ended:
+        return '$kind - ${_formatCallDuration(durationSeconds)}';
+      case CallStatus.missed:
+        return '$kind nhỡ';
+      case CallStatus.declined:
+        return '$kind bị từ chối';
+      case CallStatus.cancelled:
+        return '$kind đã hủy';
+      case CallStatus.ringing:
+      case CallStatus.accepted:
+      case CallStatus.unknown:
+        return kind;
+    }
+  }
+
+  String _formatCallDuration(int totalSeconds) {
+    final safeSeconds = totalSeconds < 0 ? 0 : totalSeconds;
+    final hours = safeSeconds ~/ 3600;
+    final minutes = (safeSeconds % 3600) ~/ 60;
+    final seconds = safeSeconds % 60;
+    if (hours > 0) {
+      return '$hours giờ ${minutes.toString().padLeft(2, '0')} phút';
+    }
+    if (minutes > 0) {
+      return '$minutes phút ${seconds.toString().padLeft(2, '0')} giây';
+    }
+    return '$seconds giây';
+  }
+
+  String _buildChatRoomId(String firstUserId, String secondUserId) {
+    final ids = [firstUserId, secondUserId]..sort();
+    return ids.join('_');
+  }
+
+  bool _isTerminalStatus(CallStatus status) {
+    return status == CallStatus.declined ||
+        status == CallStatus.cancelled ||
+        status == CallStatus.missed ||
+        status == CallStatus.ended;
   }
 
   Future<Map<String, String>> _loadCurrentUserProfile() async {

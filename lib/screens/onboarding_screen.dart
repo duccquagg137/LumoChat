@@ -100,7 +100,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: Stack(
         children: [
           Container(
-            decoration: const BoxDecoration(gradient: AppGradients.hero),
+            decoration: BoxDecoration(gradient: AppGradients.hero),
           ),
           Positioned(
             top: -100,
@@ -145,7 +145,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     onPressed: _isNavigating ? null : _finishOnboarding,
                     child: Text(
                       _txt(context, vi: 'Bỏ qua', en: 'Skip'),
-                      style: const TextStyle(color: AppColors.textSecondary),
+                      style: TextStyle(color: AppColors.textSecondary),
                     ),
                   ),
                 ),
@@ -170,7 +170,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 borderRadius: BorderRadius.circular(36),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: page.gradient.first.withAlphaFraction(0.4),
+                                    color: page.gradient.first
+                                        .withAlphaFraction(0.4),
                                     blurRadius: 36,
                                     offset: const Offset(0, 14),
                                   ),
@@ -183,7 +184,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             Text(
                               page.title,
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 28,
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.textPrimary,
@@ -194,7 +195,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             Text(
                               page.subtitle,
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 color: AppColors.textSecondary,
                                 fontFamily: 'Inter',
@@ -228,7 +229,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 borderRadius: BorderRadius.circular(8),
                                 color: active
                                     ? AppColors.primary
-                                    : AppColors.textMuted.withAlphaFraction(0.28),
+                                    : AppColors.textMuted
+                                        .withAlphaFraction(0.28),
                               ),
                             );
                           }),

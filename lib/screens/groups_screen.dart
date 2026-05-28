@@ -160,7 +160,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                   color: AppColors.textMuted,
                   fontSize: 14,
                   fontFamily: 'Inter'),
@@ -297,7 +297,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
               backgroundColor: AppColors.bgSurface,
               title: Text(
                 l10n.groupsAddMembersDialogTitle,
-                style: const TextStyle(color: AppColors.textPrimary),
+                style: TextStyle(color: AppColors.textPrimary),
               ),
               content: SizedBox(
                 width: double.maxFinite,
@@ -307,13 +307,13 @@ class _GroupsScreenState extends State<GroupsScreen> {
                     TextField(
                       onChanged: (value) =>
                           setDialogState(() => dialogQuery = value),
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppColors.textPrimary, fontFamily: 'Inter'),
                       decoration: InputDecoration(
                         hintText: l10n.groupsAddMembersSearchHint,
-                        hintStyle: const TextStyle(
+                        hintStyle: TextStyle(
                             color: AppColors.textMuted, fontFamily: 'Inter'),
-                        prefixIcon: const Icon(Icons.search_rounded,
+                        prefixIcon: Icon(Icons.search_rounded,
                             color: AppColors.textMuted, size: 20),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -344,7 +344,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                                     const EdgeInsets.symmetric(vertical: 24),
                                 child: Text(
                                   l10n.commonNoSearchResults,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       color: AppColors.textMuted,
                                       fontFamily: 'Inter'),
                                 ),
@@ -370,14 +370,14 @@ class _GroupsScreenState extends State<GroupsScreen> {
                                   activeColor: AppColors.primary,
                                   title: Text(
                                     user.name,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         color: AppColors.textPrimary,
                                         fontFamily: 'Inter',
                                         fontSize: 14),
                                   ),
                                   subtitle: Text(
                                     user.bio ?? '',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         color: AppColors.textMuted,
                                         fontFamily: 'Inter',
                                         fontSize: 12),
@@ -431,9 +431,9 @@ class _GroupsScreenState extends State<GroupsScreen> {
           builder: (dialogContext) => AlertDialog(
             backgroundColor: AppColors.bgSurface,
             title: Text(l10n.groupsLeaveConfirmTitle,
-                style: const TextStyle(color: AppColors.textPrimary)),
+                style: TextStyle(color: AppColors.textPrimary)),
             content: Text(l10n.groupsLeaveConfirmMessage(groupName),
-                style: const TextStyle(color: AppColors.textSecondary)),
+                style: TextStyle(color: AppColors.textSecondary)),
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(dialogContext, false),
@@ -473,9 +473,9 @@ class _GroupsScreenState extends State<GroupsScreen> {
           builder: (dialogContext) => AlertDialog(
             backgroundColor: AppColors.bgSurface,
             title: Text(l10n.groupsDeleteConfirmTitle,
-                style: const TextStyle(color: AppColors.textPrimary)),
+                style: TextStyle(color: AppColors.textPrimary)),
             content: Text(l10n.groupsDeleteConfirmMessage(groupName),
-                style: const TextStyle(color: AppColors.textSecondary)),
+                style: TextStyle(color: AppColors.textSecondary)),
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(dialogContext, false),
@@ -522,7 +522,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
             children: [
               Text(
                 groupName,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -531,10 +531,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
               ),
               const SizedBox(height: 10),
               ListTile(
-                leading: const Icon(Icons.person_add_alt_1_rounded,
+                leading: Icon(Icons.person_add_alt_1_rounded,
                     color: AppColors.primaryLight),
                 title: Text(l10n.groupsActionAddMembers,
-                    style: const TextStyle(color: AppColors.textPrimary)),
+                    style: TextStyle(color: AppColors.textPrimary)),
                 onTap: () async {
                   Navigator.pop(sheetContext);
                   await _showAddMembersDialog(
@@ -609,7 +609,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                     children: [
                       Text(
                         l10n.groupsTitle,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
                           color: AppColors.textPrimary,
@@ -627,7 +627,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                         child: Container(
                           width: 36,
                           height: 36,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             gradient: AppGradients.primary,
                             shape: BoxShape.circle,
                           ),
@@ -650,13 +650,13 @@ class _GroupsScreenState extends State<GroupsScreen> {
                     child: TextField(
                       controller: _searchController,
                       onChanged: _onSearchChanged,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppColors.textPrimary, fontFamily: 'Inter'),
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search_rounded,
+                        prefixIcon: Icon(Icons.search_rounded,
                             color: AppColors.textMuted, size: 20),
                         hintText: l10n.groupsSearchHint,
-                        hintStyle: const TextStyle(
+                        hintStyle: TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 14,
                             fontFamily: 'Inter'),
@@ -845,7 +845,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                                         isPinned
                                             ? l10n.commonUnpin
                                             : l10n.commonPin,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                             color: AppColors.primaryLight,
                                             fontWeight: FontWeight.w600),
                                       ),
@@ -1035,7 +1035,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       shape: BoxShape.circle,
                       border: Border.all(color: AppColors.bgDark, width: 1.5),
                     ),
-                    child: const Icon(Icons.group_rounded,
+                    child: Icon(Icons.group_rounded,
                         color: AppColors.primaryLight, size: 12),
                   ),
                 ),
@@ -1049,8 +1049,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   Row(
                     children: [
                       if (isPinned)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 4),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4),
                           child: Icon(Icons.push_pin_rounded,
                               size: 14, color: AppColors.primaryLight),
                         ),

@@ -14,6 +14,7 @@ import 'chat_screen.dart';
 import 'home_screen.dart';
 import 'landing_screen.dart';
 import 'onboarding_screen.dart';
+import 'profile_completion_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   final bool isFirebaseInitialized;
@@ -67,7 +68,13 @@ class _SplashScreenState extends State<SplashScreen> {
           .get()
           .timeout(const Duration(seconds: 2));
 
-      final screenData = userDoc.data()?['lastActiveScreen'];
+      final userData = userDoc.data();
+      if (userData?['profileCompleted'] == false) {
+        debugPrint('Splash -> ProfileCompletion');
+        return const ProfileCompletionScreen();
+      }
+
+      final screenData = userData?['lastActiveScreen'];
       if (screenData is Map<String, dynamic> && screenData['name'] == 'chat') {
         final receiverId = (screenData['receiverId'] ?? '').toString();
         if (receiverId.isNotEmpty) {
@@ -97,7 +104,7 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget _buildSplashUi() {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.hero),
+        decoration: BoxDecoration(gradient: AppGradients.hero),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,

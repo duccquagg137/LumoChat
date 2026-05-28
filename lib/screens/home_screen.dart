@@ -38,9 +38,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void _listenIncomingCalls() {
     final callService = ref.read(callServiceProvider);
     _incomingCallSubscription?.cancel();
-    _incomingCallSubscription = callService
-        .watchIncomingRingingCalls()
-        .listen((snapshot) {
+    _incomingCallSubscription =
+        callService.watchIncomingRingingCalls().listen((snapshot) {
       if (!mounted) return;
       for (final doc in snapshot.docs) {
         final call = AppCall.fromDocument(doc);
@@ -82,13 +81,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     });
   }
 
-  final _screens = const [
-    ChatListScreen(),
-    GroupsScreen(),
-    ContactsScreen(),
-    ProfileScreen(),
-  ];
-
   @override
   void dispose() {
     _incomingCallSubscription?.cancel();
@@ -99,14 +91,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final currentIndex = ref.watch(homeTabIndexProvider);
+    ref.watch(appThemeModeProvider);
+    final screens = [
+      // Keep these non-const so inactive IndexedStack tabs rebuild when
+      // the adaptive AppColors palette changes.
+      // ignore: prefer_const_constructors
+      ChatListScreen(),
+      // ignore: prefer_const_constructors
+      GroupsScreen(),
+      // ignore: prefer_const_constructors
+      ContactsScreen(),
+      // ignore: prefer_const_constructors
+      ProfileScreen(),
+    ];
 
     return Scaffold(
       body: IndexedStack(
         index: currentIndex,
-        children: _screens,
+        children: screens,
       ),
       bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.bgSurface,
           border: Border(
             top: BorderSide(color: AppColors.glassBorder, width: 0.5),

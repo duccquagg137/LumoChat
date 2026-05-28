@@ -739,7 +739,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                                 textAlign: TextAlign.center,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: AppColors.textPrimary,
                                   fontSize: 28,
                                   fontWeight: FontWeight.w700,
@@ -750,7 +750,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                               Text(
                                 _statusText(call),
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: AppColors.textSecondary,
                                   fontSize: 14,
                                   fontFamily: 'Inter',
@@ -760,7 +760,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                                 const SizedBox(height: 6),
                                 Text(
                                   _formatDuration(_elapsed),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     color: AppColors.primaryLight,
                                     fontSize: 16,
                                     fontWeight: FontWeight.w700,
@@ -793,11 +793,11 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(color: AppColors.primaryLight),
+          CircularProgressIndicator(color: AppColors.primaryLight),
           const SizedBox(height: 14),
           Text(
             _txt(context, vi: 'Đang mở cuộc gọi...', en: 'Opening call...'),
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textSecondary,
               fontSize: 14,
               fontFamily: 'Inter',
@@ -832,7 +832,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
           const SizedBox(width: 6),
           Text(
             _callTypeLabel(),
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textSecondary,
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -859,7 +859,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                 widget.peerName.isEmpty
                     ? '?'
                     : widget.peerName.substring(0, 1).toUpperCase(),
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 36,
                   fontWeight: FontWeight.w700,
@@ -914,7 +914,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                             en: 'Waiting for remote video...',
                           ),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.textSecondary,
                             fontSize: 13,
                             fontFamily: 'Inter',
@@ -950,7 +950,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
               Positioned.fill(
                 child: Container(
                   color: Colors.black.withAlphaFraction(0.35),
-                  child: const Center(
+                  child: Center(
                     child: CircularProgressIndicator(
                         color: AppColors.primaryLight),
                   ),
@@ -973,7 +973,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
               Text(
                 text,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 14,
                   fontFamily: 'Inter',
@@ -1132,7 +1132,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
           child: Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textSecondary,
               fontSize: 12,
               fontWeight: FontWeight.w600,

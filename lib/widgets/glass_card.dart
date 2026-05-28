@@ -39,7 +39,8 @@ class GlassCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: backgroundColor ?? AppColors.glassBg,
                 borderRadius: BorderRadius.circular(borderRadius),
-                border: border ?? Border.all(color: AppColors.glassBorder, width: 0.5),
+                border: border ??
+                    Border.all(color: AppColors.glassBorder, width: 0.5),
               ),
               child: child,
             ),
@@ -188,7 +189,7 @@ class OutlinedPillButton extends StatelessWidget {
                 ],
                 Text(
                   text,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.primaryLight,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -226,7 +227,8 @@ class AvatarWidget extends StatelessWidget {
     final hasImage = imageUrl != null && imageUrl!.trim().isNotEmpty;
     final pixelRatio = MediaQuery.of(context).devicePixelRatio;
     final rawCacheSize = (size * pixelRatio).round();
-    final cacheSize = rawCacheSize < 48 ? 48 : (rawCacheSize > 512 ? 512 : rawCacheSize);
+    final cacheSize =
+        rawCacheSize < 48 ? 48 : (rawCacheSize > 512 ? 512 : rawCacheSize);
     final colors = [
       AppColors.primary,
       AppColors.accent,
@@ -244,7 +246,10 @@ class AvatarWidget extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: LinearGradient(
-              colors: [colors[colorIndex], colors[colorIndex].withAlphaFraction(0.7)],
+              colors: [
+                colors[colorIndex],
+                colors[colorIndex].withAlphaFraction(0.7)
+              ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -258,7 +263,8 @@ class AvatarWidget extends StatelessWidget {
                     cacheWidth: cacheSize,
                     cacheHeight: cacheSize,
                     filterQuality: FilterQuality.medium,
-                    frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                    frameBuilder:
+                        (context, child, frame, wasSynchronouslyLoaded) {
                       if (wasSynchronouslyLoaded) return child;
                       return AnimatedOpacity(
                         opacity: frame == null ? 0 : 1,

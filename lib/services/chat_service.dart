@@ -169,8 +169,7 @@ class ChatService {
     if (receiverId.isEmpty || receiverId == _currentUserId) return;
     final senderName = _resolveSenderName();
     final roomId = buildChatRoomId(receiverId);
-    final bucket = DateTime.now().millisecondsSinceEpoch ~/ 15000;
-    final dedupeId = 'dm_${roomId}_${_currentUserId}_$bucket';
+    final dedupeId = 'dm_${roomId}_$messageId';
 
     await _notificationService.createNotification(
       recipientId: receiverId,

@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../utils/l10n.dart';
+import '../utils/profile_visibility.dart';
 import '../widgets/glass_card.dart';
 import 'chat_screen.dart';
 
@@ -14,9 +16,46 @@ class UserProfileScreen extends StatelessWidget {
     required this.userId,
   });
 
+  bool _isEnglish(BuildContext context) =>
+      Localizations.localeOf(context).languageCode == 'en';
+
+  String _txt(
+    BuildContext context, {
+    required String vi,
+    required String en,
+  }) {
+    return _isEnglish(context) ? en : vi;
+  }
+
+  String _displayOrFallback(dynamic value, {required String fallback}) {
+    final text = (value ?? '').toString().trim();
+    return text.isEmpty ? fallback : text;
+  }
+
+  String _formatDateField(dynamic raw, {required String fallback}) {
+    final text = (raw ?? '').toString().trim();
+    if (text.isEmpty) return fallback;
+    final parsed = DateTime.tryParse(text);
+    if (parsed == null) return text;
+    final dd = parsed.day.toString().padLeft(2, '0');
+    final mm = parsed.month.toString().padLeft(2, '0');
+    final yyyy = parsed.year.toString();
+    return '$dd/$mm/$yyyy';
+  }
+
+  bool _isVisible(
+    Map<String, dynamic> data,
+    String field, {
+    required bool isOwner,
+  }) {
+    return ProfileVisibility.isVisible(data, field, isOwner: isOwner);
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final l10n = context.l10n;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -29,42 +68,171 @@ class UserProfileScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [AppColors.primary.withAlphaFraction(0.15), Colors.transparent],
+                  colors: [
+                    AppColors.primary.withAlphaFraction(0.15),
+                    Colors.transparent,
+                  ],
                 ),
               ),
             ),
           ),
           SafeArea(
             child: StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(userId)
+                  .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return const Center(child: Text('Không tải được hồ sơ', style: TextStyle(color: AppColors.textMuted)));
+                  return Center(
+                    child: Text(
+                      l10n.profileLoadError,
+                      style: TextStyle(color: AppColors.textMuted),
+                    ),
+                  );
                 }
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-                }
-                final data = snapshot.data?.data() as Map<String, dynamic>?;
-                if (data == null) {
-                  return const Center(child: Text('Không tìm thấy người dùng', style: TextStyle(color: AppColors.textMuted)));
+                  return const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  );
                 }
 
-                final name = (data['name'] ?? 'Người dùng').toString();
-                final email = (data['email'] ?? '').toString();
-                final bio = (data['bio'] ?? '').toString();
+                final data = snapshot.data?.data() as Map<String, dynamic>?;
+                if (data == null) {
+                  return Center(
+                    child: Text(
+                      l10n.profileLoadError,
+                      style: TextStyle(color: AppColors.textMuted),
+                    ),
+                  );
+                }
+
+                final isOwner = currentUserId == userId;
+                final name = _displayOrFallback(
+                  data['name'],
+                  fallback: l10n.profileFallbackUser,
+                );
                 final avatar = (data['avatar'] ?? '').toString();
                 final isOnline = data['isOnline'] == true;
-                final phone = (data['phoneNumber'] ?? '').toString().trim();
-                final address = (data['address'] ?? '').toString().trim();
-                final city = (data['city'] ?? '').toString().trim();
-                final gender = (data['gender'] ?? '').toString().trim();
-                final website = (data['website'] ?? '').toString().trim();
-                final occupation = (data['occupation'] ?? '').toString().trim();
-                final dobRaw = (data['dateOfBirth'] ?? '').toString().trim();
-                final dob = DateTime.tryParse(dobRaw);
-                final birthday = dob == null
-                    ? (dobRaw.isEmpty ? 'Chưa cập nhật' : dobRaw)
-                    : '${dob.day.toString().padLeft(2, '0')}/${dob.month.toString().padLeft(2, '0')}/${dob.year}';
+                final email = _displayOrFallback(
+                  data['email'],
+                  fallback: l10n.profileNotUpdated,
+                );
+                final bio = _displayOrFallback(
+                  data['bio'],
+                  fallback: l10n.profileFallbackBio,
+                );
+                final phone = _displayOrFallback(
+                  data['phoneNumber'],
+                  fallback: l10n.profileNotUpdated,
+                );
+                final address = _displayOrFallback(
+                  data['address'],
+                  fallback: l10n.profileNotUpdated,
+                );
+                final city = _displayOrFallback(
+                  data['city'],
+                  fallback: l10n.profileNotUpdated,
+                );
+                final gender = _displayOrFallback(
+                  data['gender'],
+                  fallback: l10n.profileNotUpdated,
+                );
+                final birthday = _formatDateField(
+                  data['dateOfBirth'],
+                  fallback: l10n.profileNotUpdated,
+                );
+                final occupation = _displayOrFallback(
+                  data['occupation'],
+                  fallback: l10n.profileNotUpdated,
+                );
+                final website = _displayOrFallback(
+                  data['website'],
+                  fallback: l10n.profileNotUpdated,
+                );
+
+                final canShowEmail = _isVisible(
+                  data,
+                  ProfileVisibility.email,
+                  isOwner: isOwner,
+                );
+                final canShowBio = _isVisible(
+                  data,
+                  ProfileVisibility.bio,
+                  isOwner: isOwner,
+                );
+                final infoRows = <Widget>[
+                  if (_isVisible(
+                    data,
+                    ProfileVisibility.phoneNumber,
+                    isOwner: isOwner,
+                  ))
+                    _buildInfoRow(
+                      Icons.phone_outlined,
+                      l10n.profileFieldPhone,
+                      phone,
+                    ),
+                  if (_isVisible(
+                    data,
+                    ProfileVisibility.address,
+                    isOwner: isOwner,
+                  ))
+                    _buildInfoRow(
+                      Icons.location_on_outlined,
+                      l10n.profileFieldAddress,
+                      address,
+                    ),
+                  if (_isVisible(
+                    data,
+                    ProfileVisibility.city,
+                    isOwner: isOwner,
+                  ))
+                    _buildInfoRow(
+                      Icons.location_city_outlined,
+                      l10n.profileFieldCity,
+                      city,
+                    ),
+                  if (_isVisible(
+                    data,
+                    ProfileVisibility.gender,
+                    isOwner: isOwner,
+                  ))
+                    _buildInfoRow(
+                      Icons.wc_outlined,
+                      l10n.profileFieldGender,
+                      gender,
+                    ),
+                  if (_isVisible(
+                    data,
+                    ProfileVisibility.dateOfBirth,
+                    isOwner: isOwner,
+                  ))
+                    _buildInfoRow(
+                      Icons.cake_outlined,
+                      l10n.profileFieldBirthDate,
+                      birthday,
+                    ),
+                  if (_isVisible(
+                    data,
+                    ProfileVisibility.occupation,
+                    isOwner: isOwner,
+                  ))
+                    _buildInfoRow(
+                      Icons.work_outline_rounded,
+                      l10n.profileFieldOccupation,
+                      occupation,
+                    ),
+                  if (_isVisible(
+                    data,
+                    ProfileVisibility.website,
+                    isOwner: isOwner,
+                  ))
+                    _buildInfoRow(
+                      Icons.language_rounded,
+                      l10n.profileFieldWebsite,
+                      website,
+                    ),
+                ];
 
                 return SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -75,11 +243,15 @@ class UserProfileScreen extends StatelessWidget {
                         children: [
                           IconButton(
                             onPressed: () => Navigator.pop(context),
-                            icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary, size: 20),
+                            icon: Icon(
+                              Icons.arrow_back_ios_rounded,
+                              color: AppColors.textPrimary,
+                              size: 20,
+                            ),
                           ),
                           const SizedBox(width: 4),
-                          const Text(
-                            'Hồ sơ',
+                          Text(
+                            l10n.navProfile,
                             style: TextStyle(
                               color: AppColors.textPrimary,
                               fontSize: 20,
@@ -103,41 +275,49 @@ class UserProfileScreen extends StatelessWidget {
                             const SizedBox(height: 16),
                             Text(
                               name,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: AppColors.textPrimary,
                                 fontSize: 22,
                                 fontWeight: FontWeight.w800,
                                 fontFamily: 'Inter',
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              email,
-                              style: const TextStyle(
-                                color: AppColors.primaryLight,
-                                fontSize: 14,
-                                fontFamily: 'Inter',
+                            if (canShowEmail) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                email,
+                                style: TextStyle(
+                                  color: AppColors.primaryLight,
+                                  fontSize: 14,
+                                  fontFamily: 'Inter',
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              bio.isNotEmpty ? bio : 'Đang sử dụng LumoChat',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 14,
-                                fontFamily: 'Inter',
+                            ],
+                            if (canShowBio) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                bio,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 14,
+                                  fontFamily: 'Inter',
+                                ),
                               ),
-                            ),
+                            ],
                             const SizedBox(height: 20),
                             Row(
                               children: [
                                 Expanded(
                                   child: GradientButton(
-                                    text: 'Nhắn tin',
+                                    text: _txt(
+                                      context,
+                                      vi: 'Nhan tin',
+                                      en: 'Message',
+                                    ),
                                     icon: Icons.chat_bubble_rounded,
                                     height: 44,
-                                    onPressed: currentUserId == userId
+                                    onPressed: isOwner
                                         ? null
                                         : () {
                                             Navigator.pushReplacement(
@@ -162,17 +342,26 @@ class UserProfileScreen extends StatelessWidget {
                       const SizedBox(height: 16),
                       GlassCard(
                         padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Column(
-                          children: [
-                            _buildInfoRow(Icons.phone_outlined, 'Số điện thoại', phone.isEmpty ? 'Chưa cập nhật' : phone),
-                            _buildInfoRow(Icons.location_on_outlined, 'Địa chỉ', address.isEmpty ? 'Chưa cập nhật' : address),
-                            _buildInfoRow(Icons.location_city_outlined, 'Thành phố', city.isEmpty ? 'Chưa cập nhật' : city),
-                            _buildInfoRow(Icons.wc_outlined, 'Giới tính', gender.isEmpty ? 'Chưa cập nhật' : gender),
-                            _buildInfoRow(Icons.cake_outlined, 'Ngày sinh', birthday),
-                            _buildInfoRow(Icons.work_outline_rounded, 'Nghề nghiệp', occupation.isEmpty ? 'Chưa cập nhật' : occupation),
-                            _buildInfoRow(Icons.language_rounded, 'Website', website.isEmpty ? 'Chưa cập nhật' : website),
-                          ],
-                        ),
+                        child: infoRows.isEmpty
+                            ? Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                child: Text(
+                                  _txt(
+                                    context,
+                                    vi: 'Nguoi dung da an thong tin ca nhan.',
+                                    en: 'This user has hidden their profile details.',
+                                  ),
+                                  style: TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontFamily: 'Inter',
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              )
+                            : Column(children: infoRows),
                       ),
                       const SizedBox(height: 24),
                     ],
@@ -199,7 +388,7 @@ class UserProfileScreen extends StatelessWidget {
       ),
       title: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           color: AppColors.textPrimary,
           fontSize: 13,
           fontWeight: FontWeight.w600,
@@ -208,7 +397,7 @@ class UserProfileScreen extends StatelessWidget {
       ),
       subtitle: Text(
         value,
-        style: const TextStyle(
+        style: TextStyle(
           color: AppColors.textMuted,
           fontSize: 12,
           fontFamily: 'Inter',

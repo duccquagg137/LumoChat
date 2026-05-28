@@ -7,6 +7,7 @@ import '../services/group_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/l10n.dart';
 import '../widgets/glass_card.dart';
+import 'user_profile_screen.dart';
 
 enum GroupInfoAction { openSearch }
 
@@ -163,7 +164,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             backgroundColor: AppColors.bgSurface,
             title: Text(
               _txt(context, vi: 'Xác nhận rời nhóm', en: 'Leave group?'),
-              style: const TextStyle(color: AppColors.textPrimary),
+              style: TextStyle(color: AppColors.textPrimary),
             ),
             content: Text(
               _txt(
@@ -171,7 +172,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 vi: 'Bạn có chắc muốn rời nhóm "${widget.groupName}"?',
                 en: 'Do you want to leave "${widget.groupName}"?',
               ),
-              style: const TextStyle(color: AppColors.textSecondary),
+              style: TextStyle(color: AppColors.textSecondary),
             ),
             actions: [
               TextButton(
@@ -220,13 +221,13 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         backgroundColor: AppColors.bgSurface,
         title: Text(
           _txt(context, vi: 'Thông tin nhóm', en: 'Group info'),
-          style: const TextStyle(
+          style: TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
             fontFamily: 'Inter',
           ),
         ),
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        iconTheme: IconThemeData(color: AppColors.textPrimary),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -240,7 +241,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   Container(
                     width: 58,
                     height: 58,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       gradient: AppGradients.primary,
                       shape: BoxShape.circle,
                     ),
@@ -265,7 +266,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                           widget.groupName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.textPrimary,
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
@@ -277,7 +278,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                           l10n.groupsMemberCount(_memberIds.isEmpty
                               ? widget.memberCount
                               : _memberIds.length),
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 13,
                             fontFamily: 'Inter',
@@ -303,19 +304,19 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                     ),
                     title: Text(
                       _isPinned ? l10n.commonUnpin : l10n.commonPin,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppColors.textPrimary, fontFamily: 'Inter'),
                     ),
                     onTap:
                         _isLoadingPin || _isActionRunning ? null : _togglePin,
                   ),
                   ListTile(
-                    leading: const Icon(Icons.search_rounded,
+                    leading: Icon(Icons.search_rounded,
                         color: AppColors.primaryLight),
                     title: Text(
                       _txt(context,
                           vi: 'Tìm kiếm trong nhóm', en: 'Search in group'),
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppColors.textPrimary, fontFamily: 'Inter'),
                     ),
                     onTap: () =>
@@ -337,7 +338,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             const SizedBox(height: 14),
             Text(
               _txt(context, vi: 'Thành viên', en: 'Members'),
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
@@ -366,7 +367,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                       _txt(context,
                           vi: 'Chưa có dữ liệu thành viên.',
                           en: 'No member data available.'),
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppColors.textMuted, fontFamily: 'Inter'),
                     ),
                   );
@@ -378,6 +379,16 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                     children: users.map((user) {
                       final isMe = user.id == _currentUserId;
                       return ListTile(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => UserProfileScreen(
+                                userId: user.id,
+                              ),
+                            ),
+                          );
+                        },
                         leading: AvatarWidget(
                           name: user.name,
                           imageUrl: user.avatar,
@@ -387,7 +398,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                         ),
                         title: Text(
                           user.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.textPrimary,
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -407,6 +418,11 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                             fontSize: 12,
                             fontFamily: 'Inter',
                           ),
+                        ),
+                        trailing: Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.textMuted,
+                          size: 20,
                         ),
                       );
                     }).toList(),

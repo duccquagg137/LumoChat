@@ -223,14 +223,14 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                   child: Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.arrow_back_ios_rounded,
+                        icon: Icon(Icons.arrow_back_ios_rounded,
                             color: AppColors.textPrimary, size: 20),
                         onPressed: () => Navigator.pop(context),
                       ),
                       Expanded(
                         child: Text(
                           l10n.groupsCreateTitle,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
                             color: AppColors.textPrimary,
@@ -276,7 +276,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         return Center(
                           child: Text(
                             l10n.groupsCreateLoadProfileError,
-                            style: const TextStyle(color: AppColors.textMuted),
+                            style: TextStyle(color: AppColors.textMuted),
                           ),
                         );
                       }
@@ -301,8 +301,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                             return Center(
                               child: Text(
                                 l10n.groupsCreateLoadFriendsError,
-                                style:
-                                    const TextStyle(color: AppColors.textMuted),
+                                style: TextStyle(color: AppColors.textMuted),
                               ),
                             );
                           }
@@ -372,7 +371,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                                   ),
                                                 )
                                               else
-                                                const Icon(Icons.group_rounded,
+                                                Icon(Icons.group_rounded,
                                                     color:
                                                         AppColors.primaryLight,
                                                     size: 36),
@@ -382,7 +381,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                                   height: 80,
                                                   decoration: BoxDecoration(
                                                     color: Colors.black
-                                                        .withAlphaFraction(0.35),
+                                                        .withAlphaFraction(
+                                                            0.35),
                                                     shape: BoxShape.circle,
                                                   ),
                                                   child: const Center(
@@ -446,7 +446,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                   Text(
                                     l10n.groupsCreateSelectedCount(
                                         _selectedIds.length),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       color: AppColors.textSecondary,
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
@@ -487,7 +487,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                             const SizedBox(width: 8),
                                             Text(
                                               user.name.split(' ').last,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 color: AppColors.textPrimary,
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w500,
@@ -498,8 +498,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                             GestureDetector(
                                               onTap: () => setState(() =>
                                                   _selectedIds.remove(id)),
-                                              child: const Icon(
-                                                  Icons.close_rounded,
+                                              child: Icon(Icons.close_rounded,
                                                   color: AppColors.textMuted,
                                                   size: 16),
                                             ),
@@ -512,7 +511,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                 ],
                                 Container(
                                   decoration: BoxDecoration(
-                                    color: AppColors.bgCard.withAlphaFraction(0.5),
+                                    color:
+                                        AppColors.bgCard.withAlphaFraction(0.5),
                                     borderRadius: BorderRadius.circular(16),
                                     border: Border.all(
                                         color: AppColors.glassBorder),
@@ -521,16 +521,14 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                     controller: _searchController,
                                     onChanged: (value) => setState(
                                         () => _searchQuery = _normalize(value)),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         color: AppColors.textPrimary,
                                         fontFamily: 'Inter'),
                                     decoration: InputDecoration(
-                                      prefixIcon: const Icon(
-                                          Icons.search_rounded,
-                                          color: AppColors.textMuted,
-                                          size: 20),
+                                      prefixIcon: Icon(Icons.search_rounded,
+                                          color: AppColors.textMuted, size: 20),
                                       hintText: l10n.groupsCreateSearchHint,
-                                      hintStyle: const TextStyle(
+                                      hintStyle: TextStyle(
                                           color: AppColors.textMuted,
                                           fontSize: 14,
                                           fontFamily: 'Inter'),
@@ -547,7 +545,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                     padding: const EdgeInsets.only(top: 16),
                                     child: Text(
                                       l10n.groupsCreateNoFriends,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           color: AppColors.textMuted,
                                           fontFamily: 'Inter'),
                                     ),
@@ -557,7 +555,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                     padding: const EdgeInsets.only(top: 16),
                                     child: Text(
                                       l10n.commonNoSearchResults,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           color: AppColors.textMuted,
                                           fontFamily: 'Inter'),
                                     ),
@@ -602,7 +600,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                               children: [
                                                 Text(
                                                   user.name,
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     color:
                                                         AppColors.textPrimary,
                                                     fontSize: 14,
@@ -613,7 +611,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                                 if (user.bio != null)
                                                   Text(
                                                     user.bio!,
-                                                    style: const TextStyle(
+                                                    style: TextStyle(
                                                       color:
                                                           AppColors.textMuted,
                                                       fontSize: 12,
@@ -717,12 +715,11 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
       child: TextField(
         controller: controller,
         focusNode: focusNode,
-        style:
-            const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
+        style: TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
         decoration: InputDecoration(
           prefixIcon: Icon(icon, color: AppColors.textMuted, size: 22),
           hintText: hint,
-          hintStyle: const TextStyle(color: AppColors.textMuted),
+          hintStyle: TextStyle(color: AppColors.textMuted),
           border: InputBorder.none,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

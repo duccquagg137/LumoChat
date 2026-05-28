@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../utils/app_logger.dart';
+import '../utils/profile_visibility.dart';
 
 class AuthService {
   FirebaseAuth get _auth => FirebaseAuth.instance;
@@ -155,6 +156,9 @@ class AuthService {
       if (data['settings'] is! Map) {
         updates['settings'] = defaults['settings'];
       }
+      if (data['profileCompleted'] is! bool) {
+        updates['profileCompleted'] = _hasRequiredProfileFields(data);
+      }
       if (data['createdAt'] == null) {
         updates['createdAt'] = FieldValue.serverTimestamp();
       }
@@ -203,7 +207,9 @@ class AuthService {
       'settings': {
         'darkMode': true,
         'notifications': true,
+        'profileVisibility': ProfileVisibility.defaultValues,
       },
+      'profileCompleted': false,
       'friends': <String>[],
       'friendRequestsSent': <String>[],
       'friendRequestsReceived': <String>[],
@@ -211,6 +217,19 @@ class AuthService {
       'lastActive': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     };
+  }
+
+  bool _hasRequiredProfileFields(Map<String, dynamic> data) {
+    final requiredFields = [
+      data['name'],
+      data['phoneNumber'],
+      data['city'],
+      data['gender'],
+      data['dateOfBirth'],
+    ];
+    return requiredFields.every(
+      (value) => value != null && value.toString().trim().isNotEmpty,
+    );
   }
 
   String _firstText(Iterable<String?> values) {

@@ -15,6 +15,97 @@ import '../utils/l10n.dart';
 import '../widgets/glass_card.dart';
 import 'chat_screen.dart';
 
+final _currentUserDocumentProvider = StreamProvider.autoDispose
+    .family<DocumentSnapshot<Map<String, dynamic>>, String>((ref, userId) {
+  return FirebaseFirestore.instance.collection('users').doc(userId).snapshots();
+});
+
+final _chatRoomsProvider = StreamProvider.autoDispose
+    .family<QuerySnapshot<Map<String, dynamic>>, String>((ref, userId) {
+  return FirebaseFirestore.instance
+      .collection('chat_rooms')
+      .where('participants', arrayContains: userId)
+      .snapshots();
+});
+
+final _friendProfilesProvider =
+    StreamProvider.autoDispose.family<List<ChatUser>, String>((ref, key) {
+  final friendIds = _friendIdsFromKey(key);
+  if (friendIds.isEmpty) return Stream.value(const <ChatUser>[]);
+
+  const chunkSize = 10;
+  final chunks = <List<String>>[];
+  final usersRef = FirebaseFirestore.instance.collection('users');
+  for (var i = 0; i < friendIds.length; i += chunkSize) {
+    final end =
+        i + chunkSize < friendIds.length ? i + chunkSize : friendIds.length;
+    chunks.add(friendIds.sublist(i, end));
+  }
+
+  final controller = StreamController<List<ChatUser>>();
+  final subscriptions =
+      <StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>[];
+  final loadedChunkIndexes = <int>{};
+  final usersById = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+  var disposed = false;
+
+  void emitIfReady() {
+    if (disposed ||
+        loadedChunkIndexes.length < chunks.length ||
+        controller.isClosed) {
+      return;
+    }
+    final users = friendIds
+        .map((id) => usersById[id])
+        .whereType<QueryDocumentSnapshot<Map<String, dynamic>>>()
+        .map(ChatUser.fromDocument)
+        .toList(growable: false);
+    controller.add(users);
+  }
+
+  for (var index = 0; index < chunks.length; index++) {
+    final chunk = chunks[index];
+    final subscription = usersRef
+        .where(FieldPath.documentId, whereIn: chunk)
+        .snapshots()
+        .listen((snapshot) {
+      if (disposed) return;
+      for (final id in chunk) {
+        usersById.remove(id);
+      }
+      for (final doc in snapshot.docs) {
+        usersById[doc.id] = doc;
+      }
+      loadedChunkIndexes.add(index);
+      emitIfReady();
+    }, onError: (Object error, StackTrace stackTrace) {
+      if (disposed || controller.isClosed) return;
+      controller.addError(error, stackTrace);
+    });
+    subscriptions.add(subscription);
+  }
+
+  ref.onDispose(() {
+    disposed = true;
+    for (final subscription in subscriptions) {
+      subscription.cancel();
+    }
+    controller.close();
+  });
+
+  return controller.stream;
+});
+
+String _friendIdsKey(Set<String> friendIds) {
+  final sorted = friendIds.toList()..sort();
+  return sorted.join('|');
+}
+
+List<String> _friendIdsFromKey(String key) {
+  if (key.isEmpty) return const <String>[];
+  return key.split('|').where((id) => id.isNotEmpty).toList(growable: false);
+}
+
 class ChatListScreen extends ConsumerStatefulWidget {
   const ChatListScreen({super.key});
 
@@ -105,7 +196,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                   color: AppColors.textMuted,
                   fontSize: 14,
                   fontFamily: 'Inter'),
@@ -120,7 +211,11 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
     );
   }
 
-  Widget _buildErrorState(Object error, String operation) {
+  Widget _buildErrorState(
+    Object error,
+    String operation, {
+    VoidCallback? onRetry,
+  }) {
     final reason = AppErrorMapper.mapChat(error);
     AppLogger.error(
       'Chat list stream failed',
@@ -135,7 +230,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
       icon: Icons.error_outline_rounded,
       message: AppErrorText.forChat(context, error),
       showRetry: true,
-      onRetry: () => setState(() {}),
+      onRetry: onRetry ?? () => setState(() {}),
     );
   }
 
@@ -182,7 +277,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
             children: [
               Text(
                 peerName,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -191,10 +286,10 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
               ),
               const SizedBox(height: 12),
               ListTile(
-                leading: const Icon(Icons.visibility_off_outlined,
+                leading: Icon(Icons.visibility_off_outlined,
                     color: AppColors.textSecondary),
                 title: Text(l10n.commonHide,
-                    style: const TextStyle(color: AppColors.textPrimary)),
+                    style: TextStyle(color: AppColors.textPrimary)),
                 onTap: () async {
                   Navigator.pop(sheetContext);
                   await _runChatAction(
@@ -268,7 +363,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                     children: [
                       Text(
                         l10n.navChats,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
                           color: AppColors.textPrimary,
@@ -290,13 +385,13 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                     child: TextField(
                       controller: _searchController,
                       onChanged: _onSearchChanged,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppColors.textPrimary, fontFamily: 'Inter'),
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search_rounded,
+                        prefixIcon: Icon(Icons.search_rounded,
                             color: AppColors.textMuted, size: 20),
                         hintText: l10n.chatListSearchHint,
-                        hintStyle: const TextStyle(
+                        hintStyle: TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 14,
                             fontFamily: 'Inter'),
@@ -308,284 +403,11 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                   ),
                 ),
                 Expanded(
-                  child: currentUserId.isEmpty
-                      ? _buildStateView(
-                          icon: Icons.lock_outline_rounded,
-                          message: l10n.commonErrorUnauthenticated,
-                        )
-                      : StreamBuilder<DocumentSnapshot>(
-                          stream: FirebaseFirestore.instance
-                              .collection('users')
-                              .doc(currentUserId)
-                              .snapshots(),
-                          builder: (context, mySnapshot) {
-                            if (mySnapshot.hasError) {
-                              return _buildErrorState(
-                                  mySnapshot.error!, 'current_user');
-                            }
-                            if (mySnapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return _buildStateView(
-                                icon: Icons.hourglass_top_rounded,
-                                message: l10n.commonLoading,
-                              );
-                            }
-
-                            final myData = mySnapshot.data?.data()
-                                    as Map<String, dynamic>? ??
-                                const {};
-                            final friendIds = _readIdSet(myData['friends']);
-                            final chatMeta = _readChatMeta(myData['chatMeta']);
-
-                            if (friendIds.isEmpty) {
-                              return _buildStateView(
-                                icon: Icons.people_alt_outlined,
-                                message: l10n.chatListNoFriendsPrompt,
-                              );
-                            }
-
-                            return StreamBuilder<QuerySnapshot>(
-                              stream: FirebaseFirestore.instance
-                                  .collection('users')
-                                  .snapshots(),
-                              builder: (context, usersSnapshot) {
-                                if (usersSnapshot.hasError) {
-                                  return _buildErrorState(
-                                      usersSnapshot.error!, 'users');
-                                }
-                                if (usersSnapshot.connectionState ==
-                                    ConnectionState.waiting) {
-                                  return _buildStateView(
-                                    icon: Icons.hourglass_top_rounded,
-                                    message: l10n.commonLoading,
-                                  );
-                                }
-                                if (!usersSnapshot.hasData ||
-                                    usersSnapshot.data == null) {
-                                  return const SizedBox.shrink();
-                                }
-
-                                return StreamBuilder<QuerySnapshot>(
-                                  stream: FirebaseFirestore.instance
-                                      .collection('chat_rooms')
-                                      .where('participants',
-                                          arrayContains: currentUserId)
-                                      .snapshots(),
-                                  builder: (context, roomsSnapshot) {
-                                    if (roomsSnapshot.hasError) {
-                                      return _buildErrorState(
-                                          roomsSnapshot.error!, 'chat_rooms');
-                                    }
-                                    if (roomsSnapshot.connectionState ==
-                                        ConnectionState.waiting) {
-                                      return _buildStateView(
-                                        icon: Icons.hourglass_top_rounded,
-                                        message: l10n.commonLoading,
-                                      );
-                                    }
-
-                                    final roomDataById =
-                                        <String, Map<String, dynamic>>{};
-                                    for (final doc
-                                        in roomsSnapshot.data?.docs ??
-                                            const <QueryDocumentSnapshot>[]) {
-                                      final data = doc.data();
-                                      if (data is Map<String, dynamic>) {
-                                        roomDataById[doc.id] = data;
-                                      }
-                                    }
-
-                                    final usersList = usersSnapshot.data!.docs
-                                        .map(
-                                            (doc) => ChatUser.fromDocument(doc))
-                                        .where(
-                                            (user) => user.id != currentUserId)
-                                        .where((user) =>
-                                            friendIds.contains(user.id))
-                                        .where((user) => user.name
-                                            .toLowerCase()
-                                            .contains(searchQuery))
-                                        .where((user) {
-                                      final roomId =
-                                          _chatService.buildChatRoomId(user.id);
-                                      return !_chatFlag(
-                                          chatMeta, roomId, 'hidden');
-                                    }).toList()
-                                      ..sort((a, b) {
-                                        final roomA =
-                                            _chatService.buildChatRoomId(a.id);
-                                        final roomB =
-                                            _chatService.buildChatRoomId(b.id);
-                                        final pinA = _chatFlag(
-                                            chatMeta, roomA, 'pinned');
-                                        final pinB = _chatFlag(
-                                            chatMeta, roomB, 'pinned');
-                                        if (pinA != pinB) {
-                                          return pinA ? -1 : 1;
-                                        }
-
-                                        final tsA =
-                                            _roomTimestamp(roomDataById[roomA]);
-                                        final tsB =
-                                            _roomTimestamp(roomDataById[roomB]);
-                                        final recentCompare =
-                                            tsB.compareTo(tsA);
-                                        if (recentCompare != 0) {
-                                          return recentCompare;
-                                        }
-                                        return a.name
-                                            .toLowerCase()
-                                            .compareTo(b.name.toLowerCase());
-                                      });
-
-                                    if (usersList.isEmpty) {
-                                      return _buildStateView(
-                                        icon: Icons.chat_bubble_outline_rounded,
-                                        message: searchQuery.isEmpty
-                                            ? l10n.chatListNoConversations
-                                            : l10n.commonNoSearchResults,
-                                      );
-                                    }
-
-                                    return ListView.builder(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 16),
-                                      itemCount: usersList.length,
-                                      itemBuilder: (context, i) {
-                                        final user = usersList[i];
-                                        final chatRoomId = _chatService
-                                            .buildChatRoomId(user.id);
-                                        final roomData =
-                                            roomDataById[chatRoomId];
-                                        final isPinned = _chatFlag(
-                                            chatMeta, chatRoomId, 'pinned');
-
-                                        final hasLastMessage =
-                                            roomData?['lastMessage']
-                                                    ?.toString()
-                                                    .trim()
-                                                    .isNotEmpty ??
-                                                false;
-                                        final lastText = hasLastMessage
-                                            ? roomData!['lastMessage']
-                                                .toString()
-                                            : l10n.chatListTapToStart;
-                                        final timeTxt = _roomTimeText(roomData);
-                                        final unreadCount = _roomUnreadCount(
-                                            roomData, currentUserId);
-
-                                        final conv = Conversation(
-                                          id: user.id,
-                                          user: user,
-                                          lastMessage: lastText,
-                                          time: timeTxt,
-                                          unreadCount: unreadCount,
-                                          isPinned: isPinned,
-                                        );
-
-                                        return Dismissible(
-                                          key: ValueKey(
-                                              'chat-$chatRoomId-${user.id}'),
-                                          direction:
-                                              DismissDirection.horizontal,
-                                          confirmDismiss: (direction) async {
-                                            if (direction ==
-                                                DismissDirection.startToEnd) {
-                                              final nextPinned = !isPinned;
-                                              await _runChatAction(
-                                                chatRoomId,
-                                                () =>
-                                                    _chatService.setChatPinned(
-                                                        user.id, nextPinned),
-                                                nextPinned
-                                                    ? l10n.chatListPinSuccess
-                                                    : l10n.chatListUnpinSuccess,
-                                              );
-                                              return false;
-                                            }
-
-                                            await _showChatActionsBottomSheet(
-                                              roomId: chatRoomId,
-                                              peerId: user.id,
-                                              peerName: user.name,
-                                            );
-                                            return false;
-                                          },
-                                          background: Container(
-                                            margin: const EdgeInsets.only(
-                                                bottom: 4),
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 20),
-                                            decoration: BoxDecoration(
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                              color: AppColors.primary
-                                                  .withAlphaFraction(0.2),
-                                            ),
-                                            alignment: Alignment.centerLeft,
-                                            child: Row(
-                                              children: [
-                                                Icon(
-                                                  isPinned
-                                                      ? Icons.push_pin_outlined
-                                                      : Icons.push_pin_rounded,
-                                                  color: AppColors.primaryLight,
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  isPinned
-                                                      ? l10n.commonUnpin
-                                                      : l10n.commonPin,
-                                                  style: const TextStyle(
-                                                      color: AppColors
-                                                          .primaryLight,
-                                                      fontWeight:
-                                                          FontWeight.w600),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          secondaryBackground: Container(
-                                            margin: const EdgeInsets.only(
-                                                bottom: 4),
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 20),
-                                            decoration: BoxDecoration(
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                              color: AppColors.error
-                                                  .withAlphaFraction(0.18),
-                                            ),
-                                            alignment: Alignment.centerRight,
-                                            child: Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.end,
-                                              children: [
-                                                const Icon(
-                                                    Icons.more_horiz_rounded,
-                                                    color: AppColors.error),
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  l10n.commonMore,
-                                                  style: const TextStyle(
-                                                      color: AppColors.error,
-                                                      fontWeight:
-                                                          FontWeight.w600),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          child: _buildConversationItem(
-                                              context, conv),
-                                        );
-                                      },
-                                    );
-                                  },
-                                );
-                              },
-                            );
-                          },
-                        ),
+                  child: _buildConversationList(
+                    context,
+                    currentUserId: currentUserId,
+                    searchQuery: searchQuery,
+                  ),
                 ),
               ],
             ),
@@ -593,6 +415,240 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildConversationList(
+    BuildContext context, {
+    required String currentUserId,
+    required String searchQuery,
+  }) {
+    final l10n = context.l10n;
+    if (currentUserId.isEmpty) {
+      return _buildStateView(
+        icon: Icons.lock_outline_rounded,
+        message: l10n.commonErrorUnauthenticated,
+      );
+    }
+
+    final myUser = ref.watch(_currentUserDocumentProvider(currentUserId));
+    return myUser.when(
+      loading: () => _buildStateView(
+        icon: Icons.hourglass_top_rounded,
+        message: l10n.commonLoading,
+      ),
+      error: (error, _) => _buildErrorState(
+        error,
+        'current_user',
+        onRetry: () => ref.invalidate(
+          _currentUserDocumentProvider(currentUserId),
+        ),
+      ),
+      data: (mySnapshot) {
+        final myData = mySnapshot.data() ?? const <String, dynamic>{};
+        final friendIds = _readIdSet(myData['friends']);
+        final chatMeta = _readChatMeta(myData['chatMeta']);
+
+        if (friendIds.isEmpty) {
+          return _buildStateView(
+            icon: Icons.people_alt_outlined,
+            message: l10n.chatListNoFriendsPrompt,
+          );
+        }
+
+        final friendProfilesKey = _friendIdsKey(friendIds);
+        final friendProfiles =
+            ref.watch(_friendProfilesProvider(friendProfilesKey));
+        final chatRooms = ref.watch(_chatRoomsProvider(currentUserId));
+
+        return friendProfiles.when(
+          loading: () => _buildStateView(
+            icon: Icons.hourglass_top_rounded,
+            message: l10n.commonLoading,
+          ),
+          error: (error, _) => _buildErrorState(
+            error,
+            'friend_profiles',
+            onRetry: () => ref.invalidate(
+              _friendProfilesProvider(friendProfilesKey),
+            ),
+          ),
+          data: (friendUsers) {
+            return chatRooms.when(
+              loading: () => _buildStateView(
+                icon: Icons.hourglass_top_rounded,
+                message: l10n.commonLoading,
+              ),
+              error: (error, _) => _buildErrorState(
+                error,
+                'chat_rooms',
+                onRetry: () => ref.invalidate(
+                  _chatRoomsProvider(currentUserId),
+                ),
+              ),
+              data: (roomsSnapshot) {
+                final roomDataById = <String, Map<String, dynamic>>{};
+                for (final doc in roomsSnapshot.docs) {
+                  roomDataById[doc.id] = doc.data();
+                }
+
+                final usersList = friendUsers
+                    .where((user) => user.id != currentUserId)
+                    .where(
+                        (user) => user.name.toLowerCase().contains(searchQuery))
+                    .where((user) {
+                  final roomId = _chatService.buildChatRoomId(user.id);
+                  return !_chatFlag(chatMeta, roomId, 'hidden');
+                }).toList()
+                  ..sort((a, b) {
+                    final roomA = _chatService.buildChatRoomId(a.id);
+                    final roomB = _chatService.buildChatRoomId(b.id);
+                    final pinA = _chatFlag(chatMeta, roomA, 'pinned');
+                    final pinB = _chatFlag(chatMeta, roomB, 'pinned');
+                    if (pinA != pinB) return pinA ? -1 : 1;
+
+                    final tsA = _roomTimestamp(roomDataById[roomA]);
+                    final tsB = _roomTimestamp(roomDataById[roomB]);
+                    final recentCompare = tsB.compareTo(tsA);
+                    if (recentCompare != 0) return recentCompare;
+                    return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+                  });
+
+                if (usersList.isEmpty) {
+                  return _buildStateView(
+                    icon: Icons.chat_bubble_outline_rounded,
+                    message: searchQuery.isEmpty
+                        ? l10n.chatListNoConversations
+                        : l10n.commonNoSearchResults,
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: usersList.length,
+                  itemBuilder: (context, i) {
+                    final user = usersList[i];
+                    final chatRoomId = _chatService.buildChatRoomId(user.id);
+                    final roomData = roomDataById[chatRoomId];
+                    final isPinned = _chatFlag(chatMeta, chatRoomId, 'pinned');
+
+                    final hasLastMessage = roomData?['lastMessage']
+                            ?.toString()
+                            .trim()
+                            .isNotEmpty ??
+                        false;
+                    final lastText = hasLastMessage
+                        ? roomData!['lastMessage'].toString()
+                        : l10n.chatListTapToStart;
+                    final timeTxt = _roomTimeText(roomData);
+                    final unreadCount =
+                        _roomUnreadCount(roomData, currentUserId);
+                    final isTyping = _isPeerTyping(roomData, user.id);
+
+                    final conv = Conversation(
+                      id: user.id,
+                      user: user,
+                      lastMessage: lastText,
+                      time: timeTxt,
+                      unreadCount: unreadCount,
+                      isPinned: isPinned,
+                      isTyping: isTyping,
+                    );
+
+                    return Dismissible(
+                      key: ValueKey('chat-$chatRoomId-${user.id}'),
+                      direction: DismissDirection.horizontal,
+                      confirmDismiss: (direction) async {
+                        if (direction == DismissDirection.startToEnd) {
+                          final nextPinned = !isPinned;
+                          await _runChatAction(
+                            chatRoomId,
+                            () => _chatService.setChatPinned(
+                              user.id,
+                              nextPinned,
+                            ),
+                            nextPinned
+                                ? l10n.chatListPinSuccess
+                                : l10n.chatListUnpinSuccess,
+                          );
+                          return false;
+                        }
+
+                        await _showChatActionsBottomSheet(
+                          roomId: chatRoomId,
+                          peerId: user.id,
+                          peerName: user.name,
+                        );
+                        return false;
+                      },
+                      background: Container(
+                        margin: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: AppColors.primary.withAlphaFraction(0.2),
+                        ),
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          children: [
+                            Icon(
+                              isPinned
+                                  ? Icons.push_pin_outlined
+                                  : Icons.push_pin_rounded,
+                              color: AppColors.primaryLight,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isPinned ? l10n.commonUnpin : l10n.commonPin,
+                              style: TextStyle(
+                                color: AppColors.primaryLight,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      secondaryBackground: Container(
+                        margin: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: AppColors.error.withAlphaFraction(0.18),
+                        ),
+                        alignment: Alignment.centerRight,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            const Icon(
+                              Icons.more_horiz_rounded,
+                              color: AppColors.error,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              l10n.commonMore,
+                              style: const TextStyle(
+                                color: AppColors.error,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      child: _buildConversationItem(context, conv),
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  bool _isPeerTyping(Map<String, dynamic>? roomData, String peerId) {
+    final typingRaw = roomData?['typing'];
+    if (typingRaw is! Map) return false;
+    return typingRaw[peerId] == true;
   }
 
   Widget _buildConversationItem(BuildContext context, Conversation conv) {
@@ -640,11 +696,11 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                     bottom: 0,
                     child: Container(
                       padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         color: AppColors.bgDark,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.group_rounded,
+                      child: Icon(Icons.group_rounded,
                           color: AppColors.primaryLight, size: 14),
                     ),
                   ),
@@ -658,8 +714,8 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                   Row(
                     children: [
                       if (conv.isPinned)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 4),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4),
                           child: Icon(Icons.push_pin_rounded,
                               size: 14, color: AppColors.primaryLight),
                         ),

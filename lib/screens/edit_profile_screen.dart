@@ -32,7 +32,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String _gender = '';
   DateTime? _birthDate;
 
-  static const List<String> _genderOptions = ['Nam', 'Nữ', 'Khác', 'Không muốn chia sẻ'];
+  static const List<String> _genderOptions = [
+    'Nam',
+    'Nữ',
+    'Khác',
+    'Không muốn chia sẻ'
+  ];
 
   @override
   void initState() {
@@ -43,7 +48,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _addressController.text = (widget.userData['address'] ?? '').toString();
     _cityController.text = (widget.userData['city'] ?? '').toString();
     _websiteController.text = (widget.userData['website'] ?? '').toString();
-    _occupationController.text = (widget.userData['occupation'] ?? '').toString();
+    _occupationController.text =
+        (widget.userData['occupation'] ?? '').toString();
     _gender = (widget.userData['gender'] ?? '').toString();
 
     final dobRaw = (widget.userData['dateOfBirth'] ?? '').toString();
@@ -67,13 +73,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     try {
-      final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 60);
+      final image =
+          await picker.pickImage(source: ImageSource.gallery, imageQuality: 60);
       if (image != null) {
         setState(() => _pickedImage = File(image.path));
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi chọn ảnh: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Lỗi chọn ảnh: $e')));
     }
   }
 
@@ -102,7 +110,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _saveProfile() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tên không được để trống')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tên không được để trống')));
       return;
     }
 
@@ -114,9 +123,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       String avatarUrl = (widget.userData['avatar'] ?? '').toString();
       if (_pickedImage != null) {
-        final cloudinary = CloudinaryPublic('dds49mcmb', 'lumo_preset', cache: false);
+        final cloudinary =
+            CloudinaryPublic('dds49mcmb', 'lumo_preset', cache: false);
         final response = await cloudinary.uploadFile(
-          CloudinaryFile.fromFile(_pickedImage!.path, resourceType: CloudinaryResourceType.Image),
+          CloudinaryFile.fromFile(_pickedImage!.path,
+              resourceType: CloudinaryResourceType.Image),
         );
         avatarUrl = response.secureUrl;
       }
@@ -131,7 +142,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'website': _websiteController.text.trim(),
         'occupation': _occupationController.text.trim(),
         'gender': _gender,
-        'dateOfBirth': _birthDate != null ? _birthDate!.toIso8601String().split('T').first : '',
+        'dateOfBirth': _birthDate != null
+            ? _birthDate!.toIso8601String().split('T').first
+            : '',
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
@@ -142,10 +155,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       if (!mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cập nhật hồ sơ thành công')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cập nhật hồ sơ thành công')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi cập nhật: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Lỗi cập nhật: $e')));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -156,7 +171,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final currentAvatar = (widget.userData['avatar'] ?? '').toString();
-    final initial = _nameController.text.trim().isNotEmpty ? _nameController.text.trim()[0].toUpperCase() : 'U';
+    final initial = _nameController.text.trim().isNotEmpty
+        ? _nameController.text.trim()[0].toUpperCase()
+        : 'U';
 
     return Scaffold(
       body: Stack(
@@ -170,7 +187,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [AppColors.primary.withAlphaFraction(0.15), Colors.transparent],
+                  colors: [
+                    AppColors.primary.withAlphaFraction(0.15),
+                    Colors.transparent
+                  ],
                 ),
               ),
             ),
@@ -179,14 +199,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   child: Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary, size: 20),
+                        icon: Icon(Icons.arrow_back_ios_rounded,
+                            color: AppColors.textPrimary, size: 20),
                         onPressed: () => Navigator.pop(context),
                       ),
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'Chỉnh sửa hồ sơ',
                           style: TextStyle(
@@ -202,7 +224,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
                     child: GlassCard(
                       padding: const EdgeInsets.all(24),
                       child: Column(
@@ -213,15 +236,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               clipBehavior: Clip.none,
                               children: [
                                 AvatarWidget(
-                                  name: _nameController.text.trim().isNotEmpty ? _nameController.text.trim() : 'User',
-                                  imageUrl: _pickedImage == null ? currentAvatar : null,
+                                  name: _nameController.text.trim().isNotEmpty
+                                      ? _nameController.text.trim()
+                                      : 'User',
+                                  imageUrl: _pickedImage == null
+                                      ? currentAvatar
+                                      : null,
                                   size: 100,
                                   showStatus: false,
                                 ),
                                 if (_pickedImage != null)
                                   Positioned.fill(
                                     child: ClipOval(
-                                      child: Image.file(_pickedImage!, fit: BoxFit.cover),
+                                      child: Image.file(_pickedImage!,
+                                          fit: BoxFit.cover),
                                     ),
                                   ),
                                 Positioned(
@@ -233,9 +261,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     decoration: BoxDecoration(
                                       color: AppColors.bgSurface,
                                       shape: BoxShape.circle,
-                                      border: Border.all(color: AppColors.bgDark, width: 2),
+                                      border: Border.all(
+                                          color: AppColors.bgDark, width: 2),
                                     ),
-                                    child: const Icon(Icons.camera_alt_rounded, color: AppColors.primaryLight, size: 16),
+                                    child: Icon(Icons.camera_alt_rounded,
+                                        color: AppColors.primaryLight,
+                                        size: 16),
                                   ),
                                 ),
                               ],
@@ -246,11 +277,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               padding: const EdgeInsets.only(top: 8),
                               child: Text(
                                 initial,
-                                style: const TextStyle(color: Colors.transparent, fontSize: 1),
+                                style: const TextStyle(
+                                    color: Colors.transparent, fontSize: 1),
                               ),
                             ),
                           const SizedBox(height: 24),
-                          _buildInput(Icons.person_outline_rounded, 'Tên hiển thị', _nameController),
+                          _buildInput(Icons.person_outline_rounded,
+                              'Tên hiển thị', _nameController),
                           const SizedBox(height: 12),
                           _buildInput(
                             Icons.info_outline_rounded,
@@ -266,9 +299,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             keyboardType: TextInputType.phone,
                           ),
                           const SizedBox(height: 12),
-                          _buildInput(Icons.location_on_outlined, 'Địa chỉ', _addressController),
+                          _buildInput(Icons.location_on_outlined, 'Địa chỉ',
+                              _addressController),
                           const SizedBox(height: 12),
-                          _buildInput(Icons.location_city_outlined, 'Thành phố', _cityController),
+                          _buildInput(Icons.location_city_outlined, 'Thành phố',
+                              _cityController),
                           const SizedBox(height: 12),
                           _buildGenderField(),
                           const SizedBox(height: 12),
@@ -288,7 +323,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           ),
                           const SizedBox(height: 28),
                           _isLoading
-                              ? const CircularProgressIndicator(color: AppColors.primary)
+                              ? const CircularProgressIndicator(
+                                  color: AppColors.primary)
                               : GradientButton(
                                   text: 'Lưu thay đổi',
                                   width: double.infinity,
@@ -318,11 +354,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: _gender.isEmpty ? null : _gender,
-          hint: const Text('Giới tính', style: TextStyle(color: AppColors.textMuted)),
+          hint: Text('Giới tính', style: TextStyle(color: AppColors.textMuted)),
           isExpanded: true,
           dropdownColor: AppColors.bgSurface,
-          style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
-          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted),
+          style: TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
+          icon: Icon(Icons.keyboard_arrow_down_rounded,
+              color: AppColors.textMuted),
           items: _genderOptions
               .map((option) => DropdownMenuItem<String>(
                     value: option,
@@ -347,18 +384,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.cake_outlined, color: AppColors.textMuted, size: 22),
+            Icon(Icons.cake_outlined, color: AppColors.textMuted, size: 22),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 _formatBirthDate(),
                 style: TextStyle(
-                  color: _birthDate == null ? AppColors.textMuted : AppColors.textPrimary,
+                  color: _birthDate == null
+                      ? AppColors.textMuted
+                      : AppColors.textPrimary,
                   fontFamily: 'Inter',
                 ),
               ),
             ),
-            const Icon(Icons.calendar_month_outlined, color: AppColors.textMuted, size: 20),
+            Icon(Icons.calendar_month_outlined,
+                color: AppColors.textMuted, size: 20),
           ],
         ),
       ),
@@ -382,13 +422,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         controller: controller,
         keyboardType: keyboardType,
         maxLines: maxLines,
-        style: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
+        style: TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter'),
         decoration: InputDecoration(
           prefixIcon: Icon(icon, color: AppColors.textMuted, size: 22),
           hintText: hint,
-          hintStyle: const TextStyle(color: AppColors.textMuted),
+          hintStyle: TextStyle(color: AppColors.textMuted),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
       ),
     );
