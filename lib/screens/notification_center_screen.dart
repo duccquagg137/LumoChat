@@ -5,6 +5,7 @@ import '../models/app_notification_model.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 
+
 class NotificationCenterScreen extends StatefulWidget {
   const NotificationCenterScreen({super.key});
 

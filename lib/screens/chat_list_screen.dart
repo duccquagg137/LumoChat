@@ -15,6 +15,7 @@ import '../utils/l10n.dart';
 import '../widgets/glass_card.dart';
 import 'chat_screen.dart';
 
+
 final _currentUserDocumentProvider = StreamProvider.autoDispose
     .family<DocumentSnapshot<Map<String, dynamic>>, String>((ref, userId) {
   return FirebaseFirestore.instance.collection('users').doc(userId).snapshots();

@@ -13,6 +13,7 @@ import '../utils/l10n.dart';
 import '../widgets/glass_card.dart';
 import 'chat_screen.dart';
 
+
 enum _ContactsFilter { all, requests, friends, discover }
 
 class ContactsScreen extends StatefulWidget {

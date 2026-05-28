@@ -9,6 +9,7 @@ import '../utils/l10n.dart';
 import '../widgets/glass_card.dart';
 import 'user_profile_screen.dart';
 
+
 enum GroupInfoAction { openSearch }
 
 class GroupInfoScreen extends StatefulWidget {

@@ -16,6 +16,7 @@ import 'landing_screen.dart';
 import 'onboarding_screen.dart';
 import 'profile_completion_screen.dart';
 
+
 class SplashScreen extends StatefulWidget {
   final bool isFirebaseInitialized;
 
