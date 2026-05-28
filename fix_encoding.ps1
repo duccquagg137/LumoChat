@@ -5,3 +5,4 @@ $content = $content.Replace([char]0x00C4 + [char]0x00C3 + [char]0x00A3 + " x" + 
 
 [System.IO.File]::WriteAllText($file, $content, (New-Object System.Text.UTF8Encoding $false))
 Write-Host "Done"
+

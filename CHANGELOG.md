@@ -22,3 +22,4 @@ All notable changes to this project are documented in this file.
 
 ### Notes
 - Remaining release tasks: finalize release checklist results and tag after manual regression verification.
+
