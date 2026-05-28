@@ -1,15 +1,20 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../services/app_providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/l10n.dart';
 import '../utils/profile_visibility.dart';
 import '../widgets/glass_card.dart';
 import 'chat_screen.dart';
 
+final _userProfileDocumentProvider = StreamProvider.autoDispose
+    .family<DocumentSnapshot<Map<String, dynamic>>, String>((ref, userId) {
+  return FirebaseFirestore.instance.collection('users').doc(userId).snapshots();
+});
 
-class UserProfileScreen extends StatelessWidget {
+class UserProfileScreen extends ConsumerWidget {
   final String userId;
 
   const UserProfileScreen({
@@ -53,9 +58,10 @@ class UserProfileScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentUserId = ref.watch(currentUserIdProvider);
     final l10n = context.l10n;
+    final profile = ref.watch(_userProfileDocumentProvider(userId));
 
     return Scaffold(
       body: Stack(
@@ -78,27 +84,22 @@ class UserProfileScreen extends StatelessWidget {
             ),
           ),
           SafeArea(
-            child: StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(userId)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text(
-                      l10n.profileLoadError,
-                      style: TextStyle(color: AppColors.textMuted),
-                    ),
-                  );
-                }
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary),
-                  );
-                }
-
-                final data = snapshot.data?.data() as Map<String, dynamic>?;
+            child: profile.when(
+              error: (_, __) {
+                return Center(
+                  child: Text(
+                    l10n.profileLoadError,
+                    style: TextStyle(color: AppColors.textMuted),
+                  ),
+                );
+              },
+              loading: () {
+                return const Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                );
+              },
+              data: (snapshot) {
+                final data = snapshot.data();
                 if (data == null) {
                   return Center(
                     child: Text(

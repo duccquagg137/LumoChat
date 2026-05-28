@@ -4,22 +4,88 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
 
+class _EditProfileUiState {
+  const _EditProfileUiState({
+    this.pickedImage,
+    this.isLoading = false,
+    this.gender = '',
+    this.birthDate,
+    this.initialized = false,
+  });
 
-class EditProfileScreen extends StatefulWidget {
+  final File? pickedImage;
+  final bool isLoading;
+  final String gender;
+  final DateTime? birthDate;
+  final bool initialized;
+
+  _EditProfileUiState copyWith({
+    File? pickedImage,
+    bool? isLoading,
+    String? gender,
+    DateTime? birthDate,
+    bool? initialized,
+  }) {
+    return _EditProfileUiState(
+      pickedImage: pickedImage ?? this.pickedImage,
+      isLoading: isLoading ?? this.isLoading,
+      gender: gender ?? this.gender,
+      birthDate: birthDate ?? this.birthDate,
+      initialized: initialized ?? this.initialized,
+    );
+  }
+}
+
+class _EditProfileUiController extends StateNotifier<_EditProfileUiState> {
+  _EditProfileUiController() : super(const _EditProfileUiState());
+
+  void initialize(Map<String, dynamic> userData) {
+    if (state.initialized) return;
+    final dobRaw = (userData['dateOfBirth'] ?? '').toString();
+    state = state.copyWith(
+      gender: (userData['gender'] ?? '').toString(),
+      birthDate: dobRaw.isNotEmpty ? DateTime.tryParse(dobRaw) : null,
+      initialized: true,
+    );
+  }
+
+  void setPickedImage(File image) {
+    state = state.copyWith(pickedImage: image);
+  }
+
+  void setBirthDate(DateTime value) {
+    state = state.copyWith(birthDate: value);
+  }
+
+  void setGender(String value) {
+    state = state.copyWith(gender: value);
+  }
+
+  void setLoading(bool value) {
+    state = state.copyWith(isLoading: value);
+  }
+}
+
+final _editProfileUiControllerProvider = StateNotifierProvider.autoDispose<
+    _EditProfileUiController,
+    _EditProfileUiState>((ref) => _EditProfileUiController());
+
+class EditProfileScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> userData;
 
   const EditProfileScreen({super.key, required this.userData});
 
   @override
-  State<EditProfileScreen> createState() => _EditProfileScreenState();
+  ConsumerState<EditProfileScreen> createState() => _EditProfileScreenState();
 }
 
-class _EditProfileScreenState extends State<EditProfileScreen> {
+class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
@@ -27,11 +93,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _websiteController = TextEditingController();
   final TextEditingController _occupationController = TextEditingController();
-
-  File? _pickedImage;
-  bool _isLoading = false;
-  String _gender = '';
-  DateTime? _birthDate;
 
   static const List<String> _genderOptions = [
     'Nam',
@@ -51,12 +112,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _websiteController.text = (widget.userData['website'] ?? '').toString();
     _occupationController.text =
         (widget.userData['occupation'] ?? '').toString();
-    _gender = (widget.userData['gender'] ?? '').toString();
-
-    final dobRaw = (widget.userData['dateOfBirth'] ?? '').toString();
-    if (dobRaw.isNotEmpty) {
-      _birthDate = DateTime.tryParse(dobRaw);
-    }
+    ref.read(_editProfileUiControllerProvider.notifier).initialize(
+          widget.userData,
+        );
   }
 
   @override
@@ -77,7 +135,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final image =
           await picker.pickImage(source: ImageSource.gallery, imageQuality: 60);
       if (image != null) {
-        setState(() => _pickedImage = File(image.path));
+        ref
+            .read(_editProfileUiControllerProvider.notifier)
+            .setPickedImage(File(image.path));
       }
     } catch (e) {
       if (!mounted) return;
@@ -87,8 +147,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _pickBirthDate() async {
+    final uiState = ref.read(_editProfileUiControllerProvider);
     final now = DateTime.now();
-    final initial = _birthDate ?? DateTime(now.year - 18, now.month, now.day);
+    final initial =
+        uiState.birthDate ?? DateTime(now.year - 18, now.month, now.day);
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -96,15 +158,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       lastDate: now,
     );
     if (picked != null) {
-      setState(() => _birthDate = picked);
+      ref.read(_editProfileUiControllerProvider.notifier).setBirthDate(picked);
     }
   }
 
   String _formatBirthDate() {
-    if (_birthDate == null) return 'Chọn ngày sinh';
-    final dd = _birthDate!.day.toString().padLeft(2, '0');
-    final mm = _birthDate!.month.toString().padLeft(2, '0');
-    final yyyy = _birthDate!.year.toString();
+    final birthDate = ref.watch(_editProfileUiControllerProvider).birthDate;
+    if (birthDate == null) return 'Chọn ngày sinh';
+    final dd = birthDate.day.toString().padLeft(2, '0');
+    final mm = birthDate.month.toString().padLeft(2, '0');
+    final yyyy = birthDate.year.toString();
     return '$dd/$mm/$yyyy';
   }
 
@@ -116,18 +179,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    final uiController = ref.read(_editProfileUiControllerProvider.notifier);
+    var uiState = ref.read(_editProfileUiControllerProvider);
+    uiController.setLoading(true);
 
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
       String avatarUrl = (widget.userData['avatar'] ?? '').toString();
-      if (_pickedImage != null) {
+      if (uiState.pickedImage != null) {
         final cloudinary =
             CloudinaryPublic('dds49mcmb', 'lumo_preset', cache: false);
         final response = await cloudinary.uploadFile(
-          CloudinaryFile.fromFile(_pickedImage!.path,
+          CloudinaryFile.fromFile(uiState.pickedImage!.path,
               resourceType: CloudinaryResourceType.Image),
         );
         avatarUrl = response.secureUrl;
@@ -142,15 +207,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'city': _cityController.text.trim(),
         'website': _websiteController.text.trim(),
         'occupation': _occupationController.text.trim(),
-        'gender': _gender,
-        'dateOfBirth': _birthDate != null
-            ? _birthDate!.toIso8601String().split('T').first
+        'gender': uiState.gender,
+        'dateOfBirth': uiState.birthDate != null
+            ? uiState.birthDate!.toIso8601String().split('T').first
             : '',
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
       await user.updateDisplayName(name);
-      if (_pickedImage != null) {
+      if (uiState.pickedImage != null) {
         await user.updatePhotoURL(avatarUrl);
       }
 
@@ -163,14 +228,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Lỗi cập nhật: $e')));
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      uiController.setLoading(false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final uiState = ref.watch(_editProfileUiControllerProvider);
     final currentAvatar = (widget.userData['avatar'] ?? '').toString();
     final initial = _nameController.text.trim().isNotEmpty
         ? _nameController.text.trim()[0].toUpperCase()
@@ -240,16 +304,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   name: _nameController.text.trim().isNotEmpty
                                       ? _nameController.text.trim()
                                       : 'User',
-                                  imageUrl: _pickedImage == null
+                                  imageUrl: uiState.pickedImage == null
                                       ? currentAvatar
                                       : null,
                                   size: 100,
                                   showStatus: false,
                                 ),
-                                if (_pickedImage != null)
+                                if (uiState.pickedImage != null)
                                   Positioned.fill(
                                     child: ClipOval(
-                                      child: Image.file(_pickedImage!,
+                                      child: Image.file(uiState.pickedImage!,
                                           fit: BoxFit.cover),
                                     ),
                                   ),
@@ -273,7 +337,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               ],
                             ),
                           ),
-                          if (currentAvatar.isEmpty && _pickedImage == null)
+                          if (currentAvatar.isEmpty &&
+                              uiState.pickedImage == null)
                             Padding(
                               padding: const EdgeInsets.only(top: 8),
                               child: Text(
@@ -323,7 +388,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             keyboardType: TextInputType.url,
                           ),
                           const SizedBox(height: 28),
-                          _isLoading
+                          uiState.isLoading
                               ? const CircularProgressIndicator(
                                   color: AppColors.primary)
                               : GradientButton(
@@ -345,6 +410,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Widget _buildGenderField() {
+    final uiState = ref.watch(_editProfileUiControllerProvider);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.bgCard.withAlphaFraction(0.5),
@@ -354,7 +420,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: _gender.isEmpty ? null : _gender,
+          value: uiState.gender.isEmpty ? null : uiState.gender,
           hint: Text('Giới tính', style: TextStyle(color: AppColors.textMuted)),
           isExpanded: true,
           dropdownColor: AppColors.bgSurface,
@@ -367,13 +433,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     child: Text(option),
                   ))
               .toList(),
-          onChanged: (value) => setState(() => _gender = value ?? ''),
+          onChanged: (value) => ref
+              .read(_editProfileUiControllerProvider.notifier)
+              .setGender(value ?? ''),
         ),
       ),
     );
   }
 
   Widget _buildBirthDateField() {
+    final birthDate = ref.watch(_editProfileUiControllerProvider).birthDate;
     return GestureDetector(
       onTap: _pickBirthDate,
       child: Container(
@@ -391,7 +460,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               child: Text(
                 _formatBirthDate(),
                 style: TextStyle(
-                  color: _birthDate == null
+                  color: birthDate == null
                       ? AppColors.textMuted
                       : AppColors.textPrimary,
                   fontFamily: 'Inter',

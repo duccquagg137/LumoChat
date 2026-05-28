@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
@@ -9,16 +10,77 @@ import '../widgets/glass_card.dart';
 import 'home_screen.dart';
 import 'landing_screen.dart';
 
+class _ProfileCompletionUiState {
+  const _ProfileCompletionUiState({
+    this.isLoading = true,
+    this.isSaving = false,
+    this.gender = '',
+    this.birthDate,
+  });
 
-class ProfileCompletionScreen extends StatefulWidget {
+  final bool isLoading;
+  final bool isSaving;
+  final String gender;
+  final DateTime? birthDate;
+
+  _ProfileCompletionUiState copyWith({
+    bool? isLoading,
+    bool? isSaving,
+    String? gender,
+    DateTime? birthDate,
+  }) {
+    return _ProfileCompletionUiState(
+      isLoading: isLoading ?? this.isLoading,
+      isSaving: isSaving ?? this.isSaving,
+      gender: gender ?? this.gender,
+      birthDate: birthDate ?? this.birthDate,
+    );
+  }
+}
+
+class _ProfileCompletionUiController
+    extends StateNotifier<_ProfileCompletionUiState> {
+  _ProfileCompletionUiController() : super(const _ProfileCompletionUiState());
+
+  void setLoading(bool value) {
+    state = state.copyWith(isLoading: value);
+  }
+
+  void setSaving(bool value) {
+    state = state.copyWith(isSaving: value);
+  }
+
+  void setGender(String value) {
+    state = state.copyWith(gender: value);
+  }
+
+  void setBirthDate(DateTime value) {
+    state = state.copyWith(birthDate: value);
+  }
+
+  void hydrate({
+    required String gender,
+    required DateTime? birthDate,
+  }) {
+    state = state.copyWith(gender: gender, birthDate: birthDate);
+  }
+}
+
+final _profileCompletionUiControllerProvider = StateNotifierProvider
+    .autoDispose<_ProfileCompletionUiController, _ProfileCompletionUiState>(
+  (ref) => _ProfileCompletionUiController(),
+);
+
+class ProfileCompletionScreen extends ConsumerStatefulWidget {
   const ProfileCompletionScreen({super.key});
 
   @override
-  State<ProfileCompletionScreen> createState() =>
+  ConsumerState<ProfileCompletionScreen> createState() =>
       _ProfileCompletionScreenState();
 }
 
-class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
+class _ProfileCompletionScreenState
+    extends ConsumerState<ProfileCompletionScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _cityController = TextEditingController();
@@ -26,18 +88,13 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   final _bioController = TextEditingController();
   final _occupationController = TextEditingController();
 
-  bool _isLoading = true;
-  bool _isSaving = false;
-  String _gender = '';
-  DateTime? _birthDate;
-
   bool get _isEnglish => Localizations.localeOf(context).languageCode == 'en';
 
   List<String> get _genderOptions => _isEnglish
       ? const ['Male', 'Female', 'Other', 'Prefer not to say']
       : const ['Nam', 'Nữ', 'Khác', 'Không muốn chia sẻ'];
 
-  bool get _hasSelectedGender => _genderOptions.contains(_gender);
+  bool _hasSelectedGender(String gender) => _genderOptions.contains(gender);
 
   String _txt({required String vi, required String en}) {
     return _isEnglish ? en : vi;
@@ -61,9 +118,11 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   }
 
   Future<void> _loadProfile() async {
+    final uiController =
+        ref.read(_profileCompletionUiControllerProvider.notifier);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      if (mounted) setState(() => _isLoading = false);
+      uiController.setLoading(false);
       return;
     }
 
@@ -85,12 +144,13 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       _addressController.text = (data['address'] ?? '').toString();
       _bioController.text = (data['bio'] ?? '').toString();
       _occupationController.text = (data['occupation'] ?? '').toString();
-      _gender = (data['gender'] ?? '').toString();
 
       final birthDateRaw = (data['dateOfBirth'] ?? '').toString();
-      if (birthDateRaw.isNotEmpty) {
-        _birthDate = DateTime.tryParse(birthDateRaw);
-      }
+      uiController.hydrate(
+        gender: (data['gender'] ?? '').toString(),
+        birthDate:
+            birthDateRaw.isNotEmpty ? DateTime.tryParse(birthDateRaw) : null,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -104,7 +164,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) uiController.setLoading(false);
     }
   }
 
@@ -117,8 +177,10 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   }
 
   Future<void> _pickBirthDate() async {
+    final uiState = ref.read(_profileCompletionUiControllerProvider);
     final now = DateTime.now();
-    final initial = _birthDate ?? DateTime(now.year - 18, now.month, now.day);
+    final initial =
+        uiState.birthDate ?? DateTime(now.year - 18, now.month, now.day);
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -126,22 +188,29 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       lastDate: now,
     );
     if (picked != null) {
-      setState(() => _birthDate = picked);
+      ref
+          .read(_profileCompletionUiControllerProvider.notifier)
+          .setBirthDate(picked);
     }
   }
 
   String _formatBirthDate() {
-    if (_birthDate == null) {
+    final birthDate =
+        ref.watch(_profileCompletionUiControllerProvider).birthDate;
+    if (birthDate == null) {
       return _txt(vi: 'Chọn ngày sinh', en: 'Select birth date');
     }
-    final dd = _birthDate!.day.toString().padLeft(2, '0');
-    final mm = _birthDate!.month.toString().padLeft(2, '0');
-    final yyyy = _birthDate!.year.toString();
+    final dd = birthDate.day.toString().padLeft(2, '0');
+    final mm = birthDate.month.toString().padLeft(2, '0');
+    final yyyy = birthDate.year.toString();
     return '$dd/$mm/$yyyy';
   }
 
   Future<void> _saveProfile() async {
     final l10n = context.l10n;
+    final uiState = ref.read(_profileCompletionUiControllerProvider);
+    final uiController =
+        ref.read(_profileCompletionUiControllerProvider.notifier);
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
     final city = _cityController.text.trim();
@@ -150,8 +219,8 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       if (name.isEmpty) l10n.profileSummaryName,
       if (phone.isEmpty) l10n.profileFieldPhone,
       if (city.isEmpty) l10n.profileFieldCity,
-      if (!_hasSelectedGender) l10n.profileFieldGender,
-      if (_birthDate == null) l10n.profileFieldBirthDate,
+      if (!_hasSelectedGender(uiState.gender)) l10n.profileFieldGender,
+      if (uiState.birthDate == null) l10n.profileFieldBirthDate,
     ];
 
     if (missingFields.isNotEmpty) {
@@ -168,7 +237,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       return;
     }
 
-    setState(() => _isSaving = true);
+    uiController.setSaving(true);
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
@@ -180,8 +249,8 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
         'address': _addressController.text.trim(),
         'bio': _bioController.text.trim(),
         'occupation': _occupationController.text.trim(),
-        'gender': _gender,
-        'dateOfBirth': _birthDate!.toIso8601String().split('T').first,
+        'gender': uiState.gender,
+        'dateOfBirth': uiState.birthDate!.toIso8601String().split('T').first,
         'profileCompleted': true,
         'profileCompletedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -207,7 +276,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (mounted) uiController.setSaving(false);
     }
   }
 
@@ -230,6 +299,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final uiState = ref.watch(_profileCompletionUiControllerProvider);
 
     return PopScope(
       canPop: false,
@@ -254,7 +324,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
               ),
             ),
             SafeArea(
-              child: _isLoading
+              child: uiState.isLoading
                   ? const Center(
                       child:
                           CircularProgressIndicator(color: AppColors.primary),
@@ -340,7 +410,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                                   _occupationController,
                                 ),
                                 const SizedBox(height: 24),
-                                _isSaving
+                                uiState.isSaving
                                     ? const CircularProgressIndicator(
                                         color: AppColors.primary,
                                       )
@@ -358,7 +428,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                           const SizedBox(height: 12),
                           Center(
                             child: TextButton.icon(
-                              onPressed: _isSaving ? null : _signOut,
+                              onPressed: uiState.isSaving ? null : _signOut,
                               icon: const Icon(Icons.logout_rounded, size: 18),
                               label: Text(l10n.profileLogout),
                             ),
@@ -405,6 +475,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   }
 
   Widget _buildGenderField(String label) {
+    final uiState = ref.watch(_profileCompletionUiControllerProvider);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.bgCard.withAlphaFraction(0.5),
@@ -414,7 +485,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: _hasSelectedGender ? _gender : null,
+          value: _hasSelectedGender(uiState.gender) ? uiState.gender : null,
           hint: Text('$label *', style: TextStyle(color: AppColors.textMuted)),
           isExpanded: true,
           dropdownColor: AppColors.bgSurface,
@@ -431,13 +502,17 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                 ),
               )
               .toList(),
-          onChanged: (value) => setState(() => _gender = value ?? ''),
+          onChanged: (value) => ref
+              .read(_profileCompletionUiControllerProvider.notifier)
+              .setGender(value ?? ''),
         ),
       ),
     );
   }
 
   Widget _buildBirthDateField(String label) {
+    final birthDate =
+        ref.watch(_profileCompletionUiControllerProvider).birthDate;
     return GestureDetector(
       onTap: _pickBirthDate,
       child: Container(
@@ -453,9 +528,9 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                _birthDate == null ? '$label *' : _formatBirthDate(),
+                birthDate == null ? '$label *' : _formatBirthDate(),
                 style: TextStyle(
-                  color: _birthDate == null
+                  color: birthDate == null
                       ? AppColors.textMuted
                       : AppColors.textPrimary,
                   fontFamily: 'Inter',

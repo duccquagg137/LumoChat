@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
@@ -10,25 +11,90 @@ import '../widgets/glass_card.dart';
 import 'home_screen.dart';
 import 'profile_completion_screen.dart';
 
-
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
 enum AuthMode { email, phone }
 
-class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
-  bool _isLogin = true;
-  bool _showPassword = false;
-  bool _isLoading = false;
-  AuthMode _authMode = AuthMode.email;
+class _LoginUiState {
+  const _LoginUiState({
+    this.isLogin = true,
+    this.showPassword = false,
+    this.isLoading = false,
+    this.authMode = AuthMode.email,
+    this.isCodeSent = false,
+    this.verificationId = '',
+  });
 
-  bool _isCodeSent = false;
-  String _verificationId = '';
+  final bool isLogin;
+  final bool showPassword;
+  final bool isLoading;
+  final AuthMode authMode;
+  final bool isCodeSent;
+  final String verificationId;
+
+  _LoginUiState copyWith({
+    bool? isLogin,
+    bool? showPassword,
+    bool? isLoading,
+    AuthMode? authMode,
+    bool? isCodeSent,
+    String? verificationId,
+  }) {
+    return _LoginUiState(
+      isLogin: isLogin ?? this.isLogin,
+      showPassword: showPassword ?? this.showPassword,
+      isLoading: isLoading ?? this.isLoading,
+      authMode: authMode ?? this.authMode,
+      isCodeSent: isCodeSent ?? this.isCodeSent,
+      verificationId: verificationId ?? this.verificationId,
+    );
+  }
+}
+
+class _LoginUiController extends StateNotifier<_LoginUiState> {
+  _LoginUiController() : super(const _LoginUiState());
+
+  void setLoginTab(bool value) {
+    state = state.copyWith(isLogin: value);
+  }
+
+  void setLoading(bool value) {
+    state = state.copyWith(isLoading: value);
+  }
+
+  void setAuthMode(AuthMode value) {
+    state = state.copyWith(authMode: value, isCodeSent: false);
+  }
+
+  void codeSent(String verificationId) {
+    state = state.copyWith(
+      verificationId: verificationId,
+      isCodeSent: true,
+      isLoading: false,
+    );
+  }
+
+  void setCodeSent(bool value) {
+    state = state.copyWith(isCodeSent: value);
+  }
+
+  void togglePasswordVisibility() {
+    state = state.copyWith(showPassword: !state.showPassword);
+  }
+}
+
+final _loginUiControllerProvider =
+    StateNotifierProvider.autoDispose<_LoginUiController, _LoginUiState>(
+  (ref) => _LoginUiController(),
+);
+
+class _LoginScreenState extends ConsumerState<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
 
@@ -50,7 +116,9 @@ class _LoginScreenState extends State<LoginScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
-      setState(() => _isLogin = _tabController.index == 0);
+      ref
+          .read(_loginUiControllerProvider.notifier)
+          .setLoginTab(_tabController.index == 0);
     });
   }
 
@@ -67,7 +135,9 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _setLoading(bool value) {
-    if (mounted) setState(() => _isLoading = value);
+    if (mounted) {
+      ref.read(_loginUiControllerProvider.notifier).setLoading(value);
+    }
   }
 
   void _showError(String message) {
@@ -117,6 +187,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _submitEmailAuth() async {
     final l10n = context.l10n;
+    final uiState = ref.read(_loginUiControllerProvider);
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
@@ -127,7 +198,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     _setLoading(true);
     try {
-      if (_isLogin) {
+      if (uiState.isLogin) {
         await _authService.signInWithEmailPassword(email, password);
       } else {
         final name = _nameController.text.trim();
@@ -145,7 +216,7 @@ class _LoginScreenState extends State<LoginScreen>
         }
         await _authService.signUpWithEmailPassword(email, password, name);
       }
-      await _navigateAfterAuth(forceProfileCompletion: !_isLogin);
+      await _navigateAfterAuth(forceProfileCompletion: !uiState.isLogin);
     } catch (e) {
       _showError(AppErrorText.forAuthL10n(l10n, e));
     } finally {
@@ -199,11 +270,9 @@ class _LoginScreenState extends State<LoginScreen>
         },
         codeSent: (String verificationId) {
           if (mounted) {
-            setState(() {
-              _verificationId = verificationId;
-              _isCodeSent = true;
-              _isLoading = false;
-            });
+            ref.read(_loginUiControllerProvider.notifier).codeSent(
+                  verificationId,
+                );
           }
         },
       );
@@ -225,8 +294,10 @@ class _LoginScreenState extends State<LoginScreen>
 
     _setLoading(true);
     try {
-      final userCredential =
-          await _authService.signInWithOTP(_verificationId, code);
+      final userCredential = await _authService.signInWithOTP(
+        ref.read(_loginUiControllerProvider).verificationId,
+        code,
+      );
       await _navigateAfterAuth(
         forceProfileCompletion:
             userCredential?.additionalUserInfo?.isNewUser == true,
@@ -259,6 +330,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
+    final uiState = ref.watch(_loginUiControllerProvider);
     return Scaffold(
       body: Stack(
         children: [
@@ -348,7 +420,7 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
                   const SizedBox(height: 28),
-                  _authMode == AuthMode.email
+                  uiState.authMode == AuthMode.email
                       ? _buildEmailForm()
                       : _buildPhoneForm(),
                   const SizedBox(height: 24),
@@ -403,13 +475,11 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildModeTab(String label, AuthMode mode) {
-    final isActive = _authMode == mode;
+    final isActive = ref.watch(_loginUiControllerProvider).authMode == mode;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() {
-          _authMode = mode;
-          _isCodeSent = false;
-        }),
+        onTap: () =>
+            ref.read(_loginUiControllerProvider.notifier).setAuthMode(mode),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
@@ -431,6 +501,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildEmailForm() {
+    final uiState = ref.watch(_loginUiControllerProvider);
     return GlassCard(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -456,7 +527,7 @@ class _LoginScreenState extends State<LoginScreen>
             ],
           ),
           const SizedBox(height: 20),
-          if (!_isLogin) ...[
+          if (!uiState.isLogin) ...[
             _buildInput(
               Icons.person_outline_rounded,
               _txt(vi: 'Họ và tên', en: 'Full name'),
@@ -477,7 +548,7 @@ class _LoginScreenState extends State<LoginScreen>
             isPassword: true,
             controller: _passwordController,
           ),
-          if (!_isLogin) ...[
+          if (!uiState.isLogin) ...[
             const SizedBox(height: 16),
             _buildInput(
               Icons.lock_outline_rounded,
@@ -486,7 +557,7 @@ class _LoginScreenState extends State<LoginScreen>
               controller: _confirmPasswordController,
             ),
           ],
-          if (_isLogin) ...[
+          if (uiState.isLogin) ...[
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
@@ -504,10 +575,10 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ],
           const SizedBox(height: 20),
-          _isLoading
+          uiState.isLoading
               ? const CircularProgressIndicator(color: AppColors.primary)
               : GradientButton(
-                  text: _isLogin
+                  text: uiState.isLogin
                       ? _txt(vi: 'Đăng nhập', en: 'Sign in')
                       : _txt(vi: 'Đăng ký', en: 'Sign up'),
                   width: double.infinity,
@@ -519,12 +590,13 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildPhoneForm() {
+    final uiState = ref.watch(_loginUiControllerProvider);
     return GlassCard(
       padding: const EdgeInsets.all(24),
       child: Column(
         children: [
           Text(
-            _isCodeSent
+            uiState.isCodeSent
                 ? _txt(vi: 'Nhập mã xác nhận', en: 'Enter verification code')
                 : _txt(
                     vi: 'Đăng nhập bằng số điện thoại',
@@ -539,7 +611,7 @@ class _LoginScreenState extends State<LoginScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            _isCodeSent
+            uiState.isCodeSent
                 ? _txt(
                     vi: 'Mã OTP đã được gửi đến số điện thoại của bạn',
                     en: 'An OTP code was sent to your phone',
@@ -556,7 +628,7 @@ class _LoginScreenState extends State<LoginScreen>
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
-          if (!_isCodeSent)
+          if (!uiState.isCodeSent)
             _buildInput(
               Icons.phone_outlined,
               _txt(vi: 'Số điện thoại', en: 'Phone number'),
@@ -571,19 +643,21 @@ class _LoginScreenState extends State<LoginScreen>
               keyboardType: TextInputType.number,
             ),
           const SizedBox(height: 24),
-          _isLoading
+          uiState.isLoading
               ? const CircularProgressIndicator(color: AppColors.primary)
               : GradientButton(
-                  text: _isCodeSent
+                  text: uiState.isCodeSent
                       ? _txt(vi: 'Xác nhận', en: 'Verify')
                       : _txt(vi: 'Gửi mã OTP', en: 'Send OTP'),
                   width: double.infinity,
-                  onPressed: _isCodeSent ? _verifyOTP : _sendPhoneCode,
+                  onPressed: uiState.isCodeSent ? _verifyOTP : _sendPhoneCode,
                 ),
-          if (_isCodeSent) ...[
+          if (uiState.isCodeSent) ...[
             const SizedBox(height: 16),
             TextButton(
-              onPressed: () => setState(() => _isCodeSent = false),
+              onPressed: () => ref
+                  .read(_loginUiControllerProvider.notifier)
+                  .setCodeSent(false),
               child: Text(
                 _txt(vi: 'Thay đổi số điện thoại', en: 'Change phone number'),
                 style: TextStyle(color: AppColors.textSecondary),
@@ -602,6 +676,7 @@ class _LoginScreenState extends State<LoginScreen>
     TextEditingController? controller,
     TextInputType? keyboardType,
   }) {
+    final showPassword = ref.watch(_loginUiControllerProvider).showPassword;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.bgCard.withAlphaFraction(0.5),
@@ -610,7 +685,7 @@ class _LoginScreenState extends State<LoginScreen>
       ),
       child: TextField(
         controller: controller,
-        obscureText: isPassword && !_showPassword,
+        obscureText: isPassword && !showPassword,
         keyboardType: keyboardType,
         style: TextStyle(
           color: AppColors.textPrimary,
@@ -628,14 +703,15 @@ class _LoginScreenState extends State<LoginScreen>
           suffixIcon: isPassword
               ? IconButton(
                   icon: Icon(
-                    _showPassword
+                    showPassword
                         ? Icons.visibility_off_rounded
                         : Icons.visibility_rounded,
                     color: AppColors.textMuted,
                     size: 22,
                   ),
-                  onPressed: () =>
-                      setState(() => _showPassword = !_showPassword),
+                  onPressed: () => ref
+                      .read(_loginUiControllerProvider.notifier)
+                      .togglePasswordVisibility(),
                 )
               : null,
         ),

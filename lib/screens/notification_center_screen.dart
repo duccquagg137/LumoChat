@@ -1,22 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/app_notification_model.dart';
-import '../services/notification_service.dart';
+import '../services/app_providers.dart';
 import '../theme/app_theme.dart';
 
+final _notificationCenterBusyProvider =
+    StateProvider.autoDispose<bool>((ref) => false);
 
-class NotificationCenterScreen extends StatefulWidget {
+final _myNotificationsProvider =
+    StreamProvider.autoDispose<QuerySnapshot<Map<String, dynamic>>>((ref) {
+  return ref.watch(notificationServiceProvider).watchMyNotifications();
+});
+
+class NotificationCenterScreen extends ConsumerWidget {
   const NotificationCenterScreen({super.key});
-
-  @override
-  State<NotificationCenterScreen> createState() =>
-      _NotificationCenterScreenState();
-}
-
-class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
-  final NotificationService _notificationService = NotificationService();
-  bool _isMarkingAllRead = false;
 
   bool _isEnglish(BuildContext context) =>
       Localizations.localeOf(context).languageCode == 'en';
@@ -29,15 +28,14 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
     return _isEnglish(context) ? en : vi;
   }
 
-  Future<void> _markAllAsRead() async {
-    if (_isMarkingAllRead) return;
-    setState(() => _isMarkingAllRead = true);
+  Future<void> _markAllAsRead(BuildContext context, WidgetRef ref) async {
+    final busyController = ref.read(_notificationCenterBusyProvider.notifier);
+    if (ref.read(_notificationCenterBusyProvider)) return;
+    busyController.state = true;
     try {
-      await _notificationService.markAllAsRead();
+      await ref.read(notificationServiceProvider).markAllAsRead();
     } finally {
-      if (mounted) {
-        setState(() => _isMarkingAllRead = false);
-      }
+      busyController.state = false;
     }
   }
 
@@ -71,14 +69,17 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isMarkingAllRead = ref.watch(_notificationCenterBusyProvider);
+    final notifications = ref.watch(_myNotificationsProvider);
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.bgSurface,
         title: Text(
           _txt(
             context,
-            vi: 'Trung tâm thông báo',
+            vi: 'Trung tÃ¢m thÃ´ng bÃ¡o',
             en: 'Notification Center',
           ),
           style: TextStyle(
@@ -90,11 +91,12 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
         iconTheme: IconThemeData(color: AppColors.textPrimary),
         actions: [
           TextButton(
-            onPressed: _isMarkingAllRead ? null : _markAllAsRead,
+            onPressed:
+                isMarkingAllRead ? null : () => _markAllAsRead(context, ref),
             child: Text(
-              _txt(context, vi: 'Đọc tất cả', en: 'Read all'),
+              _txt(context, vi: 'Äá»c táº¥t cáº£', en: 'Read all'),
               style: TextStyle(
-                color: _isMarkingAllRead
+                color: isMarkingAllRead
                     ? AppColors.textMuted
                     : AppColors.primaryLight,
                 fontWeight: FontWeight.w600,
@@ -104,28 +106,26 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: _notificationService.watchMyNotifications(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(
-              child: Text(
-                _txt(
-                  context,
-                  vi: 'Không tải được thông báo',
-                  en: 'Unable to load notifications',
-                ),
-                style: TextStyle(color: AppColors.textMuted),
+      body: notifications.when(
+        error: (_, __) {
+          return Center(
+            child: Text(
+              _txt(
+                context,
+                vi: 'KhÃ´ng táº£i Ä‘Æ°á»£c thÃ´ng bÃ¡o',
+                en: 'Unable to load notifications',
               ),
-            );
-          }
-          if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            );
-          }
-
-          final items = snapshot.data!.docs
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+          );
+        },
+        loading: () {
+          return const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          );
+        },
+        data: (snapshot) {
+          final items = snapshot.docs
               .map(AppNotificationModel.fromDocument)
               .toList()
             ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -135,7 +135,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
               child: Text(
                 _txt(
                   context,
-                  vi: 'Chưa có thông báo nào',
+                  vi: 'ChÆ°a cÃ³ thÃ´ng bÃ¡o nÃ o',
                   en: 'No notifications yet',
                 ),
                 style: TextStyle(
@@ -163,7 +163,8 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
                   border: Border.all(color: AppColors.glassBorder),
                 ),
                 child: ListTile(
-                  onTap: () => _notificationService.markAsRead(item.id),
+                  onTap: () =>
+                      ref.read(notificationServiceProvider).markAsRead(item.id),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 14,
                     vertical: 6,

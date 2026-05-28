@@ -15,7 +15,6 @@ import '../utils/l10n.dart';
 import '../widgets/glass_card.dart';
 import 'chat_screen.dart';
 
-
 final _currentUserDocumentProvider = StreamProvider.autoDispose
     .family<DocumentSnapshot<Map<String, dynamic>>, String>((ref, userId) {
   return FirebaseFirestore.instance.collection('users').doc(userId).snapshots();
@@ -231,7 +230,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
       icon: Icons.error_outline_rounded,
       message: AppErrorText.forChat(context, error),
       showRetry: true,
-      onRetry: onRetry ?? () => setState(() {}),
+      onRetry: onRetry ?? () => ref.invalidate(chatListUiControllerProvider),
     );
   }
 
@@ -791,4 +790,3 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
     );
   }
 }
-

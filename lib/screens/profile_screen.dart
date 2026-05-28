@@ -16,6 +16,21 @@ import 'notification_center_screen.dart';
 import 'edit_profile_screen.dart';
 import 'landing_screen.dart';
 
+final _profileUserDocumentProvider = StreamProvider.autoDispose
+    .family<DocumentSnapshot<Map<String, dynamic>>, String>((ref, uid) {
+  return FirebaseFirestore.instance.collection('users').doc(uid).snapshots();
+});
+
+final _profileGroupsProvider = StreamProvider.autoDispose
+    .family<QuerySnapshot<Map<String, dynamic>>, String>((ref, uid) {
+  return FirebaseFirestore.instance
+      .collection('groups')
+      .where('members', arrayContains: uid)
+      .snapshots();
+});
+
+final _profileSettingsAppliedProvider =
+    StateProvider.autoDispose<bool>((ref) => false);
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -25,10 +40,6 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  bool _darkMode = true;
-  bool _notifications = true;
-  bool _settingsLoaded = false;
-
   bool _isEnglish(BuildContext context) =>
       Localizations.localeOf(context).languageCode == 'en';
 
@@ -57,14 +68,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _updateSetting(String key, bool value) async {
-    setState(() {
-      if (key == 'darkMode') {
-        _darkMode = value;
-      } else {
-        _notifications = value;
-      }
-    });
-
     final uid = FirebaseAuth.instance.currentUser?.uid;
 
     try {
@@ -106,10 +109,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     await ref.read(appLocaleActionsProvider).setLocale(languageCode);
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
-      if (mounted) setState(() {});
-      return;
-    }
+    if (uid == null) return;
 
     try {
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
@@ -122,10 +122,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             content:
                 Text(context.l10n.profileLanguageSaveFailed(e.toString()))),
       );
-    }
-
-    if (mounted) {
-      setState(() {});
     }
   }
 
@@ -226,6 +222,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final profile =
+        uid.isEmpty ? null : ref.watch(_profileUserDocumentProvider(uid));
 
     return Scaffold(
       body: Stack(
@@ -248,514 +246,581 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ),
           SafeArea(
-            child: StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(uid)
-                  .snapshots(),
-              builder: (profileContext, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(
+            child: uid.isEmpty
+                ? Center(
                     child: Text(
-                      l10n.profileLoadError,
+                      l10n.commonErrorUnauthenticated,
                       style: TextStyle(color: AppColors.textMuted),
                     ),
-                  );
-                }
-                if (!snapshot.hasData) {
-                  return const Center(
-                      child:
-                          CircularProgressIndicator(color: AppColors.primary));
-                }
-
-                final userData = snapshot.data!.data() as Map<String, dynamic>?;
-                if (userData == null) {
-                  return Center(
-                    child: Text(
-                      l10n.profileLoadError,
-                      style: TextStyle(color: AppColors.textMuted),
-                    ),
-                  );
-                }
-
-                final settings =
-                    (userData['settings'] as Map<String, dynamic>?) ?? const {};
-                final profileVisibility =
-                    ProfileVisibility.fromUserData(userData);
-                if (!_settingsLoaded) {
-                  _darkMode = settings['darkMode'] != false;
-                  _notifications = settings['notifications'] != false;
-                  final savedDarkMode = _darkMode;
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (!mounted) return;
-                    unawaited(
-                      ref
-                          .read(appThemeActionsProvider)
-                          .setDarkMode(savedDarkMode),
-                    );
-                  });
-                  final savedLanguage =
-                      (settings['languageCode'] ?? '').toString();
-                  if (savedLanguage == 'vi' || savedLanguage == 'en') {
-                    ref.read(appLocaleActionsProvider).setLocale(savedLanguage);
-                  }
-                  _settingsLoaded = true;
-                }
-
-                final name = _displayOrFallback(userData['name'],
-                    fallback: l10n.profileFallbackUser);
-                final email = _displayOrFallback(userData['email'],
-                    fallback: l10n.profileNotUpdated);
-                final bio = _displayOrFallback(userData['bio'],
-                    fallback: l10n.profileFallbackBio);
-                final avatar = (userData['avatar'] ?? '').toString();
-                final isOnline = userData['isOnline'] == true;
-                final friendCount = (userData['friends'] is List)
-                    ? (userData['friends'] as List).length
-                    : 0;
-
-                final phone = _displayOrFallback(userData['phoneNumber'],
-                    fallback: l10n.profileNotUpdated);
-                final address = _displayOrFallback(userData['address'],
-                    fallback: l10n.profileNotUpdated);
-                final city = _displayOrFallback(userData['city'],
-                    fallback: l10n.profileNotUpdated);
-                final gender = _displayOrFallback(userData['gender'],
-                    fallback: l10n.profileNotUpdated);
-                final birthday = _formatDateField(userData['dateOfBirth'],
-                    fallback: l10n.profileNotUpdated);
-                final website = _displayOrFallback(userData['website'],
-                    fallback: l10n.profileNotUpdated);
-                final occupation = _displayOrFallback(userData['occupation'],
-                    fallback: l10n.profileNotUpdated);
-
-                final profileSummary = StringBuffer()
-                  ..writeln(l10n.profileSummaryTitle)
-                  ..writeln('${l10n.profileSummaryName}: $name')
-                  ..writeln('${l10n.profileSummaryEmail}: $email')
-                  ..writeln('${l10n.profileSummaryPhone}: $phone')
-                  ..writeln('${l10n.profileSummaryAddress}: $address')
-                  ..writeln('${l10n.profileSummaryCity}: $city')
-                  ..writeln('${l10n.profileSummaryGender}: $gender')
-                  ..writeln('${l10n.profileSummaryBirthDate}: $birthday')
-                  ..writeln('${l10n.profileSummaryOccupation}: $occupation')
-                  ..writeln('${l10n.profileSummaryWebsite}: $website');
-
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Text(
-                            l10n.navProfile,
-                            style: TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.textPrimary,
-                              fontFamily: 'Inter',
-                            ),
+                  )
+                : profile!.when(
+                    error: (_, __) {
+                      return Center(
+                        child: Text(
+                          l10n.profileLoadError,
+                          style: TextStyle(color: AppColors.textMuted),
+                        ),
+                      );
+                    },
+                    loading: () {
+                      return const Center(
+                          child: CircularProgressIndicator(
+                              color: AppColors.primary));
+                    },
+                    data: (snapshot) {
+                      final userData = snapshot.data();
+                      if (userData == null) {
+                        return Center(
+                          child: Text(
+                            l10n.profileLoadError,
+                            style: TextStyle(color: AppColors.textMuted),
                           ),
-                          const Spacer(),
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: AppColors.glassBg,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                  color: AppColors.glassBorder, width: 0.5),
-                            ),
-                            child: Icon(Icons.settings_outlined,
-                                color: AppColors.textPrimary, size: 20),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      GlassCard(
-                        padding: const EdgeInsets.all(24),
+                        );
+                      }
+
+                      final settings =
+                          (userData['settings'] as Map<String, dynamic>?) ??
+                              const {};
+                      final profileVisibility =
+                          ProfileVisibility.fromUserData(userData);
+                      final darkMode = settings['darkMode'] != false;
+                      final notifications = settings['notifications'] != false;
+                      if (!ref.read(_profileSettingsAppliedProvider)) {
+                        final savedDarkMode = darkMode;
+                        final savedLanguage =
+                            (settings['languageCode'] ?? '').toString();
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+                          ref
+                              .read(_profileSettingsAppliedProvider.notifier)
+                              .state = true;
+                          unawaited(
+                            ref
+                                .read(appThemeActionsProvider)
+                                .setDarkMode(savedDarkMode),
+                          );
+                          if (savedLanguage == 'vi' || savedLanguage == 'en') {
+                            ref
+                                .read(appLocaleActionsProvider)
+                                .setLocale(savedLanguage);
+                          }
+                        });
+                      }
+
+                      final name = _displayOrFallback(userData['name'],
+                          fallback: l10n.profileFallbackUser);
+                      final email = _displayOrFallback(userData['email'],
+                          fallback: l10n.profileNotUpdated);
+                      final bio = _displayOrFallback(userData['bio'],
+                          fallback: l10n.profileFallbackBio);
+                      final avatar = (userData['avatar'] ?? '').toString();
+                      final isOnline = userData['isOnline'] == true;
+                      final friendCount = (userData['friends'] is List)
+                          ? (userData['friends'] as List).length
+                          : 0;
+
+                      final phone = _displayOrFallback(userData['phoneNumber'],
+                          fallback: l10n.profileNotUpdated);
+                      final address = _displayOrFallback(userData['address'],
+                          fallback: l10n.profileNotUpdated);
+                      final city = _displayOrFallback(userData['city'],
+                          fallback: l10n.profileNotUpdated);
+                      final gender = _displayOrFallback(userData['gender'],
+                          fallback: l10n.profileNotUpdated);
+                      final birthday = _formatDateField(userData['dateOfBirth'],
+                          fallback: l10n.profileNotUpdated);
+                      final website = _displayOrFallback(userData['website'],
+                          fallback: l10n.profileNotUpdated);
+                      final occupation = _displayOrFallback(
+                          userData['occupation'],
+                          fallback: l10n.profileNotUpdated);
+
+                      final profileSummary = StringBuffer()
+                        ..writeln(l10n.profileSummaryTitle)
+                        ..writeln('${l10n.profileSummaryName}: $name')
+                        ..writeln('${l10n.profileSummaryEmail}: $email')
+                        ..writeln('${l10n.profileSummaryPhone}: $phone')
+                        ..writeln('${l10n.profileSummaryAddress}: $address')
+                        ..writeln('${l10n.profileSummaryCity}: $city')
+                        ..writeln('${l10n.profileSummaryGender}: $gender')
+                        ..writeln('${l10n.profileSummaryBirthDate}: $birthday')
+                        ..writeln(
+                            '${l10n.profileSummaryOccupation}: $occupation')
+                        ..writeln('${l10n.profileSummaryWebsite}: $website');
+
+                      return SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Column(
                           children: [
-                            AvatarWidget(
-                              name: name,
-                              imageUrl: avatar,
-                              size: 88,
-                              isOnline: isOnline,
-                            ),
                             const SizedBox(height: 16),
-                            Text(
-                              name,
-                              style: TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                                fontFamily: 'Inter',
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              email,
-                              style: TextStyle(
-                                  color: AppColors.primaryLight,
-                                  fontSize: 14,
-                                  fontFamily: 'Inter'),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              bio,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 14,
-                                  fontFamily: 'Inter'),
-                            ),
-                            const SizedBox(height: 20),
-                            StreamBuilder<QuerySnapshot>(
-                              stream: FirebaseFirestore.instance
-                                  .collection('groups')
-                                  .where('members', arrayContains: uid)
-                                  .snapshots(),
-                              builder: (context, groupSnapshot) {
-                                final groupCount =
-                                    groupSnapshot.data?.docs.length ?? 0;
-                                return Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    _buildStat('$friendCount',
-                                        l10n.profileStatFriends),
-                                    Container(
-                                        width: 1,
-                                        height: 30,
-                                        color: AppColors.glassBorder),
-                                    _buildStat(
-                                        '$groupCount', l10n.profileStatGroups),
-                                    Container(
-                                        width: 1,
-                                        height: 30,
-                                        color: AppColors.glassBorder),
-                                    _buildStat(
-                                        isOnline
-                                            ? l10n.commonOnline
-                                            : l10n.commonOffline,
-                                        l10n.profileStatStatus),
-                                  ],
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 20),
                             Row(
                               children: [
-                                Expanded(
-                                  child: GradientButton(
-                                    text: l10n.profileEdit,
-                                    icon: Icons.edit_rounded,
-                                    height: 44,
-                                    onPressed: () {
-                                      Navigator.push(
-                                        profileContext,
-                                        MaterialPageRoute(
-                                          builder: (_) => EditProfileScreen(
-                                              userData: userData),
-                                        ),
-                                      );
-                                    },
+                                Text(
+                                  l10n.navProfile,
+                                  style: TextStyle(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.textPrimary,
+                                    fontFamily: 'Inter',
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: OutlinedPillButton(
-                                    text: l10n.profileShare,
-                                    icon: Icons.share_rounded,
-                                    onPressed: () async {
-                                      await Clipboard.setData(ClipboardData(
-                                          text: profileSummary.toString()));
-                                      if (!profileContext.mounted) return;
-                                      ScaffoldMessenger.of(profileContext)
-                                          .showSnackBar(
-                                        SnackBar(
-                                            content: Text(l10n
-                                                .profileCopySummarySuccess)),
-                                      );
-                                    },
+                                const Spacer(),
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.glassBg,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: AppColors.glassBorder,
+                                        width: 0.5),
+                                  ),
+                                  child: Icon(Icons.settings_outlined,
+                                      color: AppColors.textPrimary, size: 20),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+                            GlassCard(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                children: [
+                                  AvatarWidget(
+                                    name: name,
+                                    imageUrl: avatar,
+                                    size: 88,
+                                    isOnline: isOnline,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    name,
+                                    style: TextStyle(
+                                      color: AppColors.textPrimary,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800,
+                                      fontFamily: 'Inter',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    email,
+                                    style: TextStyle(
+                                        color: AppColors.primaryLight,
+                                        fontSize: 14,
+                                        fontFamily: 'Inter'),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    bio,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 14,
+                                        fontFamily: 'Inter'),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  ref.watch(_profileGroupsProvider(uid)).when(
+                                        loading: () => Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceEvenly,
+                                          children: [
+                                            _buildStat('$friendCount',
+                                                l10n.profileStatFriends),
+                                            Container(
+                                                width: 1,
+                                                height: 30,
+                                                color: AppColors.glassBorder),
+                                            _buildStat(
+                                                '0', l10n.profileStatGroups),
+                                            Container(
+                                                width: 1,
+                                                height: 30,
+                                                color: AppColors.glassBorder),
+                                            _buildStat(
+                                                isOnline
+                                                    ? l10n.commonOnline
+                                                    : l10n.commonOffline,
+                                                l10n.profileStatStatus),
+                                          ],
+                                        ),
+                                        error: (_, __) => Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceEvenly,
+                                          children: [
+                                            _buildStat('$friendCount',
+                                                l10n.profileStatFriends),
+                                            Container(
+                                                width: 1,
+                                                height: 30,
+                                                color: AppColors.glassBorder),
+                                            _buildStat(
+                                                '0', l10n.profileStatGroups),
+                                            Container(
+                                                width: 1,
+                                                height: 30,
+                                                color: AppColors.glassBorder),
+                                            _buildStat(
+                                                isOnline
+                                                    ? l10n.commonOnline
+                                                    : l10n.commonOffline,
+                                                l10n.profileStatStatus),
+                                          ],
+                                        ),
+                                        data: (groupSnapshot) {
+                                          final groupCount =
+                                              groupSnapshot.docs.length;
+                                          return Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceEvenly,
+                                            children: [
+                                              _buildStat('$friendCount',
+                                                  l10n.profileStatFriends),
+                                              Container(
+                                                  width: 1,
+                                                  height: 30,
+                                                  color: AppColors.glassBorder),
+                                              _buildStat('$groupCount',
+                                                  l10n.profileStatGroups),
+                                              Container(
+                                                  width: 1,
+                                                  height: 30,
+                                                  color: AppColors.glassBorder),
+                                              _buildStat(
+                                                  isOnline
+                                                      ? l10n.commonOnline
+                                                      : l10n.commonOffline,
+                                                  l10n.profileStatStatus),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                  const SizedBox(height: 20),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: GradientButton(
+                                          text: l10n.profileEdit,
+                                          icon: Icons.edit_rounded,
+                                          height: 44,
+                                          onPressed: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    EditProfileScreen(
+                                                        userData: userData),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: OutlinedPillButton(
+                                          text: l10n.profileShare,
+                                          icon: Icons.share_rounded,
+                                          onPressed: () async {
+                                            await Clipboard.setData(
+                                                ClipboardData(
+                                                    text: profileSummary
+                                                        .toString()));
+                                            if (!context.mounted) return;
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                  content: Text(l10n
+                                                      .profileCopySummarySuccess)),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            _buildSection(l10n.profileSectionBasicInfo, [
+                              _buildInfoRow(Icons.phone_outlined,
+                                  l10n.profileFieldPhone, phone),
+                              _buildInfoRow(Icons.location_on_outlined,
+                                  l10n.profileFieldAddress, address),
+                              _buildInfoRow(Icons.location_city_outlined,
+                                  l10n.profileFieldCity, city),
+                              _buildInfoRow(Icons.wc_outlined,
+                                  l10n.profileFieldGender, gender),
+                              _buildInfoRow(Icons.cake_outlined,
+                                  l10n.profileFieldBirthDate, birthday),
+                              _buildInfoRow(Icons.work_outline_rounded,
+                                  l10n.profileFieldOccupation, occupation),
+                              _buildInfoRow(Icons.language_rounded,
+                                  l10n.profileFieldWebsite, website),
+                            ]),
+                            const SizedBox(height: 16),
+                            _buildSection(l10n.profileSectionAccount, [
+                              _buildMenuItem(
+                                Icons.person_outline_rounded,
+                                l10n.profileMenuPersonalInfo,
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          EditProfileScreen(userData: userData),
+                                    ),
+                                  );
+                                },
+                              ),
+                              _buildMenuItem(
+                                Icons.content_copy_rounded,
+                                l10n.profileMenuCopyUserId,
+                                onTap: () async {
+                                  await Clipboard.setData(
+                                      ClipboardData(text: uid));
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text(
+                                            l10n.profileCopyUserIdSuccess)),
+                                  );
+                                },
+                              ),
+                              _buildMenuItem(
+                                Icons.lock_outline_rounded,
+                                l10n.profileMenuSecurity,
+                                onTap: () => _showSimpleDialog(
+                                  title: l10n.profileSecurityTitle,
+                                  message: l10n.profileSecurityMessage,
+                                ),
+                              ),
+                            ]),
+                            const SizedBox(height: 16),
+                            _buildSection(l10n.profileSectionCustomization, [
+                              _buildToggleItem(
+                                Icons.dark_mode_outlined,
+                                l10n.profileMenuDarkMode,
+                                darkMode,
+                                (value) => _updateSetting('darkMode', value),
+                              ),
+                              _buildMenuItem(
+                                Icons.language_rounded,
+                                l10n.profileMenuLanguage,
+                                trailing: _currentLanguageLabel(),
+                                onTap: _showLanguageDialog,
+                              ),
+                              _buildToggleItem(
+                                Icons.notifications_outlined,
+                                l10n.profileMenuNotifications,
+                                notifications,
+                                (value) =>
+                                    _updateSetting('notifications', value),
+                              ),
+                            ]),
+                            const SizedBox(height: 16),
+                            _buildSection(
+                              _txt(
+                                context,
+                                vi: 'Quyền riêng tư hồ sơ',
+                                en: 'Profile privacy',
+                              ),
+                              [
+                                _buildToggleItem(
+                                  Icons.email_outlined,
+                                  l10n.profileSummaryEmail,
+                                  profileVisibility[ProfileVisibility.email] !=
+                                      false,
+                                  (value) => _updateProfileVisibility(
+                                    ProfileVisibility.email,
+                                    value,
+                                  ),
+                                ),
+                                _buildToggleItem(
+                                  Icons.info_outline_rounded,
+                                  _txt(context, vi: 'Giới thiệu', en: 'Bio'),
+                                  profileVisibility[ProfileVisibility.bio] !=
+                                      false,
+                                  (value) => _updateProfileVisibility(
+                                    ProfileVisibility.bio,
+                                    value,
+                                  ),
+                                ),
+                                _buildToggleItem(
+                                  Icons.phone_outlined,
+                                  l10n.profileFieldPhone,
+                                  profileVisibility[
+                                          ProfileVisibility.phoneNumber] !=
+                                      false,
+                                  (value) => _updateProfileVisibility(
+                                    ProfileVisibility.phoneNumber,
+                                    value,
+                                  ),
+                                ),
+                                _buildToggleItem(
+                                  Icons.location_on_outlined,
+                                  l10n.profileFieldAddress,
+                                  profileVisibility[
+                                          ProfileVisibility.address] !=
+                                      false,
+                                  (value) => _updateProfileVisibility(
+                                    ProfileVisibility.address,
+                                    value,
+                                  ),
+                                ),
+                                _buildToggleItem(
+                                  Icons.location_city_outlined,
+                                  l10n.profileFieldCity,
+                                  profileVisibility[ProfileVisibility.city] !=
+                                      false,
+                                  (value) => _updateProfileVisibility(
+                                    ProfileVisibility.city,
+                                    value,
+                                  ),
+                                ),
+                                _buildToggleItem(
+                                  Icons.wc_outlined,
+                                  l10n.profileFieldGender,
+                                  profileVisibility[ProfileVisibility.gender] !=
+                                      false,
+                                  (value) => _updateProfileVisibility(
+                                    ProfileVisibility.gender,
+                                    value,
+                                  ),
+                                ),
+                                _buildToggleItem(
+                                  Icons.cake_outlined,
+                                  l10n.profileFieldBirthDate,
+                                  profileVisibility[
+                                          ProfileVisibility.dateOfBirth] !=
+                                      false,
+                                  (value) => _updateProfileVisibility(
+                                    ProfileVisibility.dateOfBirth,
+                                    value,
+                                  ),
+                                ),
+                                _buildToggleItem(
+                                  Icons.work_outline_rounded,
+                                  l10n.profileFieldOccupation,
+                                  profileVisibility[
+                                          ProfileVisibility.occupation] !=
+                                      false,
+                                  (value) => _updateProfileVisibility(
+                                    ProfileVisibility.occupation,
+                                    value,
+                                  ),
+                                ),
+                                _buildToggleItem(
+                                  Icons.language_rounded,
+                                  l10n.profileFieldWebsite,
+                                  profileVisibility[
+                                          ProfileVisibility.website] !=
+                                      false,
+                                  (value) => _updateProfileVisibility(
+                                    ProfileVisibility.website,
+                                    value,
                                   ),
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      _buildSection(l10n.profileSectionBasicInfo, [
-                        _buildInfoRow(Icons.phone_outlined,
-                            l10n.profileFieldPhone, phone),
-                        _buildInfoRow(Icons.location_on_outlined,
-                            l10n.profileFieldAddress, address),
-                        _buildInfoRow(Icons.location_city_outlined,
-                            l10n.profileFieldCity, city),
-                        _buildInfoRow(
-                            Icons.wc_outlined, l10n.profileFieldGender, gender),
-                        _buildInfoRow(Icons.cake_outlined,
-                            l10n.profileFieldBirthDate, birthday),
-                        _buildInfoRow(Icons.work_outline_rounded,
-                            l10n.profileFieldOccupation, occupation),
-                        _buildInfoRow(Icons.language_rounded,
-                            l10n.profileFieldWebsite, website),
-                      ]),
-                      const SizedBox(height: 16),
-                      _buildSection(l10n.profileSectionAccount, [
-                        _buildMenuItem(
-                          Icons.person_outline_rounded,
-                          l10n.profileMenuPersonalInfo,
-                          onTap: () {
-                            Navigator.push(
-                              profileContext,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    EditProfileScreen(userData: userData),
+                            const SizedBox(height: 16),
+                            _buildSection(l10n.profileSectionSupport, [
+                              _buildMenuItem(
+                                Icons.notifications_active_outlined,
+                                _txt(
+                                  context,
+                                  vi: 'Trung tâm thông báo',
+                                  en: 'Notification Center',
+                                ),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const NotificationCenterScreen(),
+                                    ),
+                                  );
+                                },
                               ),
-                            );
-                          },
-                        ),
-                        _buildMenuItem(
-                          Icons.content_copy_rounded,
-                          l10n.profileMenuCopyUserId,
-                          onTap: () async {
-                            await Clipboard.setData(ClipboardData(text: uid));
-                            if (!profileContext.mounted) return;
-                            ScaffoldMessenger.of(profileContext).showSnackBar(
-                              SnackBar(
-                                  content: Text(l10n.profileCopyUserIdSuccess)),
-                            );
-                          },
-                        ),
-                        _buildMenuItem(
-                          Icons.lock_outline_rounded,
-                          l10n.profileMenuSecurity,
-                          onTap: () => _showSimpleDialog(
-                            title: l10n.profileSecurityTitle,
-                            message: l10n.profileSecurityMessage,
-                          ),
-                        ),
-                      ]),
-                      const SizedBox(height: 16),
-                      _buildSection(l10n.profileSectionCustomization, [
-                        _buildToggleItem(
-                          Icons.dark_mode_outlined,
-                          l10n.profileMenuDarkMode,
-                          _darkMode,
-                          (value) => _updateSetting('darkMode', value),
-                        ),
-                        _buildMenuItem(
-                          Icons.language_rounded,
-                          l10n.profileMenuLanguage,
-                          trailing: _currentLanguageLabel(),
-                          onTap: _showLanguageDialog,
-                        ),
-                        _buildToggleItem(
-                          Icons.notifications_outlined,
-                          l10n.profileMenuNotifications,
-                          _notifications,
-                          (value) => _updateSetting('notifications', value),
-                        ),
-                      ]),
-                      const SizedBox(height: 16),
-                      _buildSection(
-                        _txt(
-                          context,
-                          vi: 'Quyền riêng tư hồ sơ',
-                          en: 'Profile privacy',
-                        ),
-                        [
-                          _buildToggleItem(
-                            Icons.email_outlined,
-                            l10n.profileSummaryEmail,
-                            profileVisibility[ProfileVisibility.email] != false,
-                            (value) => _updateProfileVisibility(
-                              ProfileVisibility.email,
-                              value,
-                            ),
-                          ),
-                          _buildToggleItem(
-                            Icons.info_outline_rounded,
-                            _txt(context, vi: 'Giới thiệu', en: 'Bio'),
-                            profileVisibility[ProfileVisibility.bio] != false,
-                            (value) => _updateProfileVisibility(
-                              ProfileVisibility.bio,
-                              value,
-                            ),
-                          ),
-                          _buildToggleItem(
-                            Icons.phone_outlined,
-                            l10n.profileFieldPhone,
-                            profileVisibility[ProfileVisibility.phoneNumber] !=
-                                false,
-                            (value) => _updateProfileVisibility(
-                              ProfileVisibility.phoneNumber,
-                              value,
-                            ),
-                          ),
-                          _buildToggleItem(
-                            Icons.location_on_outlined,
-                            l10n.profileFieldAddress,
-                            profileVisibility[ProfileVisibility.address] !=
-                                false,
-                            (value) => _updateProfileVisibility(
-                              ProfileVisibility.address,
-                              value,
-                            ),
-                          ),
-                          _buildToggleItem(
-                            Icons.location_city_outlined,
-                            l10n.profileFieldCity,
-                            profileVisibility[ProfileVisibility.city] != false,
-                            (value) => _updateProfileVisibility(
-                              ProfileVisibility.city,
-                              value,
-                            ),
-                          ),
-                          _buildToggleItem(
-                            Icons.wc_outlined,
-                            l10n.profileFieldGender,
-                            profileVisibility[ProfileVisibility.gender] !=
-                                false,
-                            (value) => _updateProfileVisibility(
-                              ProfileVisibility.gender,
-                              value,
-                            ),
-                          ),
-                          _buildToggleItem(
-                            Icons.cake_outlined,
-                            l10n.profileFieldBirthDate,
-                            profileVisibility[ProfileVisibility.dateOfBirth] !=
-                                false,
-                            (value) => _updateProfileVisibility(
-                              ProfileVisibility.dateOfBirth,
-                              value,
-                            ),
-                          ),
-                          _buildToggleItem(
-                            Icons.work_outline_rounded,
-                            l10n.profileFieldOccupation,
-                            profileVisibility[ProfileVisibility.occupation] !=
-                                false,
-                            (value) => _updateProfileVisibility(
-                              ProfileVisibility.occupation,
-                              value,
-                            ),
-                          ),
-                          _buildToggleItem(
-                            Icons.language_rounded,
-                            l10n.profileFieldWebsite,
-                            profileVisibility[ProfileVisibility.website] !=
-                                false,
-                            (value) => _updateProfileVisibility(
-                              ProfileVisibility.website,
-                              value,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      _buildSection(l10n.profileSectionSupport, [
-                        _buildMenuItem(
-                          Icons.notifications_active_outlined,
-                          _txt(
-                            context,
-                            vi: 'Trung tâm thông báo',
-                            en: 'Notification Center',
-                          ),
-                          onTap: () {
-                            Navigator.push(
-                              profileContext,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    const NotificationCenterScreen(),
+                              _buildMenuItem(
+                                Icons.help_outline_rounded,
+                                l10n.profileMenuHelpCenter,
+                                onTap: () => _showSimpleDialog(
+                                  title: l10n.profileHelpTitle,
+                                  message: l10n.profileHelpMessage,
+                                ),
                               ),
-                            );
-                          },
-                        ),
-                        _buildMenuItem(
-                          Icons.help_outline_rounded,
-                          l10n.profileMenuHelpCenter,
-                          onTap: () => _showSimpleDialog(
-                            title: l10n.profileHelpTitle,
-                            message: l10n.profileHelpMessage,
-                          ),
-                        ),
-                        _buildMenuItem(
-                          Icons.bug_report_outlined,
-                          l10n.profileMenuReportBug,
-                          onTap: () => _showSimpleDialog(
-                            title: l10n.profileReportBugTitle,
-                            message: l10n.profileReportBugMessage,
-                          ),
-                        ),
-                        _buildMenuItem(
-                          Icons.info_outline_rounded,
-                          l10n.profileMenuAbout,
-                          onTap: () => _showSimpleDialog(
-                            title: l10n.profileAboutTitle,
-                            message: l10n.profileAboutMessage,
-                          ),
-                        ),
-                      ]),
-                      const SizedBox(height: 24),
-                      GlassCard(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        borderRadius: 16,
-                        onTap: () async {
-                          try {
-                            await AuthService().signOut();
-                            if (profileContext.mounted) {
-                              Navigator.of(profileContext).pushAndRemoveUntil(
-                                MaterialPageRoute(
-                                    builder: (_) => const LandingScreen()),
-                                (route) => false,
-                              );
-                            }
-                          } catch (e) {
-                            if (!profileContext.mounted) return;
-                            ScaffoldMessenger.of(profileContext).showSnackBar(
-                              SnackBar(
-                                  content: Text(
-                                      l10n.profileLogoutError(e.toString()))),
-                            );
-                          }
-                        },
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.logout_rounded,
-                                color: AppColors.error, size: 20),
-                            const SizedBox(width: 8),
+                              _buildMenuItem(
+                                Icons.bug_report_outlined,
+                                l10n.profileMenuReportBug,
+                                onTap: () => _showSimpleDialog(
+                                  title: l10n.profileReportBugTitle,
+                                  message: l10n.profileReportBugMessage,
+                                ),
+                              ),
+                              _buildMenuItem(
+                                Icons.info_outline_rounded,
+                                l10n.profileMenuAbout,
+                                onTap: () => _showSimpleDialog(
+                                  title: l10n.profileAboutTitle,
+                                  message: l10n.profileAboutMessage,
+                                ),
+                              ),
+                            ]),
+                            const SizedBox(height: 24),
+                            GlassCard(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              borderRadius: 16,
+                              onTap: () async {
+                                try {
+                                  await AuthService().signOut();
+                                  if (context.mounted) {
+                                    Navigator.of(context).pushAndRemoveUntil(
+                                      MaterialPageRoute(
+                                          builder: (_) =>
+                                              const LandingScreen()),
+                                      (route) => false,
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text(l10n
+                                            .profileLogoutError(e.toString()))),
+                                  );
+                                }
+                              },
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.logout_rounded,
+                                      color: AppColors.error, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    l10n.profileLogout,
+                                    style: const TextStyle(
+                                      color: AppColors.error,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      fontFamily: 'Inter',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
                             Text(
-                              l10n.profileLogout,
-                              style: const TextStyle(
-                                color: AppColors.error,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: 'Inter',
-                              ),
+                              l10n.profileVersion('1.0.0'),
+                              style: TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 12,
+                                  fontFamily: 'Inter'),
                             ),
+                            const SizedBox(height: 40),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        l10n.profileVersion('1.0.0'),
-                        style: TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 12,
-                            fontFamily: 'Inter'),
-                      ),
-                      const SizedBox(height: 40),
-                    ],
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,6 +12,7 @@ import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
 import '../models/chat_models.dart';
 import '../models/call_models.dart';
+import '../services/app_providers.dart';
 import '../services/chat_service.dart';
 import '../services/call_service.dart';
 import '../services/group_service.dart';
@@ -22,7 +24,6 @@ import 'call_session_screen.dart';
 import 'group_info_screen.dart';
 import 'user_profile_screen.dart';
 
-
 class _ScrollAnchor {
   final double distanceFromBottom;
 
@@ -31,7 +32,216 @@ class _ScrollAnchor {
   });
 }
 
-class ChatScreen extends StatefulWidget {
+class _ChatUiState {
+  const _ChatUiState({
+    this.currentUserName = '',
+    this.pickedImage,
+    this.isOtherTyping = false,
+    this.isMeTyping = false,
+    this.isSearchingMessages = false,
+    this.messageSearchQuery = '',
+    this.isUploadingImage = false,
+    this.isStartingCall = false,
+    this.failedImageUpload,
+    this.failedImageReplyId,
+    this.replyingTo,
+    this.pinnedMessageData,
+    this.revision = 0,
+  });
+
+  final String currentUserName;
+  final File? pickedImage;
+  final bool isOtherTyping;
+  final bool isMeTyping;
+  final bool isSearchingMessages;
+  final String messageSearchQuery;
+  final bool isUploadingImage;
+  final bool isStartingCall;
+  final File? failedImageUpload;
+  final String? failedImageReplyId;
+  final ChatMessage? replyingTo;
+  final Map<String, dynamic>? pinnedMessageData;
+  final int revision;
+
+  _ChatUiState copyWith({
+    String? currentUserName,
+    File? pickedImage,
+    bool clearPickedImage = false,
+    bool? isOtherTyping,
+    bool? isMeTyping,
+    bool? isSearchingMessages,
+    String? messageSearchQuery,
+    bool? isUploadingImage,
+    bool? isStartingCall,
+    File? failedImageUpload,
+    bool clearFailedImageUpload = false,
+    String? failedImageReplyId,
+    bool clearFailedImageReplyId = false,
+    ChatMessage? replyingTo,
+    bool clearReplyingTo = false,
+    Map<String, dynamic>? pinnedMessageData,
+    bool clearPinnedMessageData = false,
+    bool bumpRevision = false,
+  }) {
+    return _ChatUiState(
+      currentUserName: currentUserName ?? this.currentUserName,
+      pickedImage: clearPickedImage ? null : pickedImage ?? this.pickedImage,
+      isOtherTyping: isOtherTyping ?? this.isOtherTyping,
+      isMeTyping: isMeTyping ?? this.isMeTyping,
+      isSearchingMessages: isSearchingMessages ?? this.isSearchingMessages,
+      messageSearchQuery: messageSearchQuery ?? this.messageSearchQuery,
+      isUploadingImage: isUploadingImage ?? this.isUploadingImage,
+      isStartingCall: isStartingCall ?? this.isStartingCall,
+      failedImageUpload: clearFailedImageUpload
+          ? null
+          : failedImageUpload ?? this.failedImageUpload,
+      failedImageReplyId: clearFailedImageReplyId
+          ? null
+          : failedImageReplyId ?? this.failedImageReplyId,
+      replyingTo: clearReplyingTo ? null : replyingTo ?? this.replyingTo,
+      pinnedMessageData: clearPinnedMessageData
+          ? null
+          : pinnedMessageData ?? this.pinnedMessageData,
+      revision: bumpRevision ? revision + 1 : revision,
+    );
+  }
+}
+
+class _ChatUiController extends StateNotifier<_ChatUiState> {
+  _ChatUiController() : super(const _ChatUiState());
+
+  void sync({
+    String? currentUserName,
+    File? pickedImage,
+    bool clearPickedImage = false,
+    bool? isOtherTyping,
+    bool? isMeTyping,
+    bool? isSearchingMessages,
+    String? messageSearchQuery,
+    bool? isUploadingImage,
+    bool? isStartingCall,
+    File? failedImageUpload,
+    bool clearFailedImageUpload = false,
+    String? failedImageReplyId,
+    bool clearFailedImageReplyId = false,
+    ChatMessage? replyingTo,
+    bool clearReplyingTo = false,
+    Map<String, dynamic>? pinnedMessageData,
+    bool clearPinnedMessageData = false,
+    bool bumpRevision = true,
+  }) {
+    state = state.copyWith(
+      currentUserName: currentUserName,
+      pickedImage: pickedImage,
+      clearPickedImage: clearPickedImage,
+      isOtherTyping: isOtherTyping,
+      isMeTyping: isMeTyping,
+      isSearchingMessages: isSearchingMessages,
+      messageSearchQuery: messageSearchQuery,
+      isUploadingImage: isUploadingImage,
+      isStartingCall: isStartingCall,
+      failedImageUpload: failedImageUpload,
+      clearFailedImageUpload: clearFailedImageUpload,
+      failedImageReplyId: failedImageReplyId,
+      clearFailedImageReplyId: clearFailedImageReplyId,
+      replyingTo: replyingTo,
+      clearReplyingTo: clearReplyingTo,
+      pinnedMessageData: pinnedMessageData,
+      clearPinnedMessageData: clearPinnedMessageData,
+      bumpRevision: bumpRevision,
+    );
+  }
+}
+
+final _chatUiControllerProvider = StateNotifierProvider.autoDispose
+    .family<_ChatUiController, _ChatUiState, String>(
+  (ref, _) => _ChatUiController(),
+);
+
+class _ChatStreamArgs {
+  const _ChatStreamArgs({
+    required this.receiverId,
+    required this.isGroup,
+  });
+
+  final String receiverId;
+  final bool isGroup;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _ChatStreamArgs &&
+        other.receiverId == receiverId &&
+        other.isGroup == isGroup;
+  }
+
+  @override
+  int get hashCode => Object.hash(receiverId, isGroup);
+}
+
+final _chatMessagesProvider =
+    StreamProvider.autoDispose.family<QuerySnapshot, _ChatStreamArgs>(
+  (ref, args) {
+    return args.isGroup
+        ? ref
+            .watch(groupServiceProvider)
+            .getGroupMessagesStream(args.receiverId)
+        : ref.watch(chatServiceProvider).getMessagesStream(args.receiverId);
+  },
+);
+
+final _chatUserDocumentProvider = StreamProvider.autoDispose
+    .family<DocumentSnapshot<Map<String, dynamic>>, String>((ref, userId) {
+  return FirebaseFirestore.instance.collection('users').doc(userId).snapshots();
+});
+
+class _ReplyDocumentArgs {
+  const _ReplyDocumentArgs({
+    required this.receiverId,
+    required this.isGroup,
+    required this.replyId,
+  });
+
+  final String receiverId;
+  final bool isGroup;
+  final String replyId;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _ReplyDocumentArgs &&
+        other.receiverId == receiverId &&
+        other.isGroup == isGroup &&
+        other.replyId == replyId;
+  }
+
+  @override
+  int get hashCode => Object.hash(receiverId, isGroup, replyId);
+}
+
+final _replyDocumentProvider =
+    FutureProvider.autoDispose.family<DocumentSnapshot, _ReplyDocumentArgs>(
+  (ref, args) {
+    final collection = args.isGroup ? 'groups' : 'chat_rooms';
+    final docId = args.isGroup
+        ? args.receiverId
+        : _directChatRoomId(
+            ref.watch(firebaseAuthProvider).currentUser?.uid ?? '',
+            args.receiverId,
+          );
+    return FirebaseFirestore.instance
+        .collection(collection)
+        .doc(docId)
+        .collection('messages')
+        .doc(args.replyId)
+        .get();
+  },
+);
+
+String _directChatRoomId(String currentUserId, String receiverId) {
+  final ids = [currentUserId, receiverId]..sort();
+  return ids.join('_');
+}
+
+class ChatScreen extends ConsumerStatefulWidget {
   final String userName;
   final String receiverId;
   final bool isOnline;
@@ -50,10 +260,10 @@ class ChatScreen extends StatefulWidget {
   });
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final TextEditingController _messageSearchController =
       TextEditingController();
@@ -62,7 +272,6 @@ class _ChatScreenState extends State<ChatScreen> {
   final ChatService _chatService = ChatService();
   final CallService _callService = CallService();
   final GroupService _groupService = GroupService();
-  late final Stream<QuerySnapshot> _messagesStream;
   late final Stream<DocumentSnapshot> _roomStateStream;
   final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
   String _currentUserName =
@@ -97,6 +306,50 @@ class _ChatScreenState extends State<ChatScreen> {
   // Reply state
   ChatMessage? _replyingTo;
 
+  String get _chatUiKey =>
+      '${widget.isGroup ? 'group' : 'direct'}:${widget.receiverId}';
+
+  void _syncUi({
+    String? currentUserName,
+    File? pickedImage,
+    bool clearPickedImage = false,
+    bool? isOtherTyping,
+    bool? isMeTyping,
+    bool? isSearchingMessages,
+    String? messageSearchQuery,
+    bool? isUploadingImage,
+    bool? isStartingCall,
+    File? failedImageUpload,
+    bool clearFailedImageUpload = false,
+    String? failedImageReplyId,
+    bool clearFailedImageReplyId = false,
+    ChatMessage? replyingTo,
+    bool clearReplyingTo = false,
+    Map<String, dynamic>? pinnedMessageData,
+    bool clearPinnedMessageData = false,
+  }) {
+    if (!mounted) return;
+    ref.read(_chatUiControllerProvider(_chatUiKey).notifier).sync(
+          currentUserName: currentUserName,
+          pickedImage: pickedImage,
+          clearPickedImage: clearPickedImage,
+          isOtherTyping: isOtherTyping,
+          isMeTyping: isMeTyping,
+          isSearchingMessages: isSearchingMessages,
+          messageSearchQuery: messageSearchQuery,
+          isUploadingImage: isUploadingImage,
+          isStartingCall: isStartingCall,
+          failedImageUpload: failedImageUpload,
+          clearFailedImageUpload: clearFailedImageUpload,
+          failedImageReplyId: failedImageReplyId,
+          clearFailedImageReplyId: clearFailedImageReplyId,
+          replyingTo: replyingTo,
+          clearReplyingTo: clearReplyingTo,
+          pinnedMessageData: pinnedMessageData,
+          clearPinnedMessageData: clearPinnedMessageData,
+        );
+  }
+
   String _resolvedMessageImageUrl(ChatMessage message) {
     final attempt = _imageReloadAttempts[message.id] ?? 0;
     if (attempt <= 0) return message.text;
@@ -105,11 +358,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _retryLoadMessageImage(String messageId) {
-    setState(() {
-      _imageReloadAttempts[messageId] =
-          (_imageReloadAttempts[messageId] ?? 0) + 1;
-      _networkImageAspectRatios.remove(messageId);
-    });
+    _imageReloadAttempts[messageId] =
+        (_imageReloadAttempts[messageId] ?? 0) + 1;
+    _networkImageAspectRatios.remove(messageId);
+    _syncUi();
   }
 
   void _resolveNetworkImageAspectRatio(ChatMessage message, String imageUrl) {
@@ -132,9 +384,8 @@ class _ChatScreenState extends State<ChatScreen> {
         stream.removeListener(listener);
         _resolvingImageAspectRatioKeys.remove(resolveKey);
         if (width <= 0 || height <= 0 || !mounted) return;
-        setState(() {
-          _networkImageAspectRatios[message.id] = width / height;
-        });
+        _networkImageAspectRatios[message.id] = width / height;
+        _syncUi();
       },
       onError: (_, __) {
         stream.removeListener(listener);
@@ -448,9 +699,6 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _messagesStream = widget.isGroup
-        ? _groupService.getGroupMessagesStream(widget.receiverId)
-        : _chatService.getMessagesStream(widget.receiverId);
     _roomStateStream = widget.isGroup
         ? _groupService.getGroupStream(widget.receiverId)
         : _chatService.getChatRoomStream(widget.receiverId);
@@ -482,9 +730,8 @@ class _ChatScreenState extends State<ChatScreen> {
       final data = doc.data();
       final name = data?['name']?.toString().trim();
       if (name != null && name.isNotEmpty) {
-        setState(() {
-          _currentUserName = name;
-        });
+        _currentUserName = name;
+        _syncUi(currentUserName: name);
       }
     } catch (_) {}
   }
@@ -503,7 +750,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _startDirectCall(CallType type) async {
     if (widget.isGroup || _isStartingCall) return;
-    setState(() => _isStartingCall = true);
+    _isStartingCall = true;
+    _syncUi(isStartingCall: true);
     try {
       final callId = await _callService.startOutgoingCall(
         calleeId: widget.receiverId,
@@ -536,7 +784,8 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     } finally {
       if (mounted) {
-        setState(() => _isStartingCall = false);
+        _isStartingCall = false;
+        _syncUi(isStartingCall: false);
       }
     }
   }
@@ -559,7 +808,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _setMeTyping(bool typing) {
     if (mounted) {
-      setState(() => _isMeTyping = typing);
+      _isMeTyping = typing;
+      _syncUi(isMeTyping: typing);
       if (widget.isGroup) {
         _groupService.updateTypingStatus(widget.receiverId, typing);
       } else {
@@ -603,10 +853,13 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        setState(() {
-          _isOtherTyping = isOtherTyping;
-          _pinnedMessageData = pinnedMessage;
-        });
+        _isOtherTyping = isOtherTyping;
+        _pinnedMessageData = pinnedMessage;
+        _syncUi(
+          isOtherTyping: isOtherTyping,
+          pinnedMessageData: pinnedMessage,
+          clearPinnedMessageData: pinnedMessage == null,
+        );
         _queueScrollRestore(anchor);
         _restorePendingScrollAnchor();
       });
@@ -743,7 +996,8 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    setState(() => _isSearchingMessages = true);
+    _isSearchingMessages = true;
+    _syncUi(isSearchingMessages: true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _messageSearchFocusNode.requestFocus();
@@ -755,19 +1009,17 @@ class _ChatScreenState extends State<ChatScreen> {
     _messageSearchDebounce?.cancel();
     _messageSearchController.clear();
     _messageSearchFocusNode.unfocus();
-    setState(() {
-      _isSearchingMessages = false;
-      _messageSearchQuery = '';
-    });
+    _isSearchingMessages = false;
+    _messageSearchQuery = '';
+    _syncUi(isSearchingMessages: false, messageSearchQuery: '');
   }
 
   void _onMessageSearchChanged(String value) {
     _messageSearchDebounce?.cancel();
     _messageSearchDebounce = Timer(const Duration(milliseconds: 220), () {
       if (!mounted) return;
-      setState(() {
-        _messageSearchQuery = value.trim().toLowerCase();
-      });
+      _messageSearchQuery = value.trim().toLowerCase();
+      _syncUi(messageSearchQuery: _messageSearchQuery);
     });
   }
 
@@ -837,7 +1089,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _setReplyingWithKeepPosition(ChatMessage message) {
     final anchor = _captureScrollAnchor();
-    setState(() => _replyingTo = message);
+    _replyingTo = message;
+    _syncUi(replyingTo: message);
     _queueScrollRestore(anchor);
     _restorePendingScrollAnchor();
   }
@@ -845,7 +1098,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void _clearReplyingWithKeepPosition() {
     if (_replyingTo == null) return;
     final anchor = _captureScrollAnchor();
-    setState(() => _replyingTo = null);
+    _replyingTo = null;
+    _syncUi(clearReplyingTo: true);
     _queueScrollRestore(anchor);
     _restorePendingScrollAnchor();
   }
@@ -867,30 +1121,46 @@ class _ChatScreenState extends State<ChatScreen> {
         showStatus: showStatus,
       );
     }
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        final data = snapshot.data?.data() as Map<String, dynamic>?;
-        final name = data?['name']?.toString() ?? fallbackName;
-        final avatar = data?['avatar']?.toString() ?? fallbackImage;
-        final online = data?['isOnline'] == true;
-        return AvatarWidget(
-          name: name,
-          imageUrl: avatar,
-          size: size,
-          isOnline: isOnline || online,
-          showStatus: showStatus,
+    return ref.watch(_chatUserDocumentProvider(userId)).when(
+          loading: () => AvatarWidget(
+            name: fallbackName,
+            imageUrl: fallbackImage,
+            size: size,
+            isOnline: isOnline,
+            showStatus: showStatus,
+          ),
+          error: (_, __) => AvatarWidget(
+            name: fallbackName,
+            imageUrl: fallbackImage,
+            size: size,
+            isOnline: isOnline,
+            showStatus: showStatus,
+          ),
+          data: (snapshot) {
+            final data = snapshot.data();
+            final name = data?['name']?.toString() ?? fallbackName;
+            final avatar = data?['avatar']?.toString() ?? fallbackImage;
+            final online = data?['isOnline'] == true;
+            return AvatarWidget(
+              name: name,
+              imageUrl: avatar,
+              size: size,
+              isOnline: isOnline || online,
+              showStatus: showStatus,
+            );
+          },
         );
-      },
-    );
   }
 
   @override
   void dispose() {
-    _setMeTyping(false);
+    if (_isMeTyping) {
+      if (widget.isGroup) {
+        unawaited(_groupService.updateTypingStatus(widget.receiverId, false));
+      } else {
+        unawaited(_chatService.updateTypingStatus(widget.receiverId, false));
+      }
+    }
     _scrollController.removeListener(_rememberScrollMetrics);
     _typingTimer?.cancel();
     _messageSearchDebounce?.cancel();
@@ -906,6 +1176,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(_chatUiControllerProvider(_chatUiKey));
+    final messages = ref.watch(_chatMessagesProvider(_ChatStreamArgs(
+      receiverId: widget.receiverId,
+      isGroup: widget.isGroup,
+    )));
     return Scaffold(
       body: Stack(
         children: [
@@ -934,30 +1209,25 @@ class _ChatScreenState extends State<ChatScreen> {
               if (_pinnedMessageData != null) _buildPinnedMessageBanner(),
               // Messages
               Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: _messagesStream,
-                  builder: (context, snapshot) {
+                child: messages.when(
+                  error: (_, __) {
                     final l10n = context.l10n;
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Text(
-                          l10n.commonUnexpectedError,
-                          style: TextStyle(color: AppColors.textMuted),
-                        ),
-                      );
-                    }
+                    return Center(
+                      child: Text(
+                        l10n.commonUnexpectedError,
+                        style: TextStyle(color: AppColors.textMuted),
+                      ),
+                    );
+                  },
+                  loading: () {
+                    return const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary));
+                  },
+                  data: (snapshot) {
+                    final l10n = context.l10n;
 
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(
-                          child: CircularProgressIndicator(
-                              color: AppColors.primary));
-                    }
-
-                    if (!snapshot.hasData) {
-                      return const SizedBox.shrink();
-                    }
-
-                    final messageDocs = snapshot.data!.docs.toList()
+                    final messageDocs = snapshot.docs.toList()
                       ..sort((a, b) =>
                           _messageTimestamp(a).compareTo(_messageTimestamp(b)));
 
@@ -1439,26 +1709,25 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildReplyPreview(String replyId, bool isMe) {
     final l10n = context.l10n;
-    final Future<DocumentSnapshot> replyFuture = widget.isGroup
-        ? FirebaseFirestore.instance
-            .collection('groups')
-            .doc(widget.receiverId)
-            .collection('messages')
-            .doc(replyId)
-            .get()
-        : FirebaseFirestore.instance
-            .collection('chat_rooms')
-            .doc(_getChatRoomId())
-            .collection('messages')
-            .doc(replyId)
-            .get();
+    final reply = ref.watch(_replyDocumentProvider(_ReplyDocumentArgs(
+      receiverId: widget.receiverId,
+      isGroup: widget.isGroup,
+      replyId: replyId,
+    )));
 
-    return FutureBuilder<DocumentSnapshot>(
-      future: replyFuture,
-      builder: (context, snapshot) {
+    return reply.when(
+      loading: () => _buildReplyPreviewContainer(
+        text: l10n.commonLoading,
+        isMe: isMe,
+      ),
+      error: (_, __) => _buildReplyPreviewContainer(
+        text: l10n.chatMessageDeleted,
+        isMe: isMe,
+      ),
+      data: (snapshot) {
         String replyText = l10n.chatMessageDeleted;
-        if (snapshot.hasData && snapshot.data!.exists) {
-          final data = snapshot.data!.data() as Map<String, dynamic>;
+        if (snapshot.exists) {
+          final data = snapshot.data() as Map<String, dynamic>;
           final deletedFor = List<dynamic>.from(data['deletedFor'] ?? const []);
           final isDeletedForMe =
               deletedFor.map((e) => e.toString()).contains(currentUserId);
@@ -1472,28 +1741,38 @@ class _ChatScreenState extends State<ChatScreen> {
                 : (data['text']?.toString() ?? '');
           }
         }
-        return Container(
-          margin: const EdgeInsets.only(bottom: 4),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.white10,
-            borderRadius: BorderRadius.circular(8),
-            border: Border(
-                left: BorderSide(
-                    color: isMe ? Colors.white70 : AppColors.primary,
-                    width: 3)),
-          ),
-          child: Text(
-            replyText,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-                color: Colors.white60,
-                fontSize: 12,
-                fontStyle: FontStyle.italic),
-          ),
-        );
+        return _buildReplyPreviewContainer(text: replyText, isMe: isMe);
       },
+    );
+  }
+
+  Widget _buildReplyPreviewContainer({
+    required String text,
+    required bool isMe,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white10,
+        borderRadius: BorderRadius.circular(8),
+        border: Border(
+          left: BorderSide(
+            color: isMe ? Colors.white70 : AppColors.primary,
+            width: 3,
+          ),
+        ),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Colors.white60,
+          fontSize: 12,
+          fontStyle: FontStyle.italic,
+        ),
+      ),
     );
   }
 
@@ -1517,12 +1796,6 @@ class _ChatScreenState extends State<ChatScreen> {
         }).toList(),
       ),
     );
-  }
-
-  String _getChatRoomId() {
-    List<String> ids = [currentUserId, widget.receiverId];
-    ids.sort();
-    return ids.join("_");
   }
 
   Widget _buildDeletedBubble(bool isSent) {
@@ -2062,11 +2335,16 @@ class _ChatScreenState extends State<ChatScreen> {
           top: 4,
           right: 4,
           child: GestureDetector(
-            onTap: () => setState(() {
+            onTap: () {
               _pickedImage = null;
               _failedImageUpload = null;
               _failedImageReplyId = null;
-            }),
+              _syncUi(
+                clearPickedImage: true,
+                clearFailedImageUpload: true,
+                clearFailedImageReplyId: true,
+              );
+            },
             child: Container(
               padding: const EdgeInsets.all(4),
               decoration: const BoxDecoration(
@@ -2106,9 +2384,8 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     if (mounted) {
-      setState(() {
-        _isUploadingImage = true;
-      });
+      _isUploadingImage = true;
+      _syncUi(isUploadingImage: true);
     }
 
     try {
@@ -2136,11 +2413,14 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       if (mounted) {
-        setState(() {
-          _pickedImage = null;
-          _failedImageUpload = null;
-          _failedImageReplyId = null;
-        });
+        _pickedImage = null;
+        _failedImageUpload = null;
+        _failedImageReplyId = null;
+        _syncUi(
+          clearPickedImage: true,
+          clearFailedImageUpload: true,
+          clearFailedImageReplyId: true,
+        );
       }
       return true;
     } catch (e, stackTrace) {
@@ -2158,11 +2438,15 @@ class _ChatScreenState extends State<ChatScreen> {
         },
       );
       if (mounted) {
-        setState(() {
-          _pickedImage = imageFile;
-          _failedImageUpload = imageFile;
-          _failedImageReplyId = replyTo;
-        });
+        _pickedImage = imageFile;
+        _failedImageUpload = imageFile;
+        _failedImageReplyId = replyTo;
+        _syncUi(
+          pickedImage: imageFile,
+          failedImageUpload: imageFile,
+          failedImageReplyId: replyTo,
+          clearFailedImageReplyId: replyTo == null,
+        );
         messenger.showSnackBar(
           SnackBar(
             content: Text(l10n.chatImageUploadFailedWithReason(
@@ -2178,9 +2462,8 @@ class _ChatScreenState extends State<ChatScreen> {
       return false;
     } finally {
       if (mounted) {
-        setState(() {
-          _isUploadingImage = false;
-        });
+        _isUploadingImage = false;
+        _syncUi(isUploadingImage: false);
       }
     }
   }
@@ -2295,9 +2578,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (sentAnything) {
       if (mounted) {
-        setState(() {
-          _replyingTo = null;
-        });
+        _replyingTo = null;
+        _syncUi(clearReplyingTo: true);
       }
       _setMeTyping(false);
       _scrollToBottom(animated: true);
@@ -2311,11 +2593,14 @@ class _ChatScreenState extends State<ChatScreen> {
       final XFile? image =
           await picker.pickImage(source: source, imageQuality: 70);
       if (image != null) {
-        setState(() {
-          _pickedImage = File(image.path);
-          _failedImageUpload = null;
-          _failedImageReplyId = null;
-        });
+        _pickedImage = File(image.path);
+        _failedImageUpload = null;
+        _failedImageReplyId = null;
+        _syncUi(
+          pickedImage: _pickedImage,
+          clearFailedImageUpload: true,
+          clearFailedImageReplyId: true,
+        );
       }
     } catch (e, stackTrace) {
       final reason = AppErrorMapper.mapChat(e);

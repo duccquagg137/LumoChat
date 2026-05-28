@@ -1,18 +1,112 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/chat_models.dart';
-import '../services/group_service.dart';
+import '../services/app_providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/l10n.dart';
 import '../widgets/glass_card.dart';
 import 'user_profile_screen.dart';
 
-
 enum GroupInfoAction { openSearch }
 
-class GroupInfoScreen extends StatefulWidget {
+class _GroupInfoUiState {
+  const _GroupInfoUiState({
+    this.isPinned = false,
+    this.isLoadingPin = true,
+    this.isActionRunning = false,
+    this.memberIds = const <String>[],
+  });
+
+  final bool isPinned;
+  final bool isLoadingPin;
+  final bool isActionRunning;
+  final List<String> memberIds;
+
+  _GroupInfoUiState copyWith({
+    bool? isPinned,
+    bool? isLoadingPin,
+    bool? isActionRunning,
+    List<String>? memberIds,
+  }) {
+    return _GroupInfoUiState(
+      isPinned: isPinned ?? this.isPinned,
+      isLoadingPin: isLoadingPin ?? this.isLoadingPin,
+      isActionRunning: isActionRunning ?? this.isActionRunning,
+      memberIds: memberIds ?? this.memberIds,
+    );
+  }
+}
+
+class _GroupInfoUiController extends StateNotifier<_GroupInfoUiState> {
+  _GroupInfoUiController() : super(const _GroupInfoUiState());
+
+  void initializeMembers(List<String> memberIds) {
+    if (state.memberIds.isNotEmpty || memberIds.isEmpty) return;
+    state = state.copyWith(memberIds: memberIds);
+  }
+
+  void setPinned(bool value) {
+    state = state.copyWith(isPinned: value);
+  }
+
+  void setLoadingPin(bool value) {
+    state = state.copyWith(isLoadingPin: value);
+  }
+
+  void setActionRunning(bool value) {
+    state = state.copyWith(isActionRunning: value);
+  }
+
+  void setMembers(List<String> ids) {
+    state = state.copyWith(memberIds: ids);
+  }
+}
+
+final _groupInfoUiControllerProvider = StateNotifierProvider.autoDispose<
+    _GroupInfoUiController,
+    _GroupInfoUiState>((ref) => _GroupInfoUiController());
+
+final _groupInfoMembersProvider =
+    FutureProvider.autoDispose.family<List<ChatUser>, String>((ref, key) async {
+  final memberIds = _memberIdsFromKey(key);
+  if (memberIds.isEmpty) return const <ChatUser>[];
+
+  const chunkSize = 10;
+  final futures = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
+  for (int i = 0; i < memberIds.length; i += chunkSize) {
+    final end =
+        (i + chunkSize < memberIds.length) ? i + chunkSize : memberIds.length;
+    final chunk = memberIds.sublist(i, end);
+    futures.add(
+      FirebaseFirestore.instance
+          .collection('users')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get(),
+    );
+  }
+
+  final snapshots = await Future.wait(futures);
+  final users = <ChatUser>[];
+  for (final snap in snapshots) {
+    users.addAll(snap.docs.map(ChatUser.fromDocument));
+  }
+  users.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  return users;
+});
+
+String _memberIdsKey(List<String> memberIds) {
+  final sorted = memberIds.toSet().toList()..sort();
+  return sorted.join('|');
+}
+
+List<String> _memberIdsFromKey(String key) {
+  if (key.isEmpty) return const <String>[];
+  return key.split('|').where((id) => id.isNotEmpty).toList(growable: false);
+}
+
+class GroupInfoScreen extends ConsumerStatefulWidget {
   final String groupId;
   final String groupName;
   final int memberCount;
@@ -27,16 +121,11 @@ class GroupInfoScreen extends StatefulWidget {
   });
 
   @override
-  State<GroupInfoScreen> createState() => _GroupInfoScreenState();
+  ConsumerState<GroupInfoScreen> createState() => _GroupInfoScreenState();
 }
 
-class _GroupInfoScreenState extends State<GroupInfoScreen> {
-  final GroupService _groupService = GroupService();
-  final String _currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
-  bool _isPinned = false;
-  bool _isLoadingPin = true;
-  bool _isActionRunning = false;
-  List<String> _memberIds = const [];
+class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
+  String get _currentUserId => ref.read(currentUserIdProvider);
 
   bool _isEnglish(BuildContext context) =>
       Localizations.localeOf(context).languageCode == 'en';
@@ -52,7 +141,9 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   @override
   void initState() {
     super.initState();
-    _memberIds = widget.memberIds;
+    ref
+        .read(_groupInfoUiControllerProvider.notifier)
+        .initializeMembers(widget.memberIds);
     _loadPinState();
     _loadMembersIfMissing();
   }
@@ -71,19 +162,17 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         pinned = (groupMeta[widget.groupId] as Map)['pinned'] == true;
       }
       if (!mounted) return;
-      setState(() {
-        _isPinned = pinned;
-      });
+      ref.read(_groupInfoUiControllerProvider.notifier).setPinned(pinned);
     } catch (_) {
     } finally {
       if (mounted) {
-        setState(() => _isLoadingPin = false);
+        ref.read(_groupInfoUiControllerProvider.notifier).setLoadingPin(false);
       }
     }
   }
 
   Future<void> _loadMembersIfMissing() async {
-    if (_memberIds.isNotEmpty) return;
+    if (ref.read(_groupInfoUiControllerProvider).memberIds.isNotEmpty) return;
     try {
       final groupDoc = await FirebaseFirestore.instance
           .collection('groups')
@@ -98,45 +187,23 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           .toSet()
           .toList();
       if (!mounted) return;
-      setState(() => _memberIds = ids);
+      ref.read(_groupInfoUiControllerProvider.notifier).setMembers(ids);
     } catch (_) {}
   }
 
-  Future<List<ChatUser>> _loadMembers() async {
-    if (_memberIds.isEmpty) return const [];
-
-    const chunkSize = 10;
-    final futures = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
-    for (int i = 0; i < _memberIds.length; i += chunkSize) {
-      final end = (i + chunkSize < _memberIds.length)
-          ? i + chunkSize
-          : _memberIds.length;
-      final chunk = _memberIds.sublist(i, end);
-      futures.add(
-        FirebaseFirestore.instance
-            .collection('users')
-            .where(FieldPath.documentId, whereIn: chunk)
-            .get(),
-      );
-    }
-
-    final snapshots = await Future.wait(futures);
-    final users = <ChatUser>[];
-    for (final snap in snapshots) {
-      users.addAll(snap.docs.map(ChatUser.fromDocument));
-    }
-    users.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    return users;
-  }
-
   Future<void> _togglePin() async {
-    if (_isActionRunning) return;
-    final nextPinned = !_isPinned;
-    setState(() => _isActionRunning = true);
+    final uiController = ref.read(_groupInfoUiControllerProvider.notifier);
+    final uiState = ref.read(_groupInfoUiControllerProvider);
+    if (uiState.isActionRunning) return;
+    final nextPinned = !uiState.isPinned;
+    uiController.setActionRunning(true);
     try {
-      await _groupService.setGroupPinned(widget.groupId, nextPinned);
+      await ref.read(groupServiceProvider).setGroupPinned(
+            widget.groupId,
+            nextPinned,
+          );
       if (!mounted) return;
-      setState(() => _isPinned = nextPinned);
+      uiController.setPinned(nextPinned);
       final l10n = context.l10n;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -151,13 +218,14 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       );
     } finally {
       if (mounted) {
-        setState(() => _isActionRunning = false);
+        uiController.setActionRunning(false);
       }
     }
   }
 
   Future<void> _leaveGroup() async {
-    if (_isActionRunning) return;
+    final uiController = ref.read(_groupInfoUiControllerProvider.notifier);
+    if (ref.read(_groupInfoUiControllerProvider).isActionRunning) return;
     final l10n = context.l10n;
     final accepted = await showDialog<bool>(
           context: context,
@@ -190,9 +258,9 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         false;
 
     if (!accepted) return;
-    setState(() => _isActionRunning = true);
+    uiController.setActionRunning(true);
     try {
-      await _groupService.leaveGroup(widget.groupId);
+      await ref.read(groupServiceProvider).leaveGroup(widget.groupId);
       if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -205,7 +273,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       );
     } finally {
       if (mounted) {
-        setState(() => _isActionRunning = false);
+        uiController.setActionRunning(false);
       }
     }
   }
@@ -213,6 +281,8 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final uiState = ref.watch(_groupInfoUiControllerProvider);
+    final members = uiState.memberIds;
     final headerLetter = widget.groupName.trim().isEmpty
         ? 'G'
         : widget.groupName.trim().substring(0, 1).toUpperCase();
@@ -276,9 +346,9 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          l10n.groupsMemberCount(_memberIds.isEmpty
+                          l10n.groupsMemberCount(members.isEmpty
                               ? widget.memberCount
-                              : _memberIds.length),
+                              : members.length),
                           style: TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 13,
@@ -298,18 +368,19 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 children: [
                   ListTile(
                     leading: Icon(
-                      _isPinned
+                      uiState.isPinned
                           ? Icons.push_pin_rounded
                           : Icons.push_pin_outlined,
                       color: AppColors.primaryLight,
                     ),
                     title: Text(
-                      _isPinned ? l10n.commonUnpin : l10n.commonPin,
+                      uiState.isPinned ? l10n.commonUnpin : l10n.commonPin,
                       style: TextStyle(
                           color: AppColors.textPrimary, fontFamily: 'Inter'),
                     ),
-                    onTap:
-                        _isLoadingPin || _isActionRunning ? null : _togglePin,
+                    onTap: uiState.isLoadingPin || uiState.isActionRunning
+                        ? null
+                        : _togglePin,
                   ),
                   ListTile(
                     leading: Icon(Icons.search_rounded,
@@ -331,7 +402,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                       style: const TextStyle(
                           color: AppColors.error, fontFamily: 'Inter'),
                     ),
-                    onTap: _isActionRunning ? null : _leaveGroup,
+                    onTap: uiState.isActionRunning ? null : _leaveGroup,
                   ),
                 ],
               ),
@@ -347,20 +418,28 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            FutureBuilder<List<ChatUser>>(
-              future: _loadMembers(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child:
-                          CircularProgressIndicator(color: AppColors.primary),
-                    ),
-                  );
-                }
-
-                final users = snapshot.data ?? const <ChatUser>[];
+            ref.watch(_groupInfoMembersProvider(_memberIdsKey(members))).when(
+              loading: () {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  ),
+                );
+              },
+              error: (_, __) {
+                return GlassCard(
+                  padding: const EdgeInsets.all(14),
+                  child: Text(
+                    _txt(context,
+                        vi: 'ChÆ°a cÃ³ dá»¯ liá»‡u thÃ nh viÃªn.',
+                        en: 'No member data available.'),
+                    style: TextStyle(
+                        color: AppColors.textMuted, fontFamily: 'Inter'),
+                  ),
+                );
+              },
+              data: (users) {
                 if (users.isEmpty) {
                   return GlassCard(
                     padding: const EdgeInsets.all(14),

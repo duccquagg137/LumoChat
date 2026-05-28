@@ -3,16 +3,91 @@ import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../models/call_models.dart';
+import '../services/app_providers.dart';
 import '../services/call_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
 
+class _CallSessionUiState {
+  const _CallSessionUiState({
+    this.elapsed = Duration.zero,
+    this.isMicMuted = false,
+    this.isSpeakerOn = true,
+    this.isCameraOn = true,
+    this.rtcReady = false,
+    this.hasRemoteStream = false,
+  });
 
-class CallSessionScreen extends StatefulWidget {
+  final Duration elapsed;
+  final bool isMicMuted;
+  final bool isSpeakerOn;
+  final bool isCameraOn;
+  final bool rtcReady;
+  final bool hasRemoteStream;
+
+  _CallSessionUiState copyWith({
+    Duration? elapsed,
+    bool? isMicMuted,
+    bool? isSpeakerOn,
+    bool? isCameraOn,
+    bool? rtcReady,
+    bool? hasRemoteStream,
+  }) {
+    return _CallSessionUiState(
+      elapsed: elapsed ?? this.elapsed,
+      isMicMuted: isMicMuted ?? this.isMicMuted,
+      isSpeakerOn: isSpeakerOn ?? this.isSpeakerOn,
+      isCameraOn: isCameraOn ?? this.isCameraOn,
+      rtcReady: rtcReady ?? this.rtcReady,
+      hasRemoteStream: hasRemoteStream ?? this.hasRemoteStream,
+    );
+  }
+}
+
+class _CallSessionUiController extends StateNotifier<_CallSessionUiState> {
+  _CallSessionUiController() : super(const _CallSessionUiState());
+
+  void setElapsed(Duration value) {
+    state = state.copyWith(elapsed: value);
+  }
+
+  void setMicMuted(bool value) {
+    state = state.copyWith(isMicMuted: value);
+  }
+
+  void setSpeakerOn(bool value) {
+    state = state.copyWith(isSpeakerOn: value);
+  }
+
+  void setCameraOn(bool value) {
+    state = state.copyWith(isCameraOn: value);
+  }
+
+  void setRtcReady(bool value) {
+    state = state.copyWith(rtcReady: value);
+  }
+
+  void setHasRemoteStream(bool value) {
+    state = state.copyWith(hasRemoteStream: value);
+  }
+}
+
+final _callSessionUiControllerProvider = StateNotifierProvider.autoDispose
+    .family<_CallSessionUiController, _CallSessionUiState, String>(
+  (ref, _) => _CallSessionUiController(),
+);
+
+final _callSessionDocumentProvider = StreamProvider.autoDispose
+    .family<DocumentSnapshot<Map<String, dynamic>>, String>((ref, callId) {
+  return ref.watch(callServiceProvider).watchCall(callId);
+});
+
+class CallSessionScreen extends ConsumerStatefulWidget {
   const CallSessionScreen.outgoing({
     super.key,
     required this.callId,
@@ -39,10 +114,10 @@ class CallSessionScreen extends StatefulWidget {
   final bool isIncoming;
 
   @override
-  State<CallSessionScreen> createState() => _CallSessionScreenState();
+  ConsumerState<CallSessionScreen> createState() => _CallSessionScreenState();
 }
 
-class _CallSessionScreenState extends State<CallSessionScreen> {
+class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
   final CallService _callService = CallService();
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
@@ -60,7 +135,6 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
   MediaStream? _localStream;
   MediaStream? _remoteStream;
   bool _rtcReady = false;
-  bool _hasRemoteStream = false;
   bool _sentOffer = false;
   bool _sentAnswer = false;
   bool _appliedAnswer = false;
@@ -85,9 +159,9 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
     _remoteStream = stream;
     _remoteRenderer.srcObject = stream;
     if (mounted) {
-      setState(() => _hasRemoteStream = canRender);
-    } else {
-      _hasRemoteStream = canRender;
+      ref
+          .read(_callSessionUiControllerProvider(widget.callId).notifier)
+          .setHasRemoteStream(canRender);
     }
     debugPrint(
       'Call[$source] remote stream attached: id=${stream.id}, '
@@ -150,6 +224,11 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
         final hasLocalVideo = localStream.getVideoTracks().isNotEmpty;
         if (!hasLocalVideo) {
           _isCameraOn = false;
+          if (mounted) {
+            ref
+                .read(_callSessionUiControllerProvider(widget.callId).notifier)
+                .setCameraOn(false);
+          }
           debugPrint('Call[local] no video track from getUserMedia');
         }
         debugPrint(
@@ -239,7 +318,10 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
       }
 
       if (!mounted) return;
-      setState(() => _rtcReady = true);
+      _rtcReady = true;
+      ref
+          .read(_callSessionUiControllerProvider(widget.callId).notifier)
+          .setRtcReady(true);
       _tryProcessLatestSignaling();
     } catch (_) {
       if (!mounted) return;
@@ -325,6 +407,11 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
       _elapsedTimer?.cancel();
       _elapsedTimer = null;
       _elapsed = Duration.zero;
+      if (mounted) {
+        ref
+            .read(_callSessionUiControllerProvider(widget.callId).notifier)
+            .setElapsed(Duration.zero);
+      }
       return;
     }
     if (_acceptedAt == call.acceptedAt && _elapsedTimer != null) return;
@@ -334,9 +421,10 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
     _elapsedTimer?.cancel();
     _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || _acceptedAt == null) return;
-      setState(() {
-        _elapsed = DateTime.now().difference(_acceptedAt!);
-      });
+      _elapsed = DateTime.now().difference(_acceptedAt!);
+      ref
+          .read(_callSessionUiControllerProvider(widget.callId).notifier)
+          .setElapsed(_elapsed);
     });
   }
 
@@ -624,14 +712,20 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
         in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
       track.enabled = !nextMuted;
     }
-    setState(() => _isMicMuted = nextMuted);
+    _isMicMuted = nextMuted;
+    ref
+        .read(_callSessionUiControllerProvider(widget.callId).notifier)
+        .setMicMuted(nextMuted);
   }
 
   void _toggleSpeaker() {
     HapticFeedback.selectionClick();
     final nextSpeaker = !_isSpeakerOn;
     unawaited(Helper.setSpeakerphoneOn(nextSpeaker));
-    setState(() => _isSpeakerOn = nextSpeaker);
+    _isSpeakerOn = nextSpeaker;
+    ref
+        .read(_callSessionUiControllerProvider(widget.callId).notifier)
+        .setSpeakerOn(nextSpeaker);
   }
 
   void _toggleCamera() {
@@ -641,31 +735,31 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
         in _localStream?.getVideoTracks() ?? <MediaStreamTrack>[]) {
       track.enabled = nextCamera;
     }
-    setState(() => _isCameraOn = nextCamera);
+    _isCameraOn = nextCamera;
+    ref
+        .read(_callSessionUiControllerProvider(widget.callId).notifier)
+        .setCameraOn(nextCamera);
   }
 
   @override
   Widget build(BuildContext context) {
+    final callSnapshot = ref.watch(_callSessionDocumentProvider(widget.callId));
     return Scaffold(
       backgroundColor: AppColors.bgDark,
-      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: _callService.watchCall(widget.callId),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return _buildLoading(context);
-          }
-          if (snapshot.hasError) {
-            return _buildFallback(
+      body: callSnapshot.when(
+        loading: () => _buildLoading(context),
+        error: (_, __) {
+          return _buildFallback(
+            context,
+            _txt(
               context,
-              _txt(
-                context,
-                vi: 'Không tải được cuộc gọi',
-                en: 'Unable to load call',
-              ),
-            );
-          }
-          if (!snapshot.hasData || snapshot.data?.exists != true) {
+              vi: 'Không tải được cuộc gọi',
+              en: 'Unable to load call',
+            ),
+          );
+        },
+        data: (snapshot) {
+          if (!snapshot.exists) {
             return _buildFallback(
               context,
               _txt(
@@ -676,8 +770,8 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
             );
           }
 
-          final rawData = snapshot.data!.data() ?? const <String, dynamic>{};
-          final call = AppCall.fromDocument(snapshot.data!);
+          final rawData = snapshot.data() ?? const <String, dynamic>{};
+          final call = AppCall.fromDocument(snapshot);
           _latestCallState = call;
           _latestSignalData = rawData;
           _queueSignaling(call, rawData);
@@ -760,7 +854,10 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                               if (call.status == CallStatus.accepted) ...[
                                 const SizedBox(height: 6),
                                 Text(
-                                  _formatDuration(_elapsed),
+                                  _formatDuration(ref
+                                      .watch(_callSessionUiControllerProvider(
+                                          widget.callId))
+                                      .elapsed),
                                   style: TextStyle(
                                     color: AppColors.primaryLight,
                                     fontSize: 16,
@@ -846,6 +943,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
   }
 
   Widget _buildMediaStage() {
+    final uiState = ref.watch(_callSessionUiControllerProvider(widget.callId));
     final screenSize = MediaQuery.sizeOf(context);
     final isCompact = screenSize.height < 700;
     if (widget.callType != CallType.video) {
@@ -890,7 +988,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
         child: Stack(
           children: [
             Positioned.fill(
-              child: _hasRemoteStream
+              child: uiState.hasRemoteStream
                   ? RTCVideoView(
                       _remoteRenderer,
                       objectFit:
@@ -947,7 +1045,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
                   ),
                 ),
               ),
-            if (!_rtcReady)
+            if (!uiState.rtcReady)
               Positioned.fill(
                 child: Container(
                   color: Colors.black.withAlphaFraction(0.35),
@@ -993,6 +1091,7 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
   }
 
   Widget _buildControls(AppCall call) {
+    final uiState = ref.watch(_callSessionUiControllerProvider(widget.callId));
     final isCompact = MediaQuery.sizeOf(context).height < 700;
     if (call.status == CallStatus.ringing) {
       if (widget.isIncoming && call.calleeId == _callService.currentUserId) {
@@ -1041,34 +1140,41 @@ class _CallSessionScreenState extends State<CallSessionScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _buildControlWithLabel(
-                icon: _isMicMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                icon: uiState.isMicMuted
+                    ? Icons.mic_off_rounded
+                    : Icons.mic_rounded,
                 label: _txt(context, vi: 'Mic', en: 'Mic'),
-                color: _isMicMuted ? AppColors.error : AppColors.glassBg,
+                color: uiState.isMicMuted ? AppColors.error : AppColors.glassBg,
                 onTap: _toggleMic,
-                iconColor: _isMicMuted ? Colors.white : AppColors.textPrimary,
+                iconColor:
+                    uiState.isMicMuted ? Colors.white : AppColors.textPrimary,
                 size: isCompact ? 62 : 72,
               ),
               SizedBox(width: isCompact ? 12 : 18),
               _buildControlWithLabel(
-                icon: _isSpeakerOn
+                icon: uiState.isSpeakerOn
                     ? Icons.volume_up_rounded
                     : Icons.volume_off_rounded,
                 label: _txt(context, vi: 'Loa', en: 'Speaker'),
-                color: _isSpeakerOn ? AppColors.glassBg : AppColors.error,
+                color:
+                    uiState.isSpeakerOn ? AppColors.glassBg : AppColors.error,
                 onTap: _toggleSpeaker,
-                iconColor: _isSpeakerOn ? AppColors.textPrimary : Colors.white,
+                iconColor:
+                    uiState.isSpeakerOn ? AppColors.textPrimary : Colors.white,
                 size: isCompact ? 62 : 72,
               ),
               if (widget.callType == CallType.video) ...[
                 SizedBox(width: isCompact ? 12 : 18),
                 _buildControlWithLabel(
-                  icon: _isCameraOn
+                  icon: uiState.isCameraOn
                       ? Icons.videocam_rounded
                       : Icons.videocam_off_rounded,
                   label: _txt(context, vi: 'Camera', en: 'Camera'),
-                  color: _isCameraOn ? AppColors.glassBg : AppColors.error,
+                  color:
+                      uiState.isCameraOn ? AppColors.glassBg : AppColors.error,
                   onTap: _toggleCamera,
-                  iconColor: _isCameraOn ? AppColors.textPrimary : Colors.white,
+                  iconColor:
+                      uiState.isCameraOn ? AppColors.textPrimary : Colors.white,
                   size: isCompact ? 62 : 72,
                 ),
               ],

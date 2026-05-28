@@ -1,23 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/onboarding_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
 import 'login_screen.dart';
 
+class _OnboardingUiState {
+  const _OnboardingUiState({
+    this.currentPage = 0,
+    this.isNavigating = false,
+  });
 
-class OnboardingScreen extends StatefulWidget {
+  final int currentPage;
+  final bool isNavigating;
+
+  _OnboardingUiState copyWith({
+    int? currentPage,
+    bool? isNavigating,
+  }) {
+    return _OnboardingUiState(
+      currentPage: currentPage ?? this.currentPage,
+      isNavigating: isNavigating ?? this.isNavigating,
+    );
+  }
+}
+
+class _OnboardingUiController extends StateNotifier<_OnboardingUiState> {
+  _OnboardingUiController() : super(const _OnboardingUiState());
+
+  void setCurrentPage(int value) {
+    state = state.copyWith(currentPage: value);
+  }
+
+  bool beginNavigation() {
+    if (state.isNavigating) return false;
+    state = state.copyWith(isNavigating: true);
+    return true;
+  }
+}
+
+final _onboardingUiControllerProvider = StateNotifierProvider.autoDispose<
+    _OnboardingUiController,
+    _OnboardingUiState>((ref) => _OnboardingUiController());
+
+class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final PageController _controller = PageController();
   final OnboardingService _onboardingService = OnboardingService();
-  int _currentPage = 0;
-  bool _isNavigating = false;
 
   bool _isEnglish(BuildContext context) =>
       Localizations.localeOf(context).languageCode == 'en';
@@ -78,8 +114,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _finishOnboarding() async {
-    if (_isNavigating) return;
-    setState(() => _isNavigating = true);
+    if (!ref.read(_onboardingUiControllerProvider.notifier).beginNavigation()) {
+      return;
+    }
     await _onboardingService.markCompleted();
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
@@ -94,8 +131,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final uiState = ref.watch(_onboardingUiControllerProvider);
     final pages = _buildPages(context);
-    final isLastPage = _currentPage == pages.length - 1;
+    final isLastPage = uiState.currentPage == pages.length - 1;
 
     return Scaffold(
       body: Stack(
@@ -143,7 +181,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 Align(
                   alignment: Alignment.topRight,
                   child: TextButton(
-                    onPressed: _isNavigating ? null : _finishOnboarding,
+                    onPressed: uiState.isNavigating ? null : _finishOnboarding,
                     child: Text(
                       _txt(context, vi: 'Bỏ qua', en: 'Skip'),
                       style: TextStyle(color: AppColors.textSecondary),
@@ -154,8 +192,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: PageView.builder(
                     controller: _controller,
                     itemCount: pages.length,
-                    onPageChanged: (value) =>
-                        setState(() => _currentPage = value),
+                    onPageChanged: (value) => ref
+                        .read(_onboardingUiControllerProvider.notifier)
+                        .setCurrentPage(value),
                     itemBuilder: (context, index) {
                       final page = pages[index];
                       return Padding(
@@ -220,7 +259,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: List.generate(pages.length, (index) {
-                            final active = _currentPage == index;
+                            final active = uiState.currentPage == index;
                             return AnimatedContainer(
                               duration: const Duration(milliseconds: 220),
                               margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -246,7 +285,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               ? Icons.rocket_launch_rounded
                               : Icons.arrow_forward_rounded,
                           width: double.infinity,
-                          onPressed: _isNavigating
+                          onPressed: uiState.isNavigating
                               ? null
                               : () {
                                   if (isLastPage) {

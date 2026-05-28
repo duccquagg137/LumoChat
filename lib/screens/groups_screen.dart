@@ -1,10 +1,11 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/chat_models.dart';
+import '../services/app_providers.dart';
 import '../services/group_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/error_mapper.dart';
@@ -13,14 +14,80 @@ import '../widgets/glass_card.dart';
 import 'chat_screen.dart';
 import 'create_group_screen.dart';
 
-
 enum _GroupSortMode { recent, name, members }
 
-class GroupsScreen extends StatefulWidget {
+class _GroupsUiState {
+  const _GroupsUiState({
+    this.searchQuery = '',
+    this.busyGroupIds = const <String>{},
+    this.sortMode = _GroupSortMode.recent,
+  });
+
+  final String searchQuery;
+  final Set<String> busyGroupIds;
+  final _GroupSortMode sortMode;
+
+  _GroupsUiState copyWith({
+    String? searchQuery,
+    Set<String>? busyGroupIds,
+    _GroupSortMode? sortMode,
+  }) {
+    return _GroupsUiState(
+      searchQuery: searchQuery ?? this.searchQuery,
+      busyGroupIds: busyGroupIds ?? this.busyGroupIds,
+      sortMode: sortMode ?? this.sortMode,
+    );
+  }
+}
+
+class _GroupsUiController extends StateNotifier<_GroupsUiState> {
+  _GroupsUiController() : super(const _GroupsUiState());
+
+  void setSearchQuery(String value) {
+    state = state.copyWith(searchQuery: value.trim().toLowerCase());
+  }
+
+  void setSortMode(_GroupSortMode value) {
+    state = state.copyWith(sortMode: value);
+  }
+
+  bool beginAction(String groupId) {
+    if (state.busyGroupIds.contains(groupId)) return false;
+    state = state.copyWith(
+      busyGroupIds: <String>{...state.busyGroupIds, groupId},
+    );
+    return true;
+  }
+
+  void endAction(String groupId) {
+    if (!state.busyGroupIds.contains(groupId)) return;
+    state = state.copyWith(
+      busyGroupIds: <String>{...state.busyGroupIds}..remove(groupId),
+    );
+  }
+}
+
+final _groupsUiControllerProvider =
+    StateNotifierProvider.autoDispose<_GroupsUiController, _GroupsUiState>(
+  (ref) => _GroupsUiController(),
+);
+
+final _groupsCurrentUserDocumentProvider = StreamProvider.autoDispose
+    .family<DocumentSnapshot<Map<String, dynamic>>, String>((ref, userId) {
+  return FirebaseFirestore.instance.collection('users').doc(userId).snapshots();
+});
+
+final _groupsListProvider = StreamProvider.autoDispose
+    .family<QuerySnapshot<Map<String, dynamic>>, String>((ref, _) {
+  return ref.watch(groupServiceProvider).getUserGroups()
+      as Stream<QuerySnapshot<Map<String, dynamic>>>;
+});
+
+class GroupsScreen extends ConsumerStatefulWidget {
   const GroupsScreen({super.key});
 
   @override
-  State<GroupsScreen> createState() => _GroupsScreenState();
+  ConsumerState<GroupsScreen> createState() => _GroupsScreenState();
 }
 
 class _MemberCandidateResult {
@@ -33,15 +100,12 @@ class _MemberCandidateResult {
   });
 }
 
-class _GroupsScreenState extends State<GroupsScreen> {
-  final GroupService _groupService = GroupService();
+class _GroupsScreenState extends ConsumerState<GroupsScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final Set<String> _busyGroupIds = {};
   Timer? _searchDebounce;
-  _GroupSortMode _sortMode = _GroupSortMode.recent;
-  String _searchQuery = '';
 
-  String get _currentUserId => FirebaseAuth.instance.currentUser?.uid ?? '';
+  GroupService get _groupService => ref.read(groupServiceProvider);
+  String get _currentUserId => ref.read(currentUserIdProvider);
 
   DateTime _groupTimestamp(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>?;
@@ -92,11 +156,11 @@ class _GroupsScreenState extends State<GroupsScreen> {
 
   String _normalize(String value) => value.trim().toLowerCase();
 
-  bool _matchGroup(Map<String, dynamic> data) {
-    if (_searchQuery.isEmpty) return true;
+  bool _matchGroup(Map<String, dynamic> data, String searchQuery) {
+    if (searchQuery.isEmpty) return true;
     final name = _normalize((data['name'] ?? '').toString());
     final lastMessage = _normalize((data['lastMessage'] ?? '').toString());
-    return name.contains(_searchQuery) || lastMessage.contains(_searchQuery);
+    return name.contains(searchQuery) || lastMessage.contains(searchQuery);
   }
 
   int _groupMemberCount(DocumentSnapshot doc) {
@@ -116,12 +180,12 @@ class _GroupsScreenState extends State<GroupsScreen> {
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 220), () {
       if (!mounted) return;
-      setState(() => _searchQuery = _normalize(value));
+      ref.read(_groupsUiControllerProvider.notifier).setSearchQuery(value);
     });
   }
 
-  void _sortGroups(
-      List<DocumentSnapshot> groups, Map<String, dynamic> groupMeta) {
+  void _sortGroups(List<DocumentSnapshot> groups,
+      Map<String, dynamic> groupMeta, _GroupSortMode sortMode) {
     groups.sort((a, b) {
       final pinA = _groupFlag(groupMeta, a.id, 'pinned');
       final pinB = _groupFlag(groupMeta, b.id, 'pinned');
@@ -129,7 +193,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
         return pinA ? -1 : 1;
       }
 
-      switch (_sortMode) {
+      switch (sortMode) {
         case _GroupSortMode.recent:
           return _groupTimestamp(b).compareTo(_groupTimestamp(a));
         case _GroupSortMode.name:
@@ -185,8 +249,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
 
   Future<void> _runGroupAction(String groupId, Future<void> Function() action,
       String successText) async {
-    if (_busyGroupIds.contains(groupId)) return;
-    setState(() => _busyGroupIds.add(groupId));
+    final uiController = ref.read(_groupsUiControllerProvider.notifier);
+    if (!uiController.beginAction(groupId)) return;
     final l10n = context.l10n;
     try {
       await action();
@@ -201,9 +265,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                 l10n.groupsActionFailed(AppErrorText.forGroupsL10n(l10n, e)))),
       );
     } finally {
-      if (mounted) {
-        setState(() => _busyGroupIds.remove(groupId));
-      }
+      uiController.endAction(groupId);
     }
   }
 
@@ -580,6 +642,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final uiState = ref.watch(_groupsUiControllerProvider);
+    final currentUserId = ref.watch(currentUserIdProvider);
 
     return Scaffold(
       body: Stack(
@@ -676,226 +740,246 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       children: [
                         _buildSortChip(
                           label: l10n.groupsSortRecent,
-                          selected: _sortMode == _GroupSortMode.recent,
-                          onTap: () =>
-                              setState(() => _sortMode = _GroupSortMode.recent),
+                          selected: uiState.sortMode == _GroupSortMode.recent,
+                          onTap: () => ref
+                              .read(_groupsUiControllerProvider.notifier)
+                              .setSortMode(_GroupSortMode.recent),
                         ),
                         _buildSortChip(
                           label: l10n.groupsSortName,
-                          selected: _sortMode == _GroupSortMode.name,
-                          onTap: () =>
-                              setState(() => _sortMode = _GroupSortMode.name),
+                          selected: uiState.sortMode == _GroupSortMode.name,
+                          onTap: () => ref
+                              .read(_groupsUiControllerProvider.notifier)
+                              .setSortMode(_GroupSortMode.name),
                         ),
                         _buildSortChip(
                           label: l10n.groupsSortMembers,
-                          selected: _sortMode == _GroupSortMode.members,
-                          onTap: () => setState(
-                              () => _sortMode = _GroupSortMode.members),
+                          selected: uiState.sortMode == _GroupSortMode.members,
+                          onTap: () => ref
+                              .read(_groupsUiControllerProvider.notifier)
+                              .setSortMode(_GroupSortMode.members),
                         ),
                       ],
                     ),
                   ),
                 ),
                 Expanded(
-                  child: StreamBuilder<DocumentSnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(_currentUserId)
-                        .snapshots(),
-                    builder: (context, mySnapshot) {
-                      if (mySnapshot.hasError) {
-                        return _buildStateView(
-                          icon: Icons.error_outline_rounded,
-                          message: l10n.commonUnexpectedError,
-                          showRetry: true,
-                          onRetry: () => setState(() {}),
-                        );
-                      }
-                      if (mySnapshot.connectionState ==
-                          ConnectionState.waiting) {
-                        return _buildStateView(
-                          icon: Icons.hourglass_top_rounded,
-                          message: l10n.commonLoading,
-                        );
-                      }
-
-                      final myData =
-                          mySnapshot.data?.data() as Map<String, dynamic>? ??
-                              const {};
-                      final groupMeta = _readGroupMeta(myData['groupMeta']);
-
-                      return StreamBuilder<QuerySnapshot>(
-                        stream: _groupService.getUserGroups(),
-                        builder: (context, snapshot) {
-                          if (snapshot.hasError) {
-                            final reason = AppErrorText.forGroups(
-                              context,
-                              snapshot.error ?? Exception('groups-load-error'),
-                            );
+                  child: currentUserId.isEmpty
+                      ? _buildStateView(
+                          icon: Icons.lock_outline_rounded,
+                          message: l10n.commonErrorUnauthenticated,
+                        )
+                      : ref
+                          .watch(
+                              _groupsCurrentUserDocumentProvider(currentUserId))
+                          .when(
+                          error: (_, __) {
                             return _buildStateView(
                               icon: Icons.error_outline_rounded,
-                              message: l10n.groupsLoadError(reason),
+                              message: l10n.commonUnexpectedError,
                               showRetry: true,
-                              onRetry: () => setState(() {}),
+                              onRetry: () => ref.invalidate(
+                                _groupsCurrentUserDocumentProvider(
+                                    currentUserId),
+                              ),
                             );
-                          }
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting) {
+                          },
+                          loading: () {
                             return _buildStateView(
                               icon: Icons.hourglass_top_rounded,
                               message: l10n.commonLoading,
                             );
-                          }
+                          },
+                          data: (mySnapshot) {
+                            final myData =
+                                mySnapshot.data() ?? const <String, dynamic>{};
+                            final groupMeta =
+                                _readGroupMeta(myData['groupMeta']);
 
-                          final sourceGroups =
-                              (snapshot.data?.docs ?? []).toList();
-                          final groups = sourceGroups.where((doc) {
-                            final data =
-                                doc.data() as Map<String, dynamic>? ?? const {};
-                            return _matchGroup(data);
-                          }).toList();
-                          _sortGroups(groups, groupMeta);
-
-                          if (groups.isEmpty) {
-                            final emptyText = sourceGroups.isNotEmpty &&
-                                    _searchQuery.isNotEmpty
-                                ? l10n.groupsNoSearchResults
-                                : l10n.groupsEmpty;
-                            return _buildStateView(
-                              icon: Icons.groups_outlined,
-                              message: emptyText,
-                            );
-                          }
-
-                          return ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: groups.length,
-                            itemBuilder: (context, i) {
-                              final doc = groups[i];
-                              final data = doc.data() as Map<String, dynamic>;
-                              final groupId = doc.id;
-                              final isPinned =
-                                  _groupFlag(groupMeta, groupId, 'pinned');
-                              final unreadCount =
-                                  _groupUnreadCount(data, _currentUserId);
-                              final name = (data['name'] ?? l10n.groupsUnnamed)
-                                  .toString();
-                              final avatarUrl =
-                                  (data['avatar'] ?? '').toString();
-                              final lastMessage =
-                                  (data['lastMessage'] ?? '').toString();
-                              final displayMessage = lastMessage.trim().isEmpty
-                                  ? l10n.groupsNoMessagesYet
-                                  : lastMessage;
-                              final members = _readIdList(data['members']);
-
-                              String timeTxt = '';
-                              if (data['lastTimestamp'] is Timestamp) {
-                                final ts = data['lastTimestamp'] as Timestamp;
-                                final date = ts.toDate();
-                                timeTxt =
-                                    '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-                              }
-
-                              return Dismissible(
-                                key: ValueKey('group-$groupId'),
-                                direction: DismissDirection.horizontal,
-                                confirmDismiss: (direction) async {
-                                  if (direction ==
-                                      DismissDirection.startToEnd) {
-                                    final nextPinned = !isPinned;
-                                    await _runGroupAction(
-                                      groupId,
-                                      () => _groupService.setGroupPinned(
-                                          groupId, nextPinned),
-                                      nextPinned
-                                          ? l10n.groupsPinSuccess
-                                          : l10n.groupsUnpinSuccess,
-                                    );
-                                    return false;
-                                  }
-
-                                  await _showGroupActionsSheet(
-                                    groupId: groupId,
-                                    groupName: name,
-                                    members: members,
-                                    groupData: data,
-                                  );
-                                  return false;
-                                },
-                                background: Container(
-                                  margin: const EdgeInsets.only(bottom: 4),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 20),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(16),
-                                    color: AppColors.primary
-                                        .withAlphaFraction(0.2),
-                                  ),
-                                  alignment: Alignment.centerLeft,
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        isPinned
-                                            ? Icons.push_pin_outlined
-                                            : Icons.push_pin_rounded,
-                                        color: AppColors.primaryLight,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        isPinned
-                                            ? l10n.commonUnpin
-                                            : l10n.commonPin,
-                                        style: TextStyle(
-                                            color: AppColors.primaryLight,
-                                            fontWeight: FontWeight.w600),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                secondaryBackground: Container(
-                                  margin: const EdgeInsets.only(bottom: 4),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 20),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(16),
-                                    color:
-                                        AppColors.error.withAlphaFraction(0.18),
-                                  ),
-                                  alignment: Alignment.centerRight,
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      const Icon(Icons.more_horiz_rounded,
-                                          color: AppColors.error),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        l10n.commonMore,
-                                        style: const TextStyle(
-                                            color: AppColors.error,
-                                            fontWeight: FontWeight.w600),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                child: _buildGroupItem(
+                            return ref
+                                .watch(_groupsListProvider(currentUserId))
+                                .when(
+                              error: (error, _) {
+                                final reason = AppErrorText.forGroups(
                                   context,
-                                  groupId,
-                                  name,
-                                  avatarUrl,
-                                  displayMessage,
-                                  timeTxt,
-                                  members.length,
-                                  unreadCount: unreadCount,
-                                  isPinned: isPinned,
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      );
-                    },
-                  ),
+                                  error,
+                                );
+                                return _buildStateView(
+                                  icon: Icons.error_outline_rounded,
+                                  message: l10n.groupsLoadError(reason),
+                                  showRetry: true,
+                                  onRetry: () => ref.invalidate(
+                                    _groupsListProvider(currentUserId),
+                                  ),
+                                );
+                              },
+                              loading: () {
+                                return _buildStateView(
+                                  icon: Icons.hourglass_top_rounded,
+                                  message: l10n.commonLoading,
+                                );
+                              },
+                              data: (snapshot) {
+                                final sourceGroups = snapshot.docs.toList();
+                                final groups = sourceGroups.where((doc) {
+                                  final data =
+                                      doc.data() as Map<String, dynamic>? ??
+                                          const {};
+                                  return _matchGroup(data, uiState.searchQuery);
+                                }).toList();
+                                _sortGroups(
+                                    groups, groupMeta, uiState.sortMode);
+
+                                if (groups.isEmpty) {
+                                  final emptyText = sourceGroups.isNotEmpty &&
+                                          uiState.searchQuery.isNotEmpty
+                                      ? l10n.groupsNoSearchResults
+                                      : l10n.groupsEmpty;
+                                  return _buildStateView(
+                                    icon: Icons.groups_outlined,
+                                    message: emptyText,
+                                  );
+                                }
+
+                                return ListView.builder(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16),
+                                  itemCount: groups.length,
+                                  itemBuilder: (context, i) {
+                                    final doc = groups[i];
+                                    final data = doc.data();
+                                    final groupId = doc.id;
+                                    final isPinned = _groupFlag(
+                                        groupMeta, groupId, 'pinned');
+                                    final unreadCount =
+                                        _groupUnreadCount(data, _currentUserId);
+                                    final name =
+                                        (data['name'] ?? l10n.groupsUnnamed)
+                                            .toString();
+                                    final avatarUrl =
+                                        (data['avatar'] ?? '').toString();
+                                    final lastMessage =
+                                        (data['lastMessage'] ?? '').toString();
+                                    final displayMessage =
+                                        lastMessage.trim().isEmpty
+                                            ? l10n.groupsNoMessagesYet
+                                            : lastMessage;
+                                    final members =
+                                        _readIdList(data['members']);
+
+                                    String timeTxt = '';
+                                    if (data['lastTimestamp'] is Timestamp) {
+                                      final ts =
+                                          data['lastTimestamp'] as Timestamp;
+                                      final date = ts.toDate();
+                                      timeTxt =
+                                          '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+                                    }
+
+                                    return Dismissible(
+                                      key: ValueKey('group-$groupId'),
+                                      direction: DismissDirection.horizontal,
+                                      confirmDismiss: (direction) async {
+                                        if (direction ==
+                                            DismissDirection.startToEnd) {
+                                          final nextPinned = !isPinned;
+                                          await _runGroupAction(
+                                            groupId,
+                                            () => _groupService.setGroupPinned(
+                                                groupId, nextPinned),
+                                            nextPinned
+                                                ? l10n.groupsPinSuccess
+                                                : l10n.groupsUnpinSuccess,
+                                          );
+                                          return false;
+                                        }
+
+                                        await _showGroupActionsSheet(
+                                          groupId: groupId,
+                                          groupName: name,
+                                          members: members,
+                                          groupData: data,
+                                        );
+                                        return false;
+                                      },
+                                      background: Container(
+                                        margin:
+                                            const EdgeInsets.only(bottom: 4),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 20),
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          color: AppColors.primary
+                                              .withAlphaFraction(0.2),
+                                        ),
+                                        alignment: Alignment.centerLeft,
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              isPinned
+                                                  ? Icons.push_pin_outlined
+                                                  : Icons.push_pin_rounded,
+                                              color: AppColors.primaryLight,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              isPinned
+                                                  ? l10n.commonUnpin
+                                                  : l10n.commonPin,
+                                              style: TextStyle(
+                                                  color: AppColors.primaryLight,
+                                                  fontWeight: FontWeight.w600),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      secondaryBackground: Container(
+                                        margin:
+                                            const EdgeInsets.only(bottom: 4),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 20),
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          color: AppColors.error
+                                              .withAlphaFraction(0.18),
+                                        ),
+                                        alignment: Alignment.centerRight,
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.end,
+                                          children: [
+                                            const Icon(Icons.more_horiz_rounded,
+                                                color: AppColors.error),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              l10n.commonMore,
+                                              style: const TextStyle(
+                                                  color: AppColors.error,
+                                                  fontWeight: FontWeight.w600),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      child: _buildGroupItem(
+                                        context,
+                                        groupId,
+                                        name,
+                                        avatarUrl,
+                                        displayMessage,
+                                        timeTxt,
+                                        members.length,
+                                        unreadCount: unreadCount,
+                                        isPinned: isPinned,
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                          },
+                        ),
                 ),
               ],
             ),
