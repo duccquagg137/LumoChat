@@ -1,59 +1,59 @@
 # LumoChat
 
-LumoChat is a Flutter realtime chat application backed by Firebase. It supports direct messages, group chats, contacts, profiles, voice/video calls, push notifications, profile privacy, localization, and light/dark mode.
-
-## Tech Stack
-
-- **Client**: Flutter, Dart `^3.5.1`
-- **State management**: Riverpod (`flutter_riverpod`)
-- **Backend**: Firebase Core, Firebase Auth, Cloud Firestore
-- **Push notifications**: Firebase Cloud Messaging, Flutter Local Notifications
-- **Cloud Functions**: Firebase Functions v2, Node.js 20, Firebase Admin SDK
-- **Voice/video calls**: WebRTC via local `third_party/flutter_webrtc`
-- **Media**: `image_picker` for local selection, Cloudinary for uploads
-- **Local persistence**: `shared_preferences`
-- **Localization**: Flutter gen-l10n, `intl`, English and Vietnamese ARB files
-- **Permissions**: `permission_handler`
-- **Testing/linting**: `flutter_test`, `flutter_lints`
+LumoChat is a real-time chat mobile application built with Flutter and Firebase. The app supports direct messages, group conversations, contact management, user profiles, WebRTC voice/video calls, push notifications, localization, and persisted user preferences.
 
 ## Features
 
-- Email/password, Google Sign-In, and phone OTP authentication
-- Required profile completion for new users
-- Realtime 1-1 chat with text, images, replies, reactions, search, pinned messages, recall, delete-for-me, and delivery/read status
-- Group creation, group chat, member management, group info, pin/unpin groups, leave/delete group flows
-- Contact and friend request management
-- 1-1 voice and video calls using WebRTC
-- Call records stored as system messages in chat
-- FCM push notifications for messages and calls
-- In-app notification center with read state
-- Profile privacy controls
-- Persisted light/dark theme and locale
-- First-run onboarding flow
+- Email/password, Google Sign-In, and phone OTP authentication with Firebase Authentication.
+- Required profile completion flow for newly registered users.
+- Real-time 1-1 messaging with text, image messages, replies, reactions, message search, pinned messages, recall/delete actions, typing indicators, unread counts, and delivery/read status.
+- Group chat with group creation, avatar upload, member management, group info, pin/unpin, leave group, and delete group flows.
+- Contact system with friend requests, accept/reject/cancel actions, unfriend support, and user profile viewing.
+- 1-1 voice and video calls using WebRTC, including incoming call handling, call status tracking, and call records saved into chat history.
+- Firebase Cloud Messaging and Flutter Local Notifications for message and call notifications.
+- In-app notification center with read state management.
+- Profile privacy controls for personal information visibility.
+- English and Vietnamese localization using Flutter gen-l10n.
+- Persisted light/dark theme and language settings.
+- First-run onboarding flow.
 
-## State Management
+## Tech Stack
 
-The app uses **Riverpod** as the primary state management layer.
+- **Framework**: Flutter, Dart `^3.5.1`
+- **State management**: Riverpod
+- **Backend**: Firebase Core, Firebase Authentication, Cloud Firestore
+- **Notifications**: Firebase Cloud Messaging, Flutter Local Notifications
+- **Serverless**: Firebase Cloud Functions v2, Node.js 20, Firebase Admin SDK
+- **Calls**: WebRTC via local `third_party/flutter_webrtc`
+- **Media**: Image Picker, Cloudinary
+- **Persistence**: SharedPreferences
+- **Localization**: Flutter gen-l10n, `intl`
+- **Permissions**: `permission_handler`
+- **Testing and linting**: `flutter_test`, `flutter_lints`
 
-- `Provider` is used for Firebase/service dependencies.
-- `StateProvider` is used for simple app state such as locale, theme, and selected tab.
-- `StateNotifierProvider` is used for screen UI state such as loading flags, filters, search state, busy item IDs, selected members, and call/chat controls.
-- `StreamProvider` is used for realtime Firestore data.
-- `FutureProvider` is used for one-shot async reads.
+## Architecture
 
-Flutter lifecycle objects such as `TextEditingController`, `ScrollController`, `AnimationController`, `FocusNode`, WebRTC renderers, and subscriptions remain inside widgets so they can be disposed correctly.
+The app uses Riverpod as the main state management layer:
+
+- `Provider` for service and Firebase dependencies.
+- `StateProvider` for lightweight app state such as theme, locale, and selected tab.
+- `StateNotifierProvider` for screen-level UI state and user actions.
+- `StreamProvider` for real-time Firestore data.
+- `FutureProvider` for one-time asynchronous reads.
+
+Long-lived Flutter lifecycle objects such as `TextEditingController`, `ScrollController`, `FocusNode`, `AnimationController`, WebRTC renderers, and stream subscriptions are kept inside widgets and disposed with the widget lifecycle.
 
 ## Project Structure
 
 ```text
 lib/
   main.dart                 App bootstrap and ProviderScope
-  firebase_options.dart     Firebase app configuration
+  firebase_options.dart     Firebase configuration
   models/                   Chat, call, and notification models
-  screens/                  App screens and flows
+  screens/                  App screens and user flows
   services/                 Auth, chat, group, call, notification, locale, theme
-  theme/                    Theme, colors, gradients, system overlay styles
-  utils/                    Error mapping, retry policy, l10n helpers, privacy
+  theme/                    App theme, colors, and system UI styles
+  utils/                    Error mapping, retry policy, localization, privacy
   widgets/                  Shared UI widgets
 
 functions/                  Firebase Cloud Functions for push notifications
@@ -65,26 +65,33 @@ l10n.yaml                   Localization generation config
 
 ## Requirements
 
-- Flutter stable, compatible with Flutter `3.24.1` as used by CI
+- Flutter stable compatible with Flutter `3.24.1`
 - Dart SDK compatible with `^3.5.1`
 - Java 17 for Android builds
-- Firebase CLI for rules/functions deployment
+- Firebase CLI for deploying rules and functions
 - Node.js 20 for Cloud Functions
-- Android device/emulator for the current configured Firebase app
+- Android device or emulator for the configured Firebase app
 
-## Installation
+## Getting Started
+
+Clone the project and install dependencies:
 
 ```bash
 git clone <repository-url>
 cd LumoChat
 flutter pub get
 flutter gen-l10n
+```
+
+Run the app:
+
+```bash
 flutter run
 ```
 
 ## Firebase Setup
 
-Firebase-related files are already present in the repository:
+Firebase configuration files are included in the project:
 
 ```text
 firebase.json
@@ -112,7 +119,7 @@ The Cloud Function `sendPushOnNotificationCreated` runs in `asia-southeast1`. It
 
 ## Localization
 
-Localization sources live in `lib/utils`:
+Localization source files are stored in `lib/utils`:
 
 ```text
 app_en.arb
@@ -120,7 +127,7 @@ app_vi.arb
 gen_l10n/
 ```
 
-Generate localization files with:
+Regenerate localization files after editing ARB files:
 
 ```bash
 flutter gen-l10n
@@ -128,7 +135,7 @@ flutter gen-l10n
 
 ## Quality Checks
 
-Run these before committing or opening a pull request:
+Run these commands before committing changes:
 
 ```bash
 flutter analyze
@@ -136,29 +143,24 @@ flutter test
 flutter build apk --debug
 ```
 
-Cloud Functions:
+Cloud Functions linting:
 
 ```bash
 npm --prefix functions run lint
 ```
 
-Current local verification:
-
-- `flutter analyze`: passing
-- `flutter test`: passing
-
 ## CI
 
 GitHub Actions workflow: `.github/workflows/flutter-ci.yml`
 
-The workflow runs:
+The CI pipeline runs:
 
 - `flutter pub get`
 - `flutter gen-l10n`
 - `flutter analyze`
 - `flutter test`
 - `flutter build apk --debug`
-- Uploads the debug APK artifact
+- Debug APK artifact upload
 
 ## Main Dependencies
 
@@ -183,10 +185,10 @@ See `pubspec.yaml` for the full dependency list.
 
 ## Notes
 
-- Do not commit private production credentials beyond the intended Firebase client config files.
-- Keep Firestore rules and Cloud Functions in sync with notification, chat, and group schema changes.
-- Update generated localization files after editing ARB content.
+- Keep Firestore rules and Cloud Functions in sync with chat, group, call, and notification schema changes.
+- Do not commit private production credentials beyond the intended Firebase client configuration files.
+- Regenerate localization files after changing `app_en.arb` or `app_vi.arb`.
 
 ## License
 
-No license file is currently included. Add a `LICENSE` file before distributing or publishing this project.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
