@@ -77,7 +77,7 @@ l10n.yaml                   Localization generation config
 Clone the project and install dependencies:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/duccquagg137/LumoChat.git
 cd LumoChat
 flutter pub get
 flutter gen-l10n
