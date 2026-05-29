@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -12,8 +13,29 @@ import 'services/app_locale_controller.dart';
 import 'services/app_navigator.dart';
 import 'services/app_providers.dart';
 import 'services/app_theme_controller.dart';
+import 'services/local_notification_service.dart';
 import 'theme/app_theme.dart';
 import 'utils/gen_l10n/app_localizations.dart';
+
+@pragma('vm:entry-point')
+Future<void> lumoFirebaseMessagingBackgroundHandler(
+  RemoteMessage message,
+) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
+
+  final type = (message.data['type'] ?? '').toString();
+  if (!type.startsWith('incoming_')) return;
+
+  await LocalNotificationService().showRemoteMessage(
+    message,
+    requestPermissions: false,
+  );
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +46,9 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     ).timeout(const Duration(seconds: 8));
+    FirebaseMessaging.onBackgroundMessage(
+      lumoFirebaseMessagingBackgroundHandler,
+    );
     isFirebaseInitialized = true;
     debugPrint('Firebase initialized.');
   } on TimeoutException {

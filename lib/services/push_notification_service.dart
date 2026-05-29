@@ -29,7 +29,13 @@ class PushNotificationService {
   StreamSubscription<RemoteMessage>? _openedAppSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
       _incomingCallSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+      _notificationSubscription;
+  final Set<String> _knownNotificationIds = <String>{};
+  final Set<String> _pendingCallOpenRetries = <String>{};
   String _boundUserId = '';
+  bool _notificationListenerPrimed = false;
+  DateTime? _notificationListenerStartedAt;
   bool _messageHandlersBound = false;
 
   Future<void> initForCurrentUser() async {
@@ -67,6 +73,7 @@ class PushNotificationService {
       }
 
       _listenForIncomingCalls(uid);
+      _listenForNotifications(uid);
 
       await _tokenSubscription?.cancel();
       _tokenSubscription = _messaging.onTokenRefresh.listen((nextToken) {
@@ -113,6 +120,82 @@ class PushNotificationService {
     }, onError: (Object e) {
       debugPrint('Incoming call listener failed: $e');
     });
+  }
+
+  void _listenForNotifications(String uid) {
+    _notificationSubscription?.cancel();
+    _knownNotificationIds.clear();
+    _notificationListenerPrimed = false;
+    _notificationListenerStartedAt = DateTime.now();
+    _notificationSubscription = _firestore
+        .collection('notifications')
+        .where('recipientId', isEqualTo: uid)
+        .snapshots()
+        .listen((snapshot) {
+      if (!_notificationListenerPrimed) {
+        _knownNotificationIds.addAll(snapshot.docs.map((doc) => doc.id));
+        for (final doc in snapshot.docs) {
+          if (_isFreshNotification(doc)) {
+            _showNotificationDocument(doc);
+          }
+        }
+        _notificationListenerPrimed = true;
+        return;
+      }
+
+      for (final change in snapshot.docChanges) {
+        if (change.type != DocumentChangeType.added) continue;
+        final doc = change.doc;
+        if (!_knownNotificationIds.add(doc.id)) continue;
+        _showNotificationDocument(doc);
+      }
+    }, onError: (Object e) {
+      debugPrint('Notification listener failed: $e');
+    });
+  }
+
+  bool _isFreshNotification(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final startedAt = _notificationListenerStartedAt;
+    if (startedAt == null) return false;
+    final data = doc.data();
+    if (data == null) return false;
+    final createdAt = data['createdAt'];
+    if (createdAt is! Timestamp) return false;
+    return createdAt.toDate().isAfter(
+          startedAt.subtract(const Duration(seconds: 2)),
+        );
+  }
+
+  void _showNotificationDocument(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+    if (data == null) return;
+    final type = (data['type'] ?? '').toString();
+    if (type.startsWith('incoming_')) return;
+
+    final payload = <String, String>{
+      'notificationId': doc.id,
+      'type': type,
+      'entityId': (data['entityId'] ?? '').toString(),
+    };
+    final metadata = data['data'];
+    if (metadata is Map) {
+      for (final entry in metadata.entries) {
+        payload[entry.key.toString()] = entry.value.toString();
+      }
+    }
+
+    unawaited(
+      LocalNotificationService().showPayload(
+        title: (data['title'] ?? 'LumoChat').toString(),
+        body: (data['body'] ?? '').toString(),
+        data: payload,
+        notificationId: doc.id,
+      ),
+    );
   }
 
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
@@ -169,6 +252,7 @@ class PushNotificationService {
       final context = appNavigatorKey.currentContext;
       if (navigator == null || context == null) {
         debugPrint('Push incoming call ignored ($source): navigator not ready');
+        _retryOpenIncomingCall(callId, source: source);
         return false;
       }
 
@@ -191,6 +275,19 @@ class PushNotificationService {
     } finally {
       IncomingCallCoordinator.release(callId);
     }
+  }
+
+  void _retryOpenIncomingCall(
+    String callId, {
+    required String source,
+  }) {
+    if (!_pendingCallOpenRetries.add(callId)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future<void>.delayed(const Duration(milliseconds: 350), () {
+        _pendingCallOpenRetries.remove(callId);
+        unawaited(_openIncomingCall(callId, source: '$source-retry'));
+      });
+    });
   }
 
   void _handleNotificationSelection(Map<String, String> data) {
@@ -278,11 +375,17 @@ class PushNotificationService {
     await _foregroundSubscription?.cancel();
     await _openedAppSubscription?.cancel();
     await _incomingCallSubscription?.cancel();
+    await _notificationSubscription?.cancel();
     _tokenSubscription = null;
     _foregroundSubscription = null;
     _openedAppSubscription = null;
     _incomingCallSubscription = null;
+    _notificationSubscription = null;
+    _knownNotificationIds.clear();
+    _pendingCallOpenRetries.clear();
     _boundUserId = '';
+    _notificationListenerPrimed = false;
+    _notificationListenerStartedAt = null;
     _messageHandlersBound = false;
   }
 

@@ -308,8 +308,12 @@ class GroupService {
     if (targets.isEmpty) return;
 
     final safeGroup = groupName.trim().isEmpty ? 'Group' : groupName.trim();
+    final resolvedSender = await _resolveCurrentUserName();
+    final trimmedSender = senderName.trim();
     final safeSender =
-        senderName.trim().isEmpty ? _currentUserName : senderName.trim();
+        trimmedSender.isNotEmpty && !_looksLikeEmail(trimmedSender)
+            ? trimmedSender
+            : resolvedSender;
     final messageBody = bodyText.isEmpty ? 'New message' : bodyText;
 
     await Future.wait(
@@ -332,6 +336,30 @@ class GroupService {
         );
       }),
     );
+  }
+
+  Future<String> _resolveCurrentUserName() async {
+    try {
+      final doc = await _currentUserRef().get();
+      final data = doc.data() ?? const <String, dynamic>{};
+      final name = data['name']?.toString().trim() ?? '';
+      if (name.isNotEmpty && !_looksLikeEmail(name)) return name;
+      final username = data['username']?.toString().trim() ?? '';
+      if (username.isNotEmpty && !_looksLikeEmail(username)) return username;
+    } catch (_) {}
+
+    final fallback = _currentUserName.trim();
+    if (fallback.isNotEmpty && !_looksLikeEmail(fallback)) return fallback;
+
+    final email = _auth.currentUser?.email?.trim();
+    if (email != null && email.isNotEmpty) {
+      return email.split('@').first.trim();
+    }
+    return 'User';
+  }
+
+  bool _looksLikeEmail(String value) {
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value.trim());
   }
 
   Future<void> toggleReaction(

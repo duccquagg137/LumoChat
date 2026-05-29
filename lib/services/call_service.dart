@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/call_models.dart';
+import '../utils/app_logger.dart';
 import '../utils/retry_policy.dart';
 import 'notification_service.dart';
 
@@ -199,7 +200,7 @@ class CallService {
       final endedAt = call.endedAt == null
           ? Timestamp.now()
           : Timestamp.fromDate(call.endedAt!);
-      await _writeCallChatMessage(
+      await _tryWriteCallChatMessage(
         call: call,
         status: call.status,
         endedAt: endedAt,
@@ -213,11 +214,36 @@ class CallService {
       status: status,
       endedAt: endedAt,
     );
-    await _writeCallChatMessage(
+    await _tryWriteCallChatMessage(
       call: call,
       status: status,
       endedAt: endedAt,
     );
+  }
+
+  Future<void> _tryWriteCallChatMessage({
+    required AppCall call,
+    required CallStatus status,
+    required Timestamp endedAt,
+  }) async {
+    try {
+      await _writeCallChatMessage(
+        call: call,
+        status: status,
+        endedAt: endedAt,
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Unable to write call history message',
+        tag: 'call',
+        error: error,
+        stackTrace: stackTrace,
+        context: {
+          'callId': call.id,
+          'status': status.key,
+        },
+      );
+    }
   }
 
   Future<void> _updateCallStatus({
@@ -354,7 +380,7 @@ class CallService {
 
   Future<Map<String, String>> _loadCurrentUserProfile() async {
     final uid = currentUserId;
-    final fallbackName = _auth.currentUser?.displayName?.trim() ?? 'User';
+    final fallbackName = _fallbackCurrentUserName();
     final fallbackAvatar = _auth.currentUser?.photoURL?.trim() ?? '';
     if (uid.isEmpty) {
       return {'name': fallbackName, 'avatar': fallbackAvatar};
@@ -363,11 +389,42 @@ class CallService {
     try {
       final userDoc = await _firestore.collection('users').doc(uid).get();
       final data = userDoc.data() ?? const <String, dynamic>{};
-      final name = (data['name'] ?? fallbackName).toString();
+      final name = _firstDisplayName([
+        data['name'],
+        data['username'],
+        fallbackName,
+      ]);
       final avatar = (data['avatar'] ?? fallbackAvatar).toString();
       return {'name': name, 'avatar': avatar};
     } catch (_) {
       return {'name': fallbackName, 'avatar': fallbackAvatar};
     }
+  }
+
+  String _fallbackCurrentUserName() {
+    final display = _auth.currentUser?.displayName?.trim();
+    if (display != null && display.isNotEmpty && !_looksLikeEmail(display)) {
+      return display;
+    }
+    final phone = _auth.currentUser?.phoneNumber?.trim();
+    if (phone != null && phone.isNotEmpty) return phone;
+    final email = _auth.currentUser?.email?.trim();
+    if (email != null && email.isNotEmpty) return email.split('@').first.trim();
+    return 'User';
+  }
+
+  String _firstDisplayName(List<Object?> values) {
+    for (final value in values) {
+      final text = value?.toString().trim() ?? '';
+      if (text.isNotEmpty && !_looksLikeEmail(text)) return text;
+    }
+    final fallback = values
+        .map((value) => value?.toString().trim() ?? '')
+        .firstWhere((value) => value.isNotEmpty, orElse: () => 'User');
+    return fallback.contains('@') ? fallback.split('@').first.trim() : fallback;
+  }
+
+  bool _looksLikeEmail(String value) {
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value.trim());
   }
 }

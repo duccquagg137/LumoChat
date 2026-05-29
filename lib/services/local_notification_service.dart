@@ -13,23 +13,25 @@ class LocalNotificationService {
   factory LocalNotificationService() => _instance;
 
   static const String messagesChannelId = 'lumo_chat_messages';
-  static const String callsChannelId = 'lumo_chat_calls';
+  static const String callsChannelId = 'lumo_chat_calls_v2';
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
   void Function(Map<String, String> payload)? _onNotificationSelected;
+  String? _handledLaunchPayload;
 
   Future<void> init({
     void Function(Map<String, String> payload)? onNotificationSelected,
+    bool requestPermissions = true,
   }) async {
     if (onNotificationSelected != null) {
       _onNotificationSelected = onNotificationSelected;
     }
     if (_initialized) return;
 
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const android = AndroidInitializationSettings('@drawable/ic_stat_lumochat');
     const darwin = DarwinInitializationSettings();
     const settings = InitializationSettings(
       android: android,
@@ -45,23 +47,45 @@ class LocalNotificationService {
     );
 
     await _createAndroidChannels();
-    await _requestAndroidPermission();
+    if (requestPermissions) {
+      await _requestAndroidPermission();
+    }
     _initialized = true;
+    await _handleLaunchDetails();
   }
 
-  Future<void> showRemoteMessage(RemoteMessage message) async {
-    await init();
-
+  Future<void> showRemoteMessage(
+    RemoteMessage message, {
+    bool requestPermissions = true,
+  }) async {
     final data = _stringData(message.data);
     final title = message.notification?.title ?? data['title'] ?? 'LumoChat';
     final body = message.notification?.body ?? data['body'] ?? '';
+    final notificationId = data['notificationId'] ??
+        message.messageId ??
+        '${DateTime.now().millisecondsSinceEpoch}';
+
+    await showPayload(
+      title: title,
+      body: body,
+      data: data,
+      notificationId: notificationId,
+      requestPermissions: requestPermissions,
+    );
+  }
+
+  Future<void> showPayload({
+    required String title,
+    required String body,
+    required Map<String, String> data,
+    required String notificationId,
+    bool requestPermissions = true,
+  }) async {
+    await init(requestPermissions: requestPermissions);
     if (title.trim().isEmpty && body.trim().isEmpty) return;
 
     final type = data['type'] ?? '';
     final isCall = type.startsWith('incoming_');
-    final notificationId = data['notificationId'] ??
-        message.messageId ??
-        '${DateTime.now().millisecondsSinceEpoch}';
 
     await _plugin.show(
       _stableNotificationId(notificationId),
@@ -103,6 +127,9 @@ class LocalNotificationService {
         'Cuộc gọi',
         description: 'Thông báo cuộc gọi LumoChat',
         importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
       ),
     );
   }
@@ -111,6 +138,7 @@ class LocalNotificationService {
     final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     await androidPlugin?.requestNotificationsPermission();
+    await androidPlugin?.requestFullScreenIntentPermission();
   }
 
   AndroidNotificationDetails _androidDetails({required bool isCall}) {
@@ -120,10 +148,16 @@ class LocalNotificationService {
         'Cuộc gọi',
         channelDescription: 'Thông báo cuộc gọi LumoChat',
         importance: Importance.max,
-        priority: Priority.high,
+        priority: Priority.max,
         category: AndroidNotificationCategory.call,
+        largeIcon: DrawableResourceAndroidBitmap('ic_lumochat_large'),
+        fullScreenIntent: true,
+        visibility: NotificationVisibility.public,
+        timeoutAfter: 45000,
+        ticker: 'LumoChat incoming call',
         playSound: true,
         enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
       );
     }
 
@@ -134,6 +168,7 @@ class LocalNotificationService {
       importance: Importance.high,
       priority: Priority.high,
       category: AndroidNotificationCategory.message,
+      largeIcon: DrawableResourceAndroidBitmap('ic_lumochat_large'),
       playSound: true,
       enableVibration: true,
     );
@@ -150,6 +185,15 @@ class LocalNotificationService {
     } catch (e) {
       debugPrint('Local notification payload ignored: $e');
     }
+  }
+
+  Future<void> _handleLaunchDetails() async {
+    final details = await _plugin.getNotificationAppLaunchDetails();
+    if (details?.didNotificationLaunchApp != true) return;
+    final payload = details?.notificationResponse?.payload;
+    if (payload == null || payload == _handledLaunchPayload) return;
+    _handledLaunchPayload = payload;
+    _handlePayload(payload);
   }
 
   Map<String, String> _stringData(Map<String, dynamic> data) {

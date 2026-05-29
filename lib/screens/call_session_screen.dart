@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -149,26 +150,72 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
   AppCall? _queuedCallState;
   Map<String, dynamic>? _latestSignalData;
   AppCall? _latestCallState;
+  ProviderSubscription<AsyncValue<DocumentSnapshot<Map<String, dynamic>>>>?
+      _callSnapshotSubscription;
+  String? _handledCallSnapshotSignature;
 
   bool get _isCallerSide => !widget.isIncoming;
 
-  void _attachRemoteStream(MediaStream? stream, {String source = ''}) {
+  void _syncCallUi({
+    Duration? elapsed,
+    bool? isMicMuted,
+    bool? isSpeakerOn,
+    bool? isCameraOn,
+    bool? rtcReady,
+    bool? hasRemoteStream,
+  }) {
+    if (!mounted) return;
+
+    void apply() {
+      if (!mounted) return;
+      final controller =
+          ref.read(_callSessionUiControllerProvider(widget.callId).notifier);
+      if (elapsed != null) controller.setElapsed(elapsed);
+      if (isMicMuted != null) controller.setMicMuted(isMicMuted);
+      if (isSpeakerOn != null) controller.setSpeakerOn(isSpeakerOn);
+      if (isCameraOn != null) controller.setCameraOn(isCameraOn);
+      if (rtcReady != null) controller.setRtcReady(rtcReady);
+      if (hasRemoteStream != null) {
+        controller.setHasRemoteStream(hasRemoteStream);
+      }
+    }
+
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.postFrameCallbacks) {
+      apply();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => apply());
+    }
+  }
+
+  void _attachRemoteStream(
+    MediaStream? stream, {
+    String source = '',
+    MediaStreamTrack? remoteTrack,
+  }) {
     if (stream == null) return;
-    final hasVideoTrack = stream.getVideoTracks().isNotEmpty;
+    if (remoteTrack != null && !_streamHasTrack(stream, remoteTrack)) {
+      unawaited(
+        stream.addTrack(remoteTrack, addToNative: false).catchError((_) {}),
+      );
+    }
+    final hasVideoTrack =
+        stream.getVideoTracks().isNotEmpty || remoteTrack?.kind == 'video';
     final canRender = widget.callType == CallType.video ? hasVideoTrack : true;
     _remoteStream = stream;
     _remoteRenderer.srcObject = stream;
-    if (mounted) {
-      ref
-          .read(_callSessionUiControllerProvider(widget.callId).notifier)
-          .setHasRemoteStream(canRender);
-    }
+    _syncCallUi(hasRemoteStream: canRender);
     debugPrint(
       'Call[$source] remote stream attached: id=${stream.id}, '
       'audio=${stream.getAudioTracks().length}, '
       'video=${stream.getVideoTracks().length}, '
       'render=$canRender',
     );
+  }
+
+  bool _streamHasTrack(MediaStream stream, MediaStreamTrack track) {
+    return stream.getTracks().any((item) => item.id == track.id);
   }
 
   bool _isEnglish(BuildContext context) =>
@@ -185,6 +232,11 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
   @override
   void initState() {
     super.initState();
+    _callSnapshotSubscription = ref.listenManual(
+      _callSessionDocumentProvider(widget.callId),
+      (_, next) => next.whenData(_scheduleHandleCallSnapshot),
+      fireImmediately: true,
+    );
     if (!_isCallerSide) {
       // Incoming side does not auto-mark missed.
     } else {
@@ -197,6 +249,7 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
 
   @override
   void dispose() {
+    _callSnapshotSubscription?.close();
     _ringingTimeout?.cancel();
     _elapsedTimer?.cancel();
     unawaited(_tearDownRtc());
@@ -224,11 +277,7 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
         final hasLocalVideo = localStream.getVideoTracks().isNotEmpty;
         if (!hasLocalVideo) {
           _isCameraOn = false;
-          if (mounted) {
-            ref
-                .read(_callSessionUiControllerProvider(widget.callId).notifier)
-                .setCameraOn(false);
-          }
+          _syncCallUi(isCameraOn: false);
           debugPrint('Call[local] no video track from getUserMedia');
         }
         debugPrint(
@@ -271,7 +320,11 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
 
       peer.onAddTrack = (stream, track) {
         if (widget.callType == CallType.video && track.kind != 'video') return;
-        _attachRemoteStream(stream, source: 'onAddTrack:${track.kind}');
+        _attachRemoteStream(
+          stream,
+          source: 'onAddTrack:${track.kind}',
+          remoteTrack: track,
+        );
       };
 
       peer.onTrack = (event) {
@@ -279,7 +332,11 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
           return;
         }
         if (event.streams.isNotEmpty) {
-          _attachRemoteStream(event.streams.first, source: 'onTrack');
+          _attachRemoteStream(
+            event.streams.first,
+            source: 'onTrack:${event.track.kind}',
+            remoteTrack: event.track,
+          );
           return;
         }
 
@@ -291,7 +348,11 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
                 .addTrack(event.track, addToNative: false)
                 .catchError((_) {}),
           );
-          _attachRemoteStream(existing, source: 'onTrack-fallback');
+          _attachRemoteStream(
+            existing,
+            source: 'onTrack-fallback:${event.track.kind}',
+            remoteTrack: event.track,
+          );
           return;
         }
 
@@ -319,9 +380,7 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
 
       if (!mounted) return;
       _rtcReady = true;
-      ref
-          .read(_callSessionUiControllerProvider(widget.callId).notifier)
-          .setRtcReady(true);
+      _syncCallUi(rtcReady: true);
       _tryProcessLatestSignaling();
     } catch (_) {
       if (!mounted) return;
@@ -384,20 +443,35 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
 
   Future<void> _declineCall() async {
     HapticFeedback.mediumImpact();
-    await _callService.declineCall(widget.callId);
-    if (mounted) Navigator.pop(context);
+    try {
+      await _callService.declineCall(widget.callId);
+    } catch (e) {
+      debugPrint('Call[decline] failed: $e');
+    } finally {
+      _closeCallScreen();
+    }
   }
 
   Future<void> _cancelCall() async {
     HapticFeedback.mediumImpact();
-    await _callService.cancelCall(widget.callId);
-    if (mounted) Navigator.pop(context);
+    try {
+      await _callService.cancelCall(widget.callId);
+    } catch (e) {
+      debugPrint('Call[cancel] failed: $e');
+    } finally {
+      _closeCallScreen();
+    }
   }
 
   Future<void> _endCall() async {
     HapticFeedback.mediumImpact();
-    await _callService.endCall(widget.callId);
-    if (mounted) Navigator.pop(context);
+    try {
+      await _callService.endCall(widget.callId);
+    } catch (e) {
+      debugPrint('Call[end] failed: $e');
+    } finally {
+      _closeCallScreen();
+    }
   }
 
   void _syncAcceptedTimer(AppCall call) {
@@ -407,11 +481,7 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
       _elapsedTimer?.cancel();
       _elapsedTimer = null;
       _elapsed = Duration.zero;
-      if (mounted) {
-        ref
-            .read(_callSessionUiControllerProvider(widget.callId).notifier)
-            .setElapsed(Duration.zero);
-      }
+      _syncCallUi(elapsed: Duration.zero);
       return;
     }
     if (_acceptedAt == call.acceptedAt && _elapsedTimer != null) return;
@@ -422,9 +492,7 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
     _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || _acceptedAt == null) return;
       _elapsed = DateTime.now().difference(_acceptedAt!);
-      ref
-          .read(_callSessionUiControllerProvider(widget.callId).notifier)
-          .setElapsed(_elapsed);
+      _syncCallUi(elapsed: _elapsed);
     });
   }
 
@@ -433,9 +501,13 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
     if (status == CallStatus.ringing || status == CallStatus.accepted) return;
     _closeScheduled = true;
     Future<void>.delayed(const Duration(milliseconds: 900), () {
-      if (!mounted) return;
-      Navigator.pop(context);
+      _closeCallScreen();
     });
+  }
+
+  void _closeCallScreen() {
+    if (!mounted) return;
+    unawaited(Navigator.of(context).maybePop());
   }
 
   void _queueSignaling(AppCall call, Map<String, dynamic> data) {
@@ -455,6 +527,58 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
     _latestCallState = null;
     _latestSignalData = null;
     _handleSignaling(call, data);
+  }
+
+  void _handleCallSnapshot(DocumentSnapshot<Map<String, dynamic>> snapshot) {
+    if (!snapshot.exists) return;
+    final rawData = snapshot.data() ?? const <String, dynamic>{};
+    final call = AppCall.fromDocument(snapshot);
+    _latestCallState = call;
+    _latestSignalData = rawData;
+    _queueSignaling(call, rawData);
+    _syncAcceptedTimer(call);
+    _scheduleAutoClose(call.status);
+  }
+
+  void _scheduleHandleCallSnapshot(
+    DocumentSnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    if (!snapshot.exists) return;
+    final signature = _callSnapshotSignature(snapshot);
+    if (_handledCallSnapshotSignature == signature) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _handledCallSnapshotSignature == signature) return;
+      _handledCallSnapshotSignature = signature;
+      _handleCallSnapshot(snapshot);
+    });
+  }
+
+  String _callSnapshotSignature(
+    DocumentSnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    final data = snapshot.data() ?? const <String, dynamic>{};
+    return <String>[
+      snapshot.id,
+      _snapshotValueKey(data['status']),
+      _snapshotValueKey(data['updatedAt']),
+      _snapshotValueKey(data['acceptedAt']),
+      _snapshotValueKey(data['endedAt']),
+      _snapshotValueKey(data['offer']),
+      _snapshotValueKey(data['answer']),
+      _snapshotValueKey(data['callerCandidates']),
+      _snapshotValueKey(data['calleeCandidates']),
+    ].join('|');
+  }
+
+  String _snapshotValueKey(Object? value) {
+    if (value is Timestamp) {
+      return value.millisecondsSinceEpoch.toString();
+    }
+    if (value is Iterable) {
+      return value.length.toString();
+    }
+    return value?.toString() ?? '';
   }
 
   void _handleSignaling(AppCall call, Map<String, dynamic> data) {
@@ -713,9 +837,7 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
       track.enabled = !nextMuted;
     }
     _isMicMuted = nextMuted;
-    ref
-        .read(_callSessionUiControllerProvider(widget.callId).notifier)
-        .setMicMuted(nextMuted);
+    _syncCallUi(isMicMuted: nextMuted);
   }
 
   void _toggleSpeaker() {
@@ -723,9 +845,7 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
     final nextSpeaker = !_isSpeakerOn;
     unawaited(Helper.setSpeakerphoneOn(nextSpeaker));
     _isSpeakerOn = nextSpeaker;
-    ref
-        .read(_callSessionUiControllerProvider(widget.callId).notifier)
-        .setSpeakerOn(nextSpeaker);
+    _syncCallUi(isSpeakerOn: nextSpeaker);
   }
 
   void _toggleCamera() {
@@ -736,13 +856,12 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
       track.enabled = nextCamera;
     }
     _isCameraOn = nextCamera;
-    ref
-        .read(_callSessionUiControllerProvider(widget.callId).notifier)
-        .setCameraOn(nextCamera);
+    _syncCallUi(isCameraOn: nextCamera);
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(_callSessionUiControllerProvider(widget.callId));
     final callSnapshot = ref.watch(_callSessionDocumentProvider(widget.callId));
     return Scaffold(
       backgroundColor: AppColors.bgDark,
@@ -770,13 +889,8 @@ class _CallSessionScreenState extends ConsumerState<CallSessionScreen> {
             );
           }
 
-          final rawData = snapshot.data() ?? const <String, dynamic>{};
           final call = AppCall.fromDocument(snapshot);
-          _latestCallState = call;
-          _latestSignalData = rawData;
-          _queueSignaling(call, rawData);
-          _syncAcceptedTimer(call);
-          _scheduleAutoClose(call.status);
+          _scheduleHandleCallSnapshot(snapshot);
 
           return SafeArea(
             child: Stack(

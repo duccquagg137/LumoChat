@@ -167,7 +167,7 @@ class ChatService {
     required String bodyText,
   }) async {
     if (receiverId.isEmpty || receiverId == _currentUserId) return;
-    final senderName = _resolveSenderName();
+    final senderName = await _resolveSenderName();
     final roomId = buildChatRoomId(receiverId);
     final dedupeId = 'dm_${roomId}_$messageId';
 
@@ -188,14 +188,37 @@ class ChatService {
     );
   }
 
-  String _resolveSenderName() {
+  Future<String> _resolveSenderName() async {
+    final profileName = await _loadCurrentUserProfileName();
+    if (profileName.isNotEmpty) return profileName;
+
     final display = _auth.currentUser?.displayName?.trim();
-    if (display != null && display.isNotEmpty) return display;
+    if (display != null && display.isNotEmpty && !_looksLikeEmail(display)) {
+      return display;
+    }
     final phone = _auth.currentUser?.phoneNumber?.trim();
     if (phone != null && phone.isNotEmpty) return phone;
     final email = _auth.currentUser?.email?.trim();
-    if (email != null && email.isNotEmpty) return email;
-    return 'LumoChat';
+    if (email != null && email.isNotEmpty) {
+      return email.split('@').first.trim();
+    }
+    return 'User';
+  }
+
+  Future<String> _loadCurrentUserProfileName() async {
+    try {
+      final doc = await _currentUserRef().get();
+      final data = doc.data() ?? const <String, dynamic>{};
+      final name = data['name']?.toString().trim() ?? '';
+      if (name.isNotEmpty && !_looksLikeEmail(name)) return name;
+      final username = data['username']?.toString().trim() ?? '';
+      if (username.isNotEmpty && !_looksLikeEmail(username)) return username;
+    } catch (_) {}
+    return '';
+  }
+
+  bool _looksLikeEmail(String value) {
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value.trim());
   }
 
   Future<void> updateTypingStatus(String receiverId, bool isTyping) async {

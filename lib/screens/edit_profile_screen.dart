@@ -112,9 +112,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _websiteController.text = (widget.userData['website'] ?? '').toString();
     _occupationController.text =
         (widget.userData['occupation'] ?? '').toString();
-    ref.read(_editProfileUiControllerProvider.notifier).initialize(
-          widget.userData,
-        );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(_editProfileUiControllerProvider.notifier).initialize(
+            widget.userData,
+          );
+    });
   }
 
   @override
@@ -228,7 +231,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Lỗi cập nhật: $e')));
     } finally {
-      uiController.setLoading(false);
+      if (mounted) {
+        uiController.setLoading(false);
+      }
     }
   }
 

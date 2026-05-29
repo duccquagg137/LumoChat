@@ -56,29 +56,50 @@ exports.sendPushOnNotificationCreated = onDocumentCreated(
     }
 
     const isCall = type.startsWith("incoming_");
-    const androidChannelId = isCall ? "lumo_chat_calls" : "lumo_chat_messages";
+    const androidChannelId = isCall ? "lumo_chat_calls_v2" : "lumo_chat_messages";
+    const messageData = {
+      notificationId: snap.id,
+      type,
+      entityId,
+      title,
+      body,
+      ...toStringMap(metadata),
+    };
+
+    const androidConfig = {
+      priority: "high",
+      ttl: isCall ? 45 * 1000 : 24 * 60 * 60 * 1000,
+    };
+    if (isCall) {
+      androidConfig.collapseKey = `call_${entityId || snap.id}`;
+    }
+
+    const aps = {
+      alert: { title, body },
+      sound: "default",
+    };
+    if (isCall) {
+      aps["content-available"] = 1;
+      aps["interruption-level"] = "time-sensitive";
+    }
 
     const payload = {
-      notification: { title, body },
-      data: {
-        notificationId: snap.id,
-        type,
-        entityId,
-        ...toStringMap(metadata),
-      },
+      data: messageData,
       tokens,
-      android: {
-        priority: "high",
-        notification: {
-          channelId: androidChannelId,
-          sound: "default",
-        },
-      },
+      android: androidConfig,
       apns: {
         headers: { "apns-priority": "10" },
-        payload: { aps: { sound: "default" } },
+        payload: { aps },
       },
     };
+
+    if (!isCall) {
+      payload.notification = { title, body };
+      payload.android.notification = {
+        channelId: androidChannelId,
+        sound: "default",
+      };
+    }
 
     const response = await admin.messaging().sendEachForMulticast(payload);
     const invalidTokens = [];
